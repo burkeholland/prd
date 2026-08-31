@@ -20,9 +20,8 @@ integration test over the committed snapshot (skips when it has not been generat
 
 ## check-content.mjs — every quote verbatim, every link resolvable
 
-`node --test scripts/check-content.mjs` checks each top-level `content/*.md`: frontmatter (`title`, `description`,
-integer `order`), no `#` h1 in the body, every blockquote an exact excerpt of `public/raw/build-the-urlist.md`
-(whitespace-insensitive; split on `…`/`...`/`[…]` and each piece checked; opt a quote out with
-`<!-- quote: not-gist -->` on the line above), and every `](/…)`/`](#…)` link a known route with a real heading slug.
-Failures list `file:line kind — message`. Target another checkout with `CONTENT_ROOT=<dir>` or
-`node scripts/check-content.mjs --root <dir>`. Pure helpers live in `scripts/lib/content.mjs` (tests in `content.test.mjs`).
+`node --test scripts/check-content.mjs` checks each top-level `content/*.md`: frontmatter (`title`, `description`, integer `order`),
+no `#` h1 in the body, every blockquote an exact excerpt of `public/raw/build-the-urlist.md` (whitespace-insensitive, split on
+`…`/`...`/`[…]`; opt out with `<!-- quote: not-gist -->` on the line above) and every `](/…)`/`](#…)` link a known route + heading slug.
+Failures list `file:line kind — message`. Another checkout: `CONTENT_ROOT=<dir>` or `node scripts/check-content.mjs --root <dir>`.
+Pure helpers: `scripts/lib/content.mjs` (unit tests in `content.test.mjs`, run by the `node --test` glob above).
