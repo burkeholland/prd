@@ -14,6 +14,7 @@ content/              authored markdown rendered by the site
   walkthrough.md      The sample PRD, section by section            -> /walkthrough
   template.md         Reusable PRD template (annotated)             -> /template
   gist/               snapshot of the gist + metadata               -> /sample
+  gist/history/       every revision of the gist                    -> /history
 public/               static files served as-is (mocks/, prd-template.md, favicon)
 scripts/              zero-dependency Node scripts (fetch-gist) + node:test tests
 src/                  Astro site (layouts, components, pages, styles)

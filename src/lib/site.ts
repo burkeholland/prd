@@ -14,6 +14,7 @@ export const NAV = [
   { href: '/sample/', label: 'The sample PRD' },
   { href: '/guide/', label: 'How to write one' },
   { href: '/walkthrough/', label: 'Worked example' },
+  { href: '/history/', label: 'How it evolved' },
   { href: '/template/', label: 'Template' },
 ] as const;
 
