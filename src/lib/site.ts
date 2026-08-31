@@ -4,6 +4,7 @@ export const SITE = {
     'How to write a product requirements doc an AI agent can build from — with a real one as the worked example.',
   gistUrl: 'https://gist.github.com/burkeholland/f71d1156812fd91e4369308358892817',
   gistTitle: 'Build The Urlist',
+  repoUrl: 'https://github.com/burkeholland/prd',
 } as const;
 
 // Internal page hrefs carry a trailing slash (GitHub Pages serves the directory form

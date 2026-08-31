@@ -1,6 +1,7 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import rehypeBase from './src/lib/rehype-base.mjs';
+import rehypeFigures from './src/lib/rehype-figures.mjs';
 
 // GitHub Pages project site: https://burkeholland.github.io/prd/
 // The base path is known in exactly two other places, both fed from here:
@@ -18,6 +19,7 @@ export default defineConfig({
       // Both themes are emitted; global.css switches them with prefers-color-scheme.
       themes: { light: 'github-light', dark: 'github-dark' },
     },
-    rehypePlugins: [[rehypeBase, { base }]],
+    // Block-level images (the gist's screenshots) become lazy-loaded, captioned figures.
+    rehypePlugins: [[rehypeBase, { base }], rehypeFigures],
   },
 });
