@@ -60,6 +60,10 @@ gist's screenshots render on `/sample`. The root `.gitattributes` marks
 `content/gist/**` and `public/raw/**` `-text` so the CRLF gist snapshot stays
 byte-exact on every checkout.
 
+Styles live in `src/styles/global.css` (screen) and `src/styles/print.css` (`@media print`
+only: the document pages print / save as PDF as content only, black on white, code wrapped,
+external links followed by their URL; covered by `tests/e2e/print.spec.ts`).
+
 ## Deploy
 
 Public URL: **https://burkeholland.github.io/prd/**

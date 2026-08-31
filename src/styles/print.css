@@ -1,0 +1,193 @@
+/* PRD Field Guide — print stylesheet. Loaded after global.css by src/layouts/Base.astro.
+   A PRD is a document people print or save as PDF: the four content pages print as plain
+   black-on-white text — no site chrome, no sidebar, wrapped code, external links followed
+   by their URL. Screen rendering is untouched: everything here is inside @media print. */
+
+@media print {
+  @page {
+    margin: 18mm;
+  }
+
+  /* Palette: black on white whatever the OS colour scheme says. */
+  :root {
+    color-scheme: light;
+    --bg: #fff;
+    --surface: #fff;
+    --surface-raised: #fff;
+    --border: #999;
+    --text: #000;
+    --text-muted: #333;
+    --accent: #000;
+    --accent-soft: #fff;
+    --accent-contrast: #fff;
+    --code-bg: #f4f4f4;
+  }
+
+  /* Site chrome, both tables of contents and the download / action links. */
+  .skip-link,
+  .site-header,
+  .site-footer,
+  .toc,
+  .doc__actions,
+  .source-card__links {
+    display: none !important;
+  }
+
+  html {
+    font-size: 11pt;
+    scroll-behavior: auto;
+  }
+
+  body {
+    display: block;
+    min-height: 0;
+    font-size: 11pt;
+    line-height: 1.4;
+    color: #000;
+    background: #fff;
+  }
+
+  /* Single column, full page width. */
+  .container,
+  main,
+  .doc,
+  .doc__header,
+  .doc__body,
+  .prose {
+    display: block;
+    width: auto;
+    max-width: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .doc__header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid #999;
+  }
+
+  .doc__header > * + * {
+    margin-top: 0.5rem;
+  }
+
+  .source-card {
+    padding: 0;
+    background: none;
+    border: 0;
+    border-radius: 0;
+  }
+
+  /* Pagination: keep headings with what follows them, keep blocks whole. */
+  h1,
+  h2,
+  h3,
+  h4 {
+    break-after: avoid;
+    page-break-after: avoid;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  figure,
+  pre,
+  table,
+  blockquote,
+  img {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  img,
+  .prose img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .prose blockquote {
+    border-left-color: #999;
+  }
+
+  /* Code wraps instead of scrolling (nothing scrolls on paper) and prints black on light
+     grey. Astro's Shiki output carries `background-color`, `color` and `overflow-x: auto`
+     inline on the <pre>, so those need !important; `.prose pre` keeps the specificity above
+     global.css's own `.prose pre` rule. */
+  pre,
+  code {
+    color: #000;
+    background: #f4f4f4;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  pre,
+  .prose pre,
+  .astro-code {
+    white-space: pre-wrap !important;
+    overflow-wrap: anywhere;
+    overflow: visible !important;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid #999;
+    border-radius: 0;
+    color: #000 !important;
+    background: #f4f4f4 !important;
+  }
+
+  /* Shiki keeps the light-theme colours inline on each span (they print fine) and the dark
+     theme in custom properties that global.css applies under prefers-color-scheme: dark.
+     Neutralise those so a dark-mode print never puts white text on paper. */
+  .astro-code,
+  .astro-code span {
+    --shiki-dark: #000 !important;
+    --shiki-dark-bg: #f4f4f4 !important;
+  }
+
+  .prose :not(pre) > code {
+    border: 1px solid #ccc;
+    border-radius: 0;
+  }
+
+  /* Tables were scroll boxes on screen; on paper they shrink to the page and wrap. */
+  .prose table {
+    display: table;
+    width: auto;
+    max-width: 100%;
+    overflow: visible;
+  }
+
+  .prose th,
+  .prose td {
+    overflow-wrap: anywhere;
+  }
+
+  .prose th {
+    background: #f4f4f4;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* Links: internal ones print as plain text; external ones are followed by their URL. */
+  a,
+  a:visited {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  a[href^="http"] {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+  }
+
+  a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.85em;
+    font-weight: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .placeholder {
+    border-radius: 0;
+  }
+}
