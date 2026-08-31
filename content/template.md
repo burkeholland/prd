@@ -4,7 +4,7 @@ description: "The skeleton of a PRD an agent can build from — copy it, keep th
 order: 4
 ---
 
-Burke Holland's [*Build The Urlist*](/sample) was written to be handed to a coding agent once — no follow-up questions — and it worked: the agent built the app in one shot, or close to it. What made that possible is specificity: every exact string, number, and exclusion is a decision the model does not have to guess at, and guesses are where one-shot builds fail. This template is that document's skeleton: the same sections in the same order, each with a rule, a line from the sample, and a copyable skeleton.
+Burke Holland's sample PRD, [*Build The Urlist*](/sample), was written to be handed to a coding agent once, with no follow-up questions, and by Burke's account it worked: the agent built the app in one shot, or close to it. That is this site's claim, with the sample as its proof: every exact string, number, and exclusion is a decision the agent does not have to guess at, and guesses are where one-shot builds fail. This template is that document's skeleton: the same sections in the same order, each with a rule, a line from the sample, and a copyable skeleton; the [guide](/guide) names the habits behind them, and the [walkthrough](/walkthrough) shows each in use.
 
 To use it: keep the section order, delete nothing without deciding it does not apply, replace every `{…}` placeholder starting with `{Product Name}`, and never leave a section saying "TBD". [Download the clean template](/prd-template.md), or copy the skeletons below.
 
