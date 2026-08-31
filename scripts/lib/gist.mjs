@@ -3,6 +3,8 @@
 // testable offline (see gist.test.mjs).
 
 export const DEFAULT_GIST_ID = 'f71d1156812fd91e4369308358892817';
+/** A gist's git history does not record its owner; this is the login used when nothing else says. */
+export const DEFAULT_OWNER = 'burkeholland';
 
 /** URL prefixes GitHub uses for images pasted into a gist/issue editor. */
 const USER_ATTACHMENT_PREFIXES = [
@@ -141,28 +143,47 @@ export function isPng(buffer) {
 }
 
 /**
- * Pick the gist file to snapshot: the named file, else the only file, else
- * the first markdown file, else the first file.
+ * Pick the gist file to snapshot from the file names in its tree: the named
+ * file, else the only file, else the first markdown file, else the first file.
+ * Returns the name, or null.
  */
-export function pickGistFile(apiJson, filename) {
-  const files = Object.values(apiJson?.files ?? {});
-  if (filename) return files.find((f) => f.filename === filename) ?? null;
-  if (files.length === 1) return files[0];
-  return files.find((f) => /\.(md|markdown)$/i.test(f.filename ?? '')) ?? files[0] ?? null;
+export function pickGistFile(names, filename) {
+  const list = (Array.isArray(names) ? names : []).filter((n) => typeof n === 'string' && n.length > 0);
+  if (filename) return list.find((n) => n === filename) ?? null;
+  if (list.length === 1) return list[0];
+  return list.find((n) => /\.(md|markdown)$/i.test(n)) ?? list[0] ?? null;
 }
 
-/** The `content/gist/meta.json` object — pure, given the API JSON. */
-export function buildMeta(apiJson, images, fetchedAt, filename) {
-  const file = pickGistFile(apiJson, filename);
+/** `https://gist.github.com/<owner>/<id>` (no owner: `https://gist.github.com/<id>`). */
+export function gistHtmlUrl(owner, id) {
+  return owner ? `https://gist.github.com/${owner}/${id}` : `https://gist.github.com/${id}`;
+}
+
+/** `https://gist.githubusercontent.com/<owner>/<id>/raw/<blob sha>/<file>` — the same URL the API reports. */
+export function gistRawUrl(owner, id, blobSha, filename) {
+  const base = owner ? `https://gist.githubusercontent.com/${owner}/${id}` : `https://gist.githubusercontent.com/${id}`;
+  return blobSha ? `${base}/raw/${blobSha}/${filename}` : `${base}/raw/${filename}`;
+}
+
+/**
+ * The `content/gist/meta.json` object — pure, given what the git clone knows
+ * (`filename`, `revision` = HEAD sha, `updated_at` = HEAD committer date,
+ * `blob_sha` of the file at HEAD) plus `owner`/`description`, which git does
+ * not record and the caller carries over from the previous meta.json or flags.
+ */
+export function buildMeta(gist, images, fetchedAt) {
+  const id = gist?.id ?? null;
+  const owner = gist?.owner ?? null;
+  const filename = gist?.filename ?? null;
   return {
-    id: apiJson.id ?? null,
-    description: apiJson.description ?? null,
-    owner: apiJson.owner?.login ?? null,
-    html_url: apiJson.html_url ?? null,
-    raw_url: file?.raw_url ?? null,
-    filename: file?.filename ?? null,
-    revision: apiJson.history?.[0]?.version ?? null,
-    updated_at: apiJson.updated_at ?? null,
+    id,
+    description: gist?.description ?? null,
+    owner,
+    html_url: id ? gistHtmlUrl(owner, id) : null,
+    raw_url: id && filename ? gistRawUrl(owner, id, gist?.blob_sha ?? null, filename) : null,
+    filename,
+    revision: gist?.revision ?? null,
+    updated_at: gist?.updated_at ?? null,
     fetched_at: fetchedAt instanceof Date ? fetchedAt.toISOString() : fetchedAt,
     images: (images ?? []).map(({ n, slug, alt, width, height, source }) => ({
       n,

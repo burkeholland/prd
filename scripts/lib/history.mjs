@@ -1,7 +1,7 @@
 // Pure helpers for snapshotting every revision of a GitHub gist (its "history").
 // No I/O and no dependencies beyond the language, so everything here is unit
 // testable offline (see history.test.mjs). The I/O lives in
-// scripts/fetch-gist-history.mjs.
+// scripts/fetch-gist-history.mjs and the git calls in scripts/lib/gist-git.mjs.
 
 const SHORT_LENGTH = 7;
 
@@ -11,42 +11,31 @@ export function revisionUrl(owner, id, version) {
 }
 
 /**
- * The `history[]` array of `GET /gists/{id}` (newest first, as the API returns
- * it) turned into records ordered oldest → newest and numbered `n` = 1..N:
- * `{ n, version, short, committed_at, additions, deletions, total, url }`.
- * The `change_status` counters default to 0 when the API omits them (it does
- * for the oldest revisions of some gists).
+ * The commits of the gist's git repository (`entries` = `[{ version, committed_at }]`
+ * oldest → newest, as `git log --reverse` lists them) turned into records
+ * numbered `n` = 1..N: `{ n, version, short, committed_at, additions, deletions, total, url }`.
+ * `counts` maps each version (Map or plain object) to its `{ additions, deletions }`
+ * from `git diff --numstat`; git has them for every revision, the root commit
+ * included, so a missing entry is a caller bug and throws.
  */
-export function revisionsFromGist(apiJson) {
-  const id = apiJson?.id ?? null;
-  const owner = apiJson?.owner?.login ?? apiJson?.user?.login ?? null;
-  const history = Array.isArray(apiJson?.history) ? apiJson.history : [];
+export function revisionsFromLog(entries, counts, { id = null, owner = null } = {}) {
+  const list = Array.isArray(entries) ? entries : [];
+  const lookup = (version) => (counts instanceof Map ? counts.get(version) : counts?.[version]);
 
-  // Oldest first; a stable sort on committed_at keeps the API's (reversed)
-  // order for revisions that share a timestamp.
-  const ordered = history
-    .map((h, i) => ({ h, i }))
-    .sort((a, b) => {
-      const ta = Date.parse(a.h?.committed_at ?? '');
-      const tb = Date.parse(b.h?.committed_at ?? '');
-      if (Number.isFinite(ta) && Number.isFinite(tb) && ta !== tb) return ta - tb;
-      return b.i - a.i;
-    });
-
-  return ordered.map(({ h }, index) => {
-    const version = String(h?.version ?? '');
-    const status = h?.change_status ?? {};
-    const additions = Number.isFinite(status.additions) ? status.additions : 0;
-    const deletions = Number.isFinite(status.deletions) ? status.deletions : 0;
-    const total = Number.isFinite(status.total) ? status.total : additions + deletions;
+  return list.map((entry, index) => {
+    const version = String(entry?.version ?? '');
+    const status = lookup(version);
+    if (!status || !Number.isFinite(status.additions) || !Number.isFinite(status.deletions)) {
+      throw new Error(`revisionsFromLog: no line counts for revision ${index + 1} (${version})`);
+    }
     return {
       n: index + 1,
       version,
       short: version.slice(0, SHORT_LENGTH),
-      committed_at: h?.committed_at ?? null,
-      additions,
-      deletions,
-      total,
+      committed_at: entry?.committed_at ?? null,
+      additions: status.additions,
+      deletions: status.deletions,
+      total: status.additions + status.deletions,
       url: revisionUrl(owner, id, version),
     };
   });
@@ -103,7 +92,7 @@ function lookupSnapshot(files, rec) {
 
 /**
  * The `content/gist/history.json` object. `revisions` are the records from
- * revisionsFromGist (oldest → newest); `files` maps each `version` (or `n`)
+ * revisionsFromLog (oldest → newest); `files` maps each `version` (or `n`)
  * to the snapshot bytes/text of that revision.
  */
 export function historyDocument({ id, owner, fetched_at, revisions, files }) {

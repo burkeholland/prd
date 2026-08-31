@@ -686,3 +686,143 @@ main:focus {
     text-decoration: var(--shiki-dark-text-decoration) !important;
   }
 }
+
+/* history ---------------------------------------------------------------
+   /history: lead, size chart (inline SVG, no script) and the revision table.
+   Colours reuse --accent, --border and --text-muted; nothing else is restyled. */
+
+.history-page {
+  display: grid;
+  gap: 2.5rem;
+}
+
+.history-page__header {
+  max-width: var(--measure);
+  display: grid;
+  gap: 1.25rem;
+}
+
+.history-page__header time {
+  white-space: nowrap;
+}
+
+.history-chart,
+.history-table {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.history-note {
+  font-size: 0.92rem;
+  color: var(--text-muted);
+  max-width: var(--measure);
+}
+
+.size-chart {
+  display: block;
+  width: 100%;
+  max-width: var(--measure);
+  font-size: 0.8rem;
+  font-family: var(--font-mono);
+}
+
+.size-chart__label {
+  fill: var(--text-muted);
+}
+
+.size-chart__bar rect {
+  fill: var(--text-muted);
+  fill-opacity: 0.45;
+}
+
+.size-chart__bar--current rect {
+  fill: var(--accent);
+  fill-opacity: 1;
+}
+
+.table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+table.history {
+  border-collapse: collapse;
+  font-size: 0.92rem;
+  min-width: 40rem;
+  width: 100%;
+}
+
+table.history caption {
+  text-align: left;
+  caption-side: bottom;
+  padding-top: 0.75rem;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+
+table.history th,
+table.history td {
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+table.history thead th {
+  background: var(--surface);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+table.history tbody th {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+table.history .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+table.history time {
+  white-space: nowrap;
+}
+
+.history__time {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.history__delta {
+  min-width: 18rem;
+}
+
+table.history tr.is-current > * {
+  background: var(--accent-soft);
+}
+
+.history__badge {
+  display: inline-block;
+  padding: 0 0.45em;
+  font-size: 0.8rem;
+  font-weight: 650;
+  color: var(--accent-contrast);
+  background: var(--accent);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.history__badge a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.history__badge a:hover {
+  text-decoration: underline;
+}
+
+.history-page__outro {
+  max-width: var(--measure);
+}

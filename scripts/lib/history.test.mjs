@@ -9,7 +9,7 @@ import {
   keepPreviousFetchedAt,
   lineEndingStyle,
   revisionUrl,
-  revisionsFromGist,
+  revisionsFromLog,
   snapshotName,
   snapshotStats,
 } from './history.mjs';
@@ -19,19 +19,23 @@ const V1 = '2a8d004750914fbb98719b92f4c5ef76c5690591';
 const V2 = 'f3d7c70aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const V3 = '8ef29d7eecb97ecbbd5a89ff4a7375482364704f';
 
-// Newest first, exactly as GET /gists/{id} returns it; the oldest has no change_status.
-const API_FIXTURE = {
-  id: ID,
-  owner: { login: 'burkeholland' },
-  history: [
-    { version: V3, committed_at: '2026-08-31T13:11:39Z', change_status: { total: 6, additions: 1, deletions: 5 } },
-    { version: V2, committed_at: '2026-08-15T14:42:40Z', change_status: { total: 204, additions: 125, deletions: 79 } },
-    { version: V1, committed_at: '2026-08-12T20:39:59Z' },
-  ],
-};
+// Oldest first, exactly as `git log --reverse` lists it (dates already normalised to UTC).
+const LOG_FIXTURE = [
+  { version: V1, committed_at: '2026-08-12T20:39:59Z' },
+  { version: V2, committed_at: '2026-08-15T14:42:40Z' },
+  { version: V3, committed_at: '2026-08-31T13:11:39Z' },
+];
+// `git diff --numstat` per version; the root commit has real counts too.
+const COUNTS = new Map([
+  [V1, { additions: 790, deletions: 0 }],
+  [V2, { additions: 125, deletions: 79 }],
+  [V3, { additions: 1, deletions: 5 }],
+]);
+const GIST = { id: ID, owner: 'burkeholland' };
+const revisions = () => revisionsFromLog(LOG_FIXTURE, COUNTS, GIST);
 
-test('revisionsFromGist: oldest → newest, numbered 1..N, change_status defaults to 0', () => {
-  const revs = revisionsFromGist(API_FIXTURE);
+test('revisionsFromLog: log order kept (oldest → newest), numbered 1..N, counts from numstat incl. the root', () => {
+  const revs = revisions();
   assert.equal(revs.length, 3);
   assert.deepEqual(revs.map((r) => r.n), [1, 2, 3]);
   assert.deepEqual(revs.map((r) => r.version), [V1, V2, V3]);
@@ -45,40 +49,43 @@ test('revisionsFromGist: oldest → newest, numbered 1..N, change_status default
     version: V1,
     short: '2a8d004',
     committed_at: '2026-08-12T20:39:59Z',
-    additions: 0,
+    additions: 790,
     deletions: 0,
-    total: 0,
+    total: 790,
     url: `https://gist.github.com/burkeholland/${ID}/${V1}`,
   });
   assert.deepEqual([revs[1].additions, revs[1].deletions, revs[1].total], [125, 79, 204]);
   assert.deepEqual([revs[2].additions, revs[2].deletions, revs[2].total], [1, 5, 6]);
   assert.deepEqual(Object.keys(revs[2]), ['n', 'version', 'short', 'committed_at', 'additions', 'deletions', 'total', 'url']);
+
+  const fromObject = revisionsFromLog(LOG_FIXTURE, Object.fromEntries(COUNTS), GIST);
+  assert.deepEqual(fromObject, revs, 'counts as a plain object work too');
 });
 
-test('revisionsFromGist: empty/missing history → [], url without owner when anonymous', () => {
-  assert.deepEqual(revisionsFromGist({ id: ID }), []);
-  assert.deepEqual(revisionsFromGist(undefined), []);
+test('revisionsFromLog: empty log → [], url without owner when anonymous, missing counts throw', () => {
+  assert.deepEqual(revisionsFromLog([], new Map(), GIST), []);
+  assert.deepEqual(revisionsFromLog(undefined, undefined, GIST), []);
   assert.equal(revisionUrl(null, ID, V1), `https://gist.github.com/${ID}/${V1}`);
-  const [rev] = revisionsFromGist({ id: ID, history: [{ version: V1, committed_at: '2026-08-12T20:39:59Z' }] });
+  const [rev] = revisionsFromLog(LOG_FIXTURE.slice(0, 1), COUNTS, { id: ID, owner: null });
   assert.equal(rev.url, `https://gist.github.com/${ID}/${V1}`);
+  assert.throws(() => revisionsFromLog(LOG_FIXTURE, new Map([[V1, COUNTS.get(V1)]]), GIST), /no line counts for revision 2/);
+  assert.throws(() => revisionsFromLog(LOG_FIXTURE, new Map([...COUNTS, [V2, { additions: 'x' }]]), GIST), /revision 2/);
 });
 
-test('revisionsFromGist: equal timestamps keep the API order (reversed)', () => {
+test('revisionsFromLog: equal timestamps keep the log order (no re-sorting by date)', () => {
   const same = '2026-08-13T15:00:00Z';
-  const revs = revisionsFromGist({
-    id: ID,
-    history: [
-      { version: 'c'.repeat(40), committed_at: same },
-      { version: 'b'.repeat(40), committed_at: same },
-      { version: 'a'.repeat(40), committed_at: same },
-    ],
-  });
-  assert.deepEqual(revs.map((r) => r.short), ['aaaaaaa', 'bbbbbbb', 'ccccccc']);
+  const log = [
+    { version: 'a'.repeat(40), committed_at: same },
+    { version: 'b'.repeat(40), committed_at: same },
+    { version: 'c'.repeat(40), committed_at: same },
+  ];
+  const counts = Object.fromEntries(log.map((e) => [e.version, { additions: 1, deletions: 1 }]));
+  assert.deepEqual(revisionsFromLog(log, counts, GIST).map((r) => r.short), ['aaaaaaa', 'bbbbbbb', 'ccccccc']);
 });
 
 test('snapshotName: history/NN-<short>.md, zero-padded', () => {
   assert.equal(snapshotName({ n: 7, short: '8ef29d7' }), 'history/07-8ef29d7.md');
-  assert.equal(snapshotName(revisionsFromGist(API_FIXTURE)[0]), 'history/01-2a8d004.md');
+  assert.equal(snapshotName(revisions()[0]), 'history/01-2a8d004.md');
   assert.equal(snapshotName({ n: 12, short: 'abcdef0' }), 'history/12-abcdef0.md');
   assert.ok(SNAPSHOT_FILE_RE.test('07-8ef29d7.md'));
   assert.ok(!SNAPSHOT_FILE_RE.test('history.json'));
@@ -108,12 +115,11 @@ const SNAPSHOTS = new Map([
 ]);
 
 test('historyDocument: totals, count, first/last, per-revision file/bytes/lines', () => {
-  const revisions = revisionsFromGist(API_FIXTURE);
   const doc = historyDocument({
     id: ID,
     owner: 'burkeholland',
     fetched_at: '2026-08-31T18:00:00.000Z',
-    revisions,
+    revisions: revisions(),
     files: SNAPSHOTS,
   });
   assert.deepEqual(Object.keys(doc), [
@@ -126,7 +132,7 @@ test('historyDocument: totals, count, first/last, per-revision file/bytes/lines'
   assert.equal(doc.count, 3);
   assert.equal(doc.first_committed_at, '2026-08-12T20:39:59Z');
   assert.equal(doc.last_committed_at, '2026-08-31T13:11:39Z');
-  assert.equal(doc.additions_total, 126);
+  assert.equal(doc.additions_total, 916, 'the root commit counts too');
   assert.equal(doc.deletions_total, 84);
   assert.deepEqual(doc.revisions.map((r) => r.file), ['history/01-2a8d004.md', 'history/02-f3d7c70.md', 'history/03-8ef29d7.md']);
   assert.deepEqual(doc.revisions.map((r) => r.bytes), [35, 52, 34]);
@@ -134,9 +140,9 @@ test('historyDocument: totals, count, first/last, per-revision file/bytes/lines'
   assert.deepEqual(Object.keys(doc.revisions[0]), [
     'n', 'version', 'short', 'committed_at', 'additions', 'deletions', 'total', 'url', 'file', 'bytes', 'lines',
   ]);
-  assert.equal(doc.revisions[0].additions, 0, 'record fields are carried over');
+  assert.equal(doc.revisions[0].additions, 790, 'record fields are carried over');
 
-  const fromObject = historyDocument({ id: ID, owner: 'x', fetched_at: new Date('2026-01-02T03:04:05Z'), revisions, files: Object.fromEntries(SNAPSHOTS) });
+  const fromObject = historyDocument({ id: ID, owner: 'x', fetched_at: new Date('2026-01-02T03:04:05Z'), revisions: revisions(), files: Object.fromEntries(SNAPSHOTS) });
   assert.equal(fromObject.fetched_at, '2026-01-02T03:04:05.000Z');
   assert.deepEqual(fromObject.revisions.map((r) => r.bytes), [35, 52, 34]);
 });
@@ -150,14 +156,13 @@ test('historyDocument: empty history → zero totals and null dates; missing sna
   assert.equal(empty.deletions_total, 0);
   assert.deepEqual(empty.revisions, []);
   assert.throws(
-    () => historyDocument({ id: ID, owner: 'x', fetched_at: 'x', revisions: revisionsFromGist(API_FIXTURE), files: new Map() }),
+    () => historyDocument({ id: ID, owner: 'x', fetched_at: 'x', revisions: revisions(), files: new Map() }),
     /no snapshot for revision 1/,
   );
 });
 
 test('keepPreviousFetchedAt: keeps the old stamp on identical content, takes the new one otherwise', () => {
-  const revisions = revisionsFromGist(API_FIXTURE);
-  const make = (fetched_at, files = SNAPSHOTS) => historyDocument({ id: ID, owner: 'burkeholland', fetched_at, revisions, files });
+  const make = (fetched_at, files = SNAPSHOTS) => historyDocument({ id: ID, owner: 'burkeholland', fetched_at, revisions: revisions(), files });
   const prev = make('2026-08-31T18:00:00.000Z');
   const next = make('2026-08-31T19:00:00.000Z');
 
@@ -175,10 +180,15 @@ test('keepPreviousFetchedAt: keeps the old stamp on identical content, takes the
     id: ID,
     owner: 'burkeholland',
     fetched_at: '2026-08-31T19:00:00.000Z',
-    revisions: revisionsFromGist({ ...API_FIXTURE, history: API_FIXTURE.history.slice(1) }),
-    files: SNAPSHOTS,
+    revisions: revisionsFromLog(LOG_FIXTURE.slice(1), COUNTS, GIST),
+    files: new Map([[V2, SNAPSHOTS.get(V2)], [V3, SNAPSHOTS.get(V3)]]),
   });
   assert.equal(keepPreviousFetchedAt(prev, more).fetched_at, '2026-08-31T19:00:00.000Z', 'a different count takes the new stamp');
+
+  const recounted = new Map(COUNTS);
+  recounted.set(V1, { additions: 0, deletions: 0 });
+  const counts = historyDocument({ id: ID, owner: 'burkeholland', fetched_at: '2026-08-31T19:00:00.000Z', revisions: revisionsFromLog(LOG_FIXTURE, recounted, GIST), files: SNAPSHOTS });
+  assert.equal(keepPreviousFetchedAt(prev, counts).fetched_at, '2026-08-31T19:00:00.000Z', 'changed +/- counts take the new stamp');
 
   assert.equal(keepPreviousFetchedAt(null, next), next, 'no previous document');
   assert.equal(keepPreviousFetchedAt(undefined, next), next);

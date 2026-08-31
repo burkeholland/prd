@@ -11,23 +11,26 @@ screenshots so the site builds offline. Rerunning it with an unchanged gist chan
 - `public/mocks/NN-slug.png` — the screenshots, validated (HTTP 200, PNG magic bytes, > 10 000 bytes)
 - `content/gist/meta.json` — gist id/owner/revision/`updated_at`/`fetched_at` + the image list
 
-Options: `--gist <id>`, `--out <repo root>`, `--dry-run` (fetch + validate, write nothing).
+Options: `--gist <id>`, `--out <repo root>`, `--owner <login>`, `--description <text>`, `--dry-run` (fetch + validate, write nothing).
 Exit codes: 0 ok · 1 fetch/validation failure (nothing partial is written) · 2 usage.
-Set `GITHUB_TOKEN` to raise the unauthenticated GitHub API limit (60 requests/hour); it is never printed.
+Both scripts clone the gist's git repository (anonymous, ~1 s); the GitHub REST API is not used, so no token is needed.
+Git does not record a gist's owner or description: `--owner`/`--description` set them, else they are carried over from the
+existing `content/gist/meta.json` (default owner `burkeholland`, no description). The screenshots are plain HTTPS downloads.
 
 Automatic refresh: the workflow **Refresh the sample PRD snapshot** (`.github/workflows/refresh-gist.yml`) reruns this
 script and `fetch-gist-history.mjs` daily at 13:00 UTC. When the gist changed it pushes `gist-refresh/<revision>` and
 opens a pull request (gist revision link, diff stat, a `Checks: pass` / `Checks: FAIL` line from `node --test`); it
 never commits to `main`. By hand: `gh workflow run refresh-gist.yml -f dry_run=true` (fetch + diff only, no push, no PR).
 
-Tests: `node --test "scripts/**/*.test.mjs"` — offline unit tests for `scripts/lib/gist.mjs` plus one
-integration test over the committed snapshot (skips when it has not been generated yet).
+Tests: `node --test "scripts/**/*.test.mjs"` — offline unit tests for `scripts/lib/gist.mjs` and `scripts/lib/gist-git.mjs`
+(the thin git layer: `git clone`/`log`/`diff --numstat`/`cat-file blob`/`rev-parse`/`ls-tree`, tested by injecting the
+command runner) plus one integration test over the committed snapshot (skips when it has not been generated yet).
 
 ## fetch-gist-history.mjs — every revision of the sample PRD
 
-`node scripts/fetch-gist-history.mjs` fetches the gist's revision list (`GET /gists/<id>`), then each
-revision (`GET /gists/<id>/<version>`, sequential, 17 requests for 16 revisions) and keeps the
-`build-the-urlist.md` of every one, so the "how this PRD evolved" data is offline and reproducible.
+`node scripts/fetch-gist-history.mjs` clones the gist's git repository once (`--no-checkout`), reads the revision list
+from `git log`, the +/- line counts of every revision from `git diff --numstat` (the first revision included) and the
+`build-the-urlist.md` of every one from `git cat-file blob`, so the "how this PRD evolved" data is offline and reproducible.
 Rerunning it with an unchanged gist changes nothing (`fetched_at` is kept while the content is identical);
 snapshots of revisions that vanished from the gist are removed. It writes:
 
@@ -37,9 +40,10 @@ snapshots of revisions that vanished from the gist are removed. It writes:
   and per revision `n`, `version`, `short`, `committed_at`, `additions`/`deletions`/`total`, `url`, `file`, `bytes`, `lines`
 
 Every snapshot must be non-empty UTF-8 starting with the gist's `# ` h1, else nothing is written.
-Options: `--gist <id>`, `--out <repo root>`, `--dry-run` (fetch + validate, print the plan, write nothing).
+Options: `--gist <id>`, `--out <repo root>`, `--owner <login>` (for the revision URLs; default: `meta.json`, else `burkeholland`),
+`--dry-run` (fetch + validate, print the plan, write nothing).
 Exit codes: 0 ok · 1 fetch/validation failure (nothing partial is written) · 2 usage.
-A 403/429 stops the run with a hint to set `GITHUB_TOKEN` (60 unauthenticated requests/hour); it is never printed.
+Both scripts clone the gist's git repository (anonymous, ~1 s); the GitHub REST API is not used, so no token is needed.
 Pure helpers: `scripts/lib/history.mjs` (`history.test.mjs` also checks the committed data: `count` = files on disk,
 recorded `bytes`, and the snapshot matching `meta.json`'s `revision` byte-identical to `public/raw/build-the-urlist.md`).
 

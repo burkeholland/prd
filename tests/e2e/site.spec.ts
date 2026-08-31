@@ -7,11 +7,13 @@ import { expect, test, type Page } from '@playwright/test';
 const BASE = '/prd';
 const to = (path: string) => `${BASE}${path}`;
 
-const NAV = [
+// `title` is set only where the page's <title> does not start with the nav label.
+const NAV: { href: string; label: string; title?: string }[] = [
   { href: '/', label: 'Home' },
   { href: '/sample/', label: 'The sample PRD' },
   { href: '/guide/', label: 'How to write one' },
   { href: '/walkthrough/', label: 'Worked example' },
+  { href: '/history/', label: 'How it evolved', title: 'How this PRD evolved' },
   { href: '/template/', label: 'Template' },
 ];
 
@@ -26,6 +28,7 @@ const CONTENT = {
   gistMeta: 'content/gist/meta.json',
   rawGist: 'public/raw/build-the-urlist.md',
   cleanTemplate: 'public/prd-template.md',
+  history: 'content/gist/history.json',
 };
 const present = (file: string) => existsSync(resolve(file));
 
@@ -70,7 +73,7 @@ test('home has one h1, three cards and makes no cross-origin requests', async ({
   await expect(cards.nth(1)).toHaveAttribute('href', to('/guide/'));
   await expect(cards.nth(2)).toHaveAttribute('href', to('/walkthrough/'));
 
-  await expect(page.locator('nav.site-nav a')).toHaveCount(5);
+  await expect(page.locator('nav.site-nav a')).toHaveCount(6);
 
   const own = new URL(page.url()).origin;
   expect([...origins]).toEqual([own]);
@@ -94,7 +97,8 @@ test('every nav route responds 200 with a title that starts with its label', asy
     expect(response?.status(), `${item.href} status`).toBe(200);
 
     const title = await page.title();
-    const allowed = item.href === '/' ? [item.label, BRAND] : [item.label];
+    const prefix = item.title ?? item.label;
+    const allowed = item.href === '/' ? [prefix, BRAND] : [prefix];
     expect(
       allowed.some((prefix) => title.startsWith(prefix)),
       `${item.href} title "${title}" should start with ${allowed.join(' or ')}`,
@@ -103,7 +107,7 @@ test('every nav route responds 200 with a title that starts with its label', asy
 });
 
 test('no page whose content exists says it is on its way', async ({ page }) => {
-  const routes = ['/', '/sample/', '/guide/'];
+  const routes = ['/', '/sample/', '/guide/', '/history/'];
   if (present(CONTENT.walkthrough)) routes.push('/walkthrough/');
   if (present(CONTENT.template)) routes.push('/template/');
 
@@ -238,9 +242,9 @@ test('every walkthrough link into the sample PRD lands on an existing heading', 
   expect(unresolved, 'walkthrough → sample anchors without a heading').toEqual([]);
 });
 
-test('no horizontal scroll at 320px on / and /sample/', async ({ page }) => {
+test('no horizontal scroll at 320px on /, /sample/ and /history/', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 640 });
-  for (const path of ['/', '/sample/']) {
+  for (const path of ['/', '/sample/', '/history/']) {
     await page.goto(to(path));
     const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
     expect(scrollWidth, `${path} scrollWidth`).toBeLessThanOrEqual(320);
@@ -300,4 +304,41 @@ test('the sample PRD shows its seven screenshots from under the base', async ({ 
     expect(img.src, 'screenshot src').toMatch(new RegExp(`^${BASE}/mocks/`));
     expect(img.naturalWidth, `${img.src} loaded`).toBeGreaterThan(0);
   }
+});
+test('the history page lists every gist revision, badges the published one, and ships a static chart with no script', async ({
+  page,
+}) => {
+  test.skip(!present(CONTENT.history), 'gist history not merged yet');
+  const history = JSON.parse(readFileSync(resolve(CONTENT.history), 'utf8')) as {
+    count: number;
+    revisions: { n: number; additions: number; deletions: number }[];
+  };
+  // Derived from the data, never hard-coded: revisions GitHub reports no counts for show `—` in
+  // `+` and `−`; the first revision always shows counts. Today that is 2–6; a later data source may make it 0.
+  const noCounts = history.revisions.filter((rev) => rev.additions + rev.deletions === 0 && rev.n !== 1).length;
+
+  await page.goto(to('/history/'));
+  await expect(page.locator('h1')).toHaveText('How this PRD evolved');
+
+  const table = page.locator('table.history');
+  await expect(table.locator('tbody tr')).toHaveCount(history.count);
+  await expect(table.locator('mark')).toHaveCount(1);
+  await expect(table.locator('mark a')).toHaveAttribute('href', to('/sample/'));
+  await expect(table.locator('tbody a[href^="https://gist.github.com/"]')).toHaveCount(history.count);
+
+  const dashes = await table.locator('tbody tr').evaluateAll((rows) =>
+    rows.map((row) => {
+      const cells = Array.from(row.querySelectorAll('td'), (cell) => cell.textContent?.trim() ?? '');
+      return { plus: cells[1] === '—', minus: cells[2] === '—' };
+    }),
+  );
+  expect(dashes.filter((row) => row.plus).length, '— in the + column').toBe(noCounts);
+  expect(dashes.filter((row) => row.minus).length, '— in the − column').toBe(noCounts);
+  expect(dashes.every((row) => row.plus === row.minus), '+ and − dash together').toBe(true);
+  expect(dashes[0]?.plus, 'the first revision shows counts').toBe(false);
+  await expect(page.locator('.history-note__counts'), 'footnote only when a row lacks counts').toHaveCount(noCounts > 0 ? 1 : 0);
+
+  await expect(page.locator('svg.size-chart text')).toHaveCount(history.count);
+  await expect(page.locator('svg.size-chart rect')).toHaveCount(history.count);
+  await expect(page.locator('script')).toHaveCount(0);
 });
