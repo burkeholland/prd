@@ -11,7 +11,9 @@ const to = (path: string) => `${BASE}${path}`;
 // Routes come from `src/pages/*.astro` at test time so a page that lands on main later
 // (`/history/`) is audited without editing this file. `/nope/` is the 404 page: it answers
 // 404 but is audited like the others. Known routes keep the order of the site navigation.
+// EXTRA lists pages a dynamic route builds (`src/pages/history/[n].astro`), which discovery cannot see.
 const PREFERRED = ['/', '/sample/', '/guide/', '/walkthrough/', '/template/', '/history/'];
+const EXTRA = ['/history/13/'];
 const NOT_FOUND = '/nope/';
 
 function discoverRoutes(): string[] {
@@ -22,7 +24,7 @@ function discoverRoutes(): string[] {
   const routes = new Set(names.map((name) => (name === 'index' ? '/' : `/${name}/`)));
   const ordered = PREFERRED.filter((route) => routes.has(route));
   const extra = [...routes].filter((route) => !PREFERRED.includes(route)).sort();
-  return [...ordered, ...extra, NOT_FOUND];
+  return [...ordered, ...extra, ...EXTRA, NOT_FOUND];
 }
 
 const ROUTES = discoverRoutes();
