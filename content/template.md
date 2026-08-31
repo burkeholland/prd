@@ -14,7 +14,7 @@ Fourteen sections, in the order the sample uses them.
 
 ## Mission and stop condition
 
-**Write here:** One paragraph, first, directly under the title as in the sample: what to build, where, and when to stop. Without a stop condition the model decides what counts as done.
+**Write here:** One paragraph, first, directly under the title as in the sample: what to build, where, and when to stop. Without a stop condition the agent decides what counts as done.
 
 **Example from the sample:**
 
@@ -64,7 +64,7 @@ Use the format `- [ ] Requirement — Verify: method`. Check an item only after 
 
 ## Stack and design
 
-**Write here:** Pin every layer by name and name what you are ruling out ("no ORM", "no second CSS framework"). Each unpinned layer is a decision the model makes silently.
+**Write here:** Pin every layer by name and name what you are ruling out ("no ORM", "no second CSS framework"). Each unpinned layer is a decision the agent makes silently.
 
 **Example from the sample:**
 
@@ -86,7 +86,7 @@ Design system: {CSS framework} for every screen, {icon set} for all icons; no se
 
 ## Product
 
-**Write here:** What it is, who can do what, invariants as plain rules, and what does *not* exist, exact strings in bold. A model not told "no soft delete" will often build one.
+**Write here:** What it is, who can do what, invariants as plain rules, and what does *not* exist, exact strings in bold. An agent not told "no soft delete" will often build one.
 
 **Example from the sample:**
 
@@ -290,7 +290,7 @@ Ship a README covering setup, environment variables, commands, {local sign-in}, 
 
 ## Completion
 
-**Write here:** Numbered steps the agent can run — commands, journeys, a restart — not qualities the result should have, ending with: claim nothing that did not run. This lets the model stop on its own.
+**Write here:** Numbered steps the agent can run — commands, journeys, a restart — not qualities the result should have, ending with: claim nothing that did not run. This lets the agent stop on its own.
 
 **Example from the sample:**
 
