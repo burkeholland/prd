@@ -27,7 +27,8 @@ test('every page has one canonical URL and a matching Open Graph / Twitter card'
     expect(await meta('meta[property="og:image"]'), `${path} og:image`).toBe(OG_IMAGE);
     expect(await meta('meta[name="twitter:card"]'), `${path} twitter:card`).toBe('summary_large_image');
     expect(await meta('meta[name="twitter:image"]'), `${path} twitter:image`).toBe(OG_IMAGE);
-    expect(await meta('meta[name="robots"]'), `${path} must be indexable`).toBeNull();
+    // Locators auto-wait for a match, so an absent tag is asserted by count, not by attribute.
+    await expect(page.locator('meta[name="robots"]'), `${path} must be indexable`).toHaveCount(0);
   }
 });
 
