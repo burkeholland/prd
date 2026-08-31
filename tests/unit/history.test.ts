@@ -264,7 +264,11 @@ describe('the real gist history', () => {
 
     const current = list.filter((row) => row.isCurrent);
     expect(current).toHaveLength(1);
-    expect(list.filter((row) => !row.hasCounts).map((row) => row.n)).toEqual([2, 3, 4, 5, 6]);
+    // Derived, not hard-coded: a follow-up task gives the earliest revisions real counts, after
+    // which this list is empty and the assertion still holds.
+    const noCounts = history.revisions.filter((rev) => rev.additions + rev.deletions === 0 && rev.n !== 1);
+    expect(list.filter((row) => !row.hasCounts).map((row) => row.n)).toEqual(noCounts.map((rev) => rev.n));
+    expect(list[0]?.hasCounts, 'the first revision always has counts').toBe(true);
 
     // The task brief expected revision 13 to be a pure line-ending re-conversion. The snapshots
     // say otherwise: it flipped LF → CRLF *and* edited seven sections (24 916 − 24 349 bytes ≠ 268

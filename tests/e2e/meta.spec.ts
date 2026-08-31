@@ -6,7 +6,7 @@ const to = (path: string) => `${BASE}${path}`;
 
 // Canonical URLs are absolute (astro.config.mjs `site` + `base`) and end in a slash for pages.
 const SITE = 'https://burkeholland.github.io';
-const ROUTES = ['/', '/sample/', '/guide/', '/walkthrough/', '/template/'];
+const ROUTES = ['/', '/sample/', '/guide/', '/walkthrough/', '/history/', '/template/'];
 const canonicalOf = (path: string) => `${SITE}${BASE}${path}`;
 const OG_IMAGE = `${SITE}${BASE}/og.png`;
 
@@ -45,7 +45,7 @@ test('og.png is served as a 1200×630 PNG under 200 KB', async ({ request }) => 
   expect(body.length, 'file size').toBeLessThan(200_000);
 });
 
-test('the sitemap index points at one sitemap listing exactly the five pages by canonical URL', async ({ request }) => {
+test('the sitemap index points at one sitemap listing exactly the six pages by canonical URL', async ({ request }) => {
   const index = await request.get(to('/sitemap-index.xml'));
   expect(index.status()).toBe(200);
   const indexXml = await index.text();
@@ -56,7 +56,7 @@ test('the sitemap index points at one sitemap listing exactly the five pages by 
   const sitemap = await request.get(to('/sitemap-0.xml'));
   expect(sitemap.status()).toBe(200);
   const locs = [...(await sitemap.text()).matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
-  expect(locs).toHaveLength(5);
+  expect(locs).toHaveLength(6);
   expect(new Set(locs)).toEqual(new Set(ROUTES.map(canonicalOf)));
   expect(locs.filter((loc) => loc.includes('404')), 'status pages in the sitemap').toEqual([]);
 });

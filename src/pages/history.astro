@@ -26,6 +26,9 @@ const current = list.find((row) => row.isCurrent);
 const largest = list.reduce((max, row) => (row.bytes > max.bytes ? row : max), list[0]!);
 const smallest = list.reduce((min, row) => (row.bytes < min.bytes ? row : min), list[0]!);
 const withoutCounts = list.filter((row) => !row.hasCounts);
+const eolFlips = list.filter((row) => row.delta.eol.changed);
+// The first revision is "everything added". The API gives it no counts; a later data source may.
+const added = (row: (typeof list)[number]) => (row.n === 1 ? row.additions || row.lines : row.additions);
 
 const title = 'How this PRD evolved';
 const description = `${SITE.gistTitle} went through ${totals.count} revisions over ${totals.days} days — what grew, what was rewritten, and when.`;
@@ -128,7 +131,7 @@ const BAR_SPACE = 160; // barScale's default maxPx: the inner chart's viewBox wi
                       <span class="history__time">{row.time}</span>
                     </time>
                   </td>
-                  <td class="num">{row.hasCounts ? (row.n === 1 ? row.lines : row.additions) : '—'}</td>
+                  <td class="num">{row.hasCounts ? added(row) : '—'}</td>
                   <td class="num">{row.hasCounts ? row.deletions : '—'}</td>
                   <td class="num">{kb(row.bytes)}</td>
                   <td class="num">{row.sectionCount}</td>
@@ -154,12 +157,23 @@ const BAR_SPACE = 160; // barScale's default maxPx: the inner chart's viewBox wi
           </tbody>
         </table>
       </div>
-      <p class="history-note" id="counts-note">
-        GitHub reports no line counts for the earliest revisions
-        {withoutCounts.length > 0 && ` (#${withoutCounts[0]!.n}–#${withoutCounts[withoutCounts.length - 1]!.n})`};
-        the first draft counts every line as added. When a revision flips the line endings (CRLF ↔ LF), GitHub counts
-        every line as changed, so + and − overstate the edit.
-      </p>
+      {
+        (withoutCounts.length > 0 || eolFlips.length > 0) && (
+          <p class="history-note" id="counts-note">
+            {withoutCounts.length > 0 && (
+              <span class="history-note__counts">
+                {`GitHub reports no line counts for the earliest revisions (#${withoutCounts[0]!.n}–#${withoutCounts[withoutCounts.length - 1]!.n}); the first draft counts every line as added. `}
+              </span>
+            )}
+            {eolFlips.length > 0 && (
+              <span class="history-note__eol">
+                When a revision flips the line endings (CRLF ↔ LF), GitHub counts every line as changed, so + and −
+                overstate the edit.
+              </span>
+            )}
+          </p>
+        )
+      }
     </section>
 
     <p class="history-page__outro">

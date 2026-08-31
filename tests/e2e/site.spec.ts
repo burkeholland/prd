@@ -309,7 +309,13 @@ test('the history page lists every gist revision, badges the published one, and 
   page,
 }) => {
   test.skip(!present(CONTENT.history), 'gist history not merged yet');
-  const history = JSON.parse(readFileSync(resolve(CONTENT.history), 'utf8')) as { count: number };
+  const history = JSON.parse(readFileSync(resolve(CONTENT.history), 'utf8')) as {
+    count: number;
+    revisions: { n: number; additions: number; deletions: number }[];
+  };
+  // Derived from the data, never hard-coded: revisions GitHub reports no counts for show `—` in
+  // `+` and `−`; the first revision always shows counts. Today that is 2–6; a later data source may make it 0.
+  const noCounts = history.revisions.filter((rev) => rev.additions + rev.deletions === 0 && rev.n !== 1).length;
 
   await page.goto(to('/history/'));
   await expect(page.locator('h1')).toHaveText('How this PRD evolved');
@@ -319,6 +325,18 @@ test('the history page lists every gist revision, badges the published one, and 
   await expect(table.locator('mark')).toHaveCount(1);
   await expect(table.locator('mark a')).toHaveAttribute('href', to('/sample/'));
   await expect(table.locator('tbody a[href^="https://gist.github.com/"]')).toHaveCount(history.count);
+
+  const dashes = await table.locator('tbody tr').evaluateAll((rows) =>
+    rows.map((row) => {
+      const cells = Array.from(row.querySelectorAll('td'), (cell) => cell.textContent?.trim() ?? '');
+      return { plus: cells[1] === '—', minus: cells[2] === '—' };
+    }),
+  );
+  expect(dashes.filter((row) => row.plus).length, '— in the + column').toBe(noCounts);
+  expect(dashes.filter((row) => row.minus).length, '— in the − column').toBe(noCounts);
+  expect(dashes.every((row) => row.plus === row.minus), '+ and − dash together').toBe(true);
+  expect(dashes[0]?.plus, 'the first revision shows counts').toBe(false);
+  await expect(page.locator('.history-note__counts'), 'footnote only when a row lacks counts').toHaveCount(noCounts > 0 ? 1 : 0);
 
   await expect(page.locator('svg.size-chart text')).toHaveCount(history.count);
   await expect(page.locator('svg.size-chart rect')).toHaveCount(history.count);
