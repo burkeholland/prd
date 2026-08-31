@@ -4,6 +4,8 @@ node_modules/
 # build output
 dist/
 .astro/
+# WebP copies of public/mocks/*.png, derived by scripts/make-mocks.mjs on every build (prebuild/predev)
+public/mocks/derived/
 
 # tests
 test-results/
