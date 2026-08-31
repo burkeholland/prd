@@ -2,6 +2,7 @@
 import { getEntry } from 'astro:content';
 import Doc from '../layouts/Doc.astro';
 import { DOC_ROUTES, SITE } from '../lib/site';
+import { withBase } from '../lib/base';
 
 interface GistMeta {
   fetched_at?: string;
@@ -36,7 +37,7 @@ const fetchedLabel =
     <p>{description}</p>
     <ul class="source-card__links">
       <li><a href={SITE.gistUrl}>View on GitHub</a></li>
-      <li><a href="/raw/build-the-urlist.md" download>Download .md</a></li>
+      <li><a href={withBase('/raw/build-the-urlist.md')} download>Download .md</a></li>
     </ul>
     {
       meta && (meta.fetched_at || meta.revision) && (

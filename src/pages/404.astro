@@ -1,0 +1,28 @@
+---
+import Base from '../layouts/Base.astro';
+import { NAV, SITE } from '../lib/site';
+import { withBase } from '../lib/base';
+
+// Astro writes this route to dist/404.html; GitHub Pages serves it for unknown paths under the base.
+---
+
+<Base title={`Not found · ${SITE.name}`} description="There is nothing at this address.">
+  <article class="doc">
+    <header class="doc__header">
+      <h1>Not found</h1>
+      <p class="doc__description">There is nothing at this address.</p>
+    </header>
+    <div class="doc__body prose">
+      <p>Try one of these pages instead:</p>
+      <ul>
+        {
+          NAV.map((item) => (
+            <li>
+              <a href={withBase(item.href)}>{item.label}</a>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </article>
+</Base>
