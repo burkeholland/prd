@@ -1,0 +1,209 @@
+name: Refresh the sample PRD snapshot
+
+# Daily: re-run the gist snapshot scripts against Burke's gist. When anything under
+# content/gist, public/raw or public/mocks changed, push a gist-refresh/<revision>
+# branch and open a pull request. Never commits to main — a human or the lead merges,
+# and merging republishes /sample/.
+#
+# A push made with github.token does not start `on: push` workflows, so this run
+# dispatches the Deploy workflow on the PR branch itself (hence `actions: write`).
+# By hand: gh workflow run refresh-gist.yml -f dry_run=true
+
+on:
+  schedule:
+    - cron: '0 13 * * *' # daily, 13:00 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Fetch and diff only; do not push or open a PR'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+concurrency: refresh-gist
+
+env:
+  SNAPSHOT_PATHS: content/gist public/raw public/mocks
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # Zero-dependency scripts: no npm ci. Either exits non-zero → job fails, nothing partial is written.
+      - name: Fetch the gist snapshot and its revision history
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node scripts/fetch-gist.mjs
+          node scripts/fetch-gist-history.mjs
+
+      - name: Detect changes
+        id: detect
+        run: |
+          field() { node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(0, "utf8"))[process.argv[1]]))' -- "$1"; }
+          old_full=$(git show HEAD:content/gist/meta.json | field revision)
+          new_full=$(field revision < content/gist/meta.json)
+          old=${old_full:0:7}
+          new=${new_full:0:7}
+          gist_url="https://gist.github.com/$(field owner < content/gist/meta.json)/$(field id < content/gist/meta.json)"
+          {
+            echo "old=$old"
+            echo "new=$new"
+            echo "new_full=$new_full"
+            echo "gist_url=$gist_url"
+          } >> "$GITHUB_OUTPUT"
+          status=$(git status --porcelain -- $SNAPSHOT_PATHS)
+          if [ -z "$status" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Snapshot is current (revision $new)"
+            {
+              echo "### Refresh the sample PRD snapshot"
+              echo "Snapshot is current (revision \`$new\`)."
+              echo "Nothing pushed, no pull request."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Snapshot changed: $old → $new"
+            echo "$status"
+          fi
+
+      # A failing check must not fail the workflow: a stale quote is exactly what the PR reports.
+      - name: Run the repo checks
+        id: checks
+        if: steps.detect.outputs.changed == 'true'
+        continue-on-error: true
+        run: node --test "scripts/**/*.test.mjs" "scripts/check-*.mjs"
+
+      # Stages the snapshot and writes the PR title/body once, for the dry run and the real PR alike.
+      # `git diff --cached --stat` here is what `git diff --stat HEAD~1` shows after the commit below.
+      - name: Compose the pull request
+        id: compose
+        if: steps.detect.outputs.changed == 'true'
+        env:
+          OLD: ${{ steps.detect.outputs.old }}
+          NEW: ${{ steps.detect.outputs.new }}
+          REVISION_URL: ${{ steps.detect.outputs.gist_url }}/${{ steps.detect.outputs.new_full }}
+          CHECKS: "${{ steps.checks.outcome == 'success' && 'Checks: pass' || 'Checks: FAIL — see run log' }}"
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          git add -A -- $SNAPSHOT_PATHS
+          body="$RUNNER_TEMP/pr-body.md"
+          {
+            echo "Gist revision: $REVISION_URL"
+            echo
+            echo '```'
+            git diff --cached --stat
+            echo '```'
+            echo
+            echo "$CHECKS"
+            echo "Workflow run: $RUN_URL"
+            echo
+            echo "Merging republishes /sample/; if Checks failed, the guide/walkthrough/template quotes need the content task."
+          } > "$body"
+          {
+            echo "title=Refresh sample PRD snapshot ($OLD → $NEW)"
+            echo "body=$body"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Dry run
+        if: steps.detect.outputs.changed == 'true' && inputs.dry_run == true
+        env:
+          OLD: ${{ steps.detect.outputs.old }}
+          NEW: ${{ steps.detect.outputs.new }}
+          TITLE: ${{ steps.compose.outputs.title }}
+          BODY: ${{ steps.compose.outputs.body }}
+        run: |
+          echo "Dry run: nothing pushed, no pull request. Would push gist-refresh/$NEW and open:"
+          git diff --cached --stat
+          echo "--- title ---"
+          echo "$TITLE"
+          echo "--- body ---"
+          cat "$BODY"
+          {
+            echo "### Refresh the sample PRD snapshot"
+            echo "Dry run: snapshot changed ($OLD → $NEW); nothing pushed, no pull request."
+            echo "Would open: $TITLE"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Push the refresh branch
+        id: branch
+        if: steps.detect.outputs.changed == 'true' && inputs.dry_run != true
+        env:
+          BRANCH: gist-refresh/${{ steps.detect.outputs.new }}
+          OLD: ${{ steps.detect.outputs.old }}
+          NEW: ${{ steps.detect.outputs.new }}
+        run: |
+          if git ls-remote --exit-code --heads origin "refs/heads/$BRANCH" > /dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "PR branch already exists: $BRANCH — nothing pushed"
+            {
+              echo "### Refresh the sample PRD snapshot"
+              echo "PR branch already exists: \`$BRANCH\` ($OLD → $NEW)."
+              echo "Nothing pushed; merge or close its pull request."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "exists=false" >> "$GITHUB_OUTPUT"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch --create "$BRANCH"
+          git commit --quiet -m "Refresh sample PRD snapshot: $OLD → $NEW"
+          git push origin "$BRANCH"
+
+      # github.token pushes do not trigger deploy.yml's `on: push`; dispatch it so the PR gets check + test + build.
+      - name: Start CI on the branch
+        id: ci
+        if: steps.branch.outputs.exists == 'false'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: gist-refresh/${{ steps.detect.outputs.new }}
+        run: gh workflow run deploy.yml --ref "$BRANCH"
+
+      - name: Open the pull request
+        id: pr
+        if: steps.branch.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: gist-refresh/${{ steps.detect.outputs.new }}
+          OLD: ${{ steps.detect.outputs.old }}
+          NEW: ${{ steps.detect.outputs.new }}
+          TITLE: ${{ steps.compose.outputs.title }}
+          BODY: ${{ steps.compose.outputs.body }}
+          CHECKS: "${{ steps.checks.outcome == 'success' && 'Checks: pass' || 'Checks: FAIL — see run log' }}"
+          CI_OUTCOME: ${{ steps.ci.outcome }}
+          DEPLOY_RUNS: ${{ github.server_url }}/${{ github.repository }}/actions/workflows/deploy.yml
+        run: |
+          url=$(gh pr list --base main --head "$BRANCH" --state open --json url --jq '.[0].url // empty')
+          if [ -n "$url" ]; then
+            echo "Pull request already exists: $url — not opening a second one"
+          else
+            if [ "$CI_OUTCOME" = success ]; then
+              echo "CI: the Deploy workflow was dispatched on this branch by the refresh run (a push by github-actions[bot] does not trigger it): $DEPLOY_RUNS?query=branch%3A$BRANCH" >> "$BODY"
+            else
+              echo "CI: dispatching the Deploy workflow on this branch failed; run it by hand: \`gh workflow run deploy.yml --ref $BRANCH\`" >> "$BODY"
+            fi
+            url=$(gh pr create --base main --head "$BRANCH" --title "$TITLE" --body-file "$BODY")
+            echo "Pull request opened: $url"
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Refresh the sample PRD snapshot"
+            echo "Pull request: $url ($OLD → $NEW)."
+            echo "$CHECKS — merging republishes /sample/."
+          } >> "$GITHUB_STEP_SUMMARY"
