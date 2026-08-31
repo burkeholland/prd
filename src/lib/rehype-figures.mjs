@@ -4,19 +4,23 @@
  * captioned, lazily loaded figure:
  *
  *   #### Home Page
- *   <img alt="…" src="/mocks/01-home-page.png" />
+ *   <img alt="Screenshot 2026-08-31 080518" src="/mocks/01-home-page.png" />
  *
  * becomes
  *
  *   <h4>Home Page</h4>
  *   <figure class="figure">
- *     <img alt="…" src="/mocks/01-home-page.png" loading="lazy" decoding="async" />
+ *     <img alt="Home Page" src="/mocks/01-home-page.png" loading="lazy" decoding="async" />
  *     <figcaption>Home Page</figcaption>
  *   </figure>
  *
  * The caption is the text of the nearest preceding `h4`; a higher heading
  * (h1–h3) starts a new section and clears it, so an image with no h4 of its own
- * gets a figure without a caption. Only top-level images are wrapped: a raw
+ * gets a figure without a caption. When there is a caption and the image's own
+ * alt is a placeholder — missing, blank, the file name, or an auto-generated
+ * "Screenshot 2026-08-31 080518" — the caption becomes the alt, so a screen
+ * reader hears what the screenshot shows; a written alt is never replaced.
+ * Only top-level images are wrapped: a raw
  * `<img>` HTML block (the gist's screenshots) or a paragraph whose only content
  * is an `<img>` (markdown `![alt](src)` syntax). Inline images inside text and
  * every other node are left alone, so the document text does not change.
@@ -38,6 +42,30 @@
 const RAW_IMG_BLOCK = /^\s*<img\b[^>]*>\s*$/i;
 const CAPTION_TAGS = new Set(['h4']);
 const SECTION_TAGS = new Set(['h1', 'h2', 'h3']);
+/** `alt="…"` / `alt='…'` / bare `alt` on a raw `<img>` tag. */
+const RAW_ALT = /\salt(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/i;
+const RAW_SRC = /\ssrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/i;
+const IMAGE_EXTENSION = /\.(?:png|jpe?g|gif|webp|svg|avif|bmp)$/i;
+/** Auto-generated screenshot names such as GitHub's "Screenshot 2026-08-31 080518". */
+const SCREENSHOT_NAME = /^screen ?shot\b[\s\d:._-]*(?:at[\s\d:._-]*)?(?:[ap]m)?$/i;
+
+/**
+ * True when an image's alt text says nothing a caption would not say better:
+ * missing, blank, the file name (with or without its extension), or an
+ * auto-generated screenshot name. A written alt is never touched.
+ * @param {string | undefined} alt
+ * @param {string | undefined} src
+ * @returns {boolean}
+ */
+export function isPlaceholderAlt(alt, src) {
+  const text = (alt ?? '').trim();
+  if (!text) return true;
+  if (IMAGE_EXTENSION.test(text) || SCREENSHOT_NAME.test(text)) return true;
+  const file = (src ?? '').split(/[?#]/)[0].split('/').pop() ?? '';
+  const stem = file.replace(IMAGE_EXTENSION, '');
+  const lower = text.toLowerCase();
+  return file !== '' && (lower === file.toLowerCase() || lower === stem.toLowerCase());
+}
 
 /**
  * Concatenates the text of a node's descendants.
@@ -64,6 +92,24 @@ export function lazyImgTag(tag) {
   // Insert before the closing `/>` or `>`.
   out = out.replace(/\s*\/?>\s*$/, (end) => ` ${missing.join(' ')}${end.trimStart() === '/>' ? ' />' : '>'}`);
   return out;
+}
+
+/**
+ * Gives a raw `<img …>` tag string the caption as `alt` when its own alt is a
+ * placeholder (see `isPlaceholderAlt`); a written alt is kept as is.
+ * @param {string} tag
+ * @param {string | undefined} caption
+ * @returns {string}
+ */
+export function captionAltTag(tag, caption) {
+  if (!caption) return tag;
+  const alt = RAW_ALT.exec(tag);
+  const src = RAW_SRC.exec(tag);
+  const current = alt ? (alt[1] ?? alt[2] ?? alt[3] ?? '') : undefined;
+  if (!isPlaceholderAlt(current, src?.[1] ?? src?.[2] ?? src?.[3])) return tag;
+  const attr = ` alt="${caption.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')}"`;
+  if (alt) return tag.replace(RAW_ALT, attr);
+  return tag.replace(/^<img\b/i, `<img${attr}`);
 }
 
 /**
@@ -134,7 +180,7 @@ export function wrapFigures(tree) {
     }
 
     if (node.type === 'raw' && typeof node.value === 'string' && RAW_IMG_BLOCK.test(node.value)) {
-      children[i] = figureFor({ type: 'raw', value: lazyImgTag(node.value.trim()) }, caption);
+      children[i] = figureFor({ type: 'raw', value: captionAltTag(lazyImgTag(node.value.trim()), caption) }, caption);
       count++;
       continue;
     }
@@ -142,6 +188,10 @@ export function wrapFigures(tree) {
     const image = soleImageOf(node);
     if (image) {
       image.properties = { loading: 'lazy', decoding: 'async', ...image.properties };
+      const { alt, src } = image.properties;
+      if (caption && isPlaceholderAlt(typeof alt === 'string' ? alt : undefined, typeof src === 'string' ? src : undefined)) {
+        image.properties.alt = caption;
+      }
       children[i] = figureFor(image, caption);
       count++;
     }

@@ -567,6 +567,27 @@ main:focus {
   margin-top: 0.3em;
 }
 
+/* GFM task lists ("- [ ]") render a disabled checkbox with no label — a control that does nothing
+   and that assistive tech cannot name. Draw the box as text instead, so the item text is the item. */
+.prose .task-list-item {
+  list-style: none;
+}
+
+.prose .task-list-item > input[type="checkbox"] {
+  display: none;
+}
+
+.prose .task-list-item::before {
+  content: "☐";
+  display: inline-block;
+  width: 1.4rem;
+  margin-left: -1.4rem;
+}
+
+.prose .task-list-item:has(> input[type="checkbox"]:checked)::before {
+  content: "☑";
+}
+
 .prose blockquote {
   margin: 1.1em 0;
   padding: 0.25rem 1.25rem;
@@ -622,6 +643,14 @@ main:focus {
   background: none;
   border: 0;
   padding: 0;
+}
+
+/* github-light paints markdown list markers ("1.") #E36209: 3.5:1 on the white code background.
+   Darken that one token in light mode (5.6:1); dark mode keeps the theme's own colour below. */
+@media (prefers-color-scheme: light) {
+  .astro-code span[style*="#E36209" i] {
+    color: #a35200 !important;
+  }
 }
 
 .prose table {
