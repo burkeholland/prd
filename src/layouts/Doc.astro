@@ -1,0 +1,59 @@
+---
+import { render, type CollectionEntry } from 'astro:content';
+import Base from './Base.astro';
+import Toc from '../components/Toc.astro';
+import { buildToc } from '../lib/toc';
+import { PLACEHOLDER, SITE } from '../lib/site';
+
+type DocEntry = CollectionEntry<'docs'> | CollectionEntry<'gist'>;
+
+interface Props {
+  /** Nav label for this route; the <title> starts with it and it is the fallback heading. */
+  label: string;
+  title?: string;
+  description?: string;
+  /** Missing on branches where `content/` has not merged yet — the page shows a placeholder. */
+  entry?: DocEntry;
+}
+
+const { label, entry, title = label, description } = Astro.props;
+const rendered = entry ? await render(entry) : undefined;
+const Content = rendered?.Content;
+const toc = buildToc(rendered?.headings ?? []);
+const hasToc = toc.length > 0;
+---
+
+<Base title={`${label} · ${SITE.name}`} description={description}>
+  <article class="doc">
+    <header class="doc__header">
+      <slot name="header">
+        <h1>{title}</h1>
+        {description && <p class="doc__description">{description}</p>}
+      </slot>
+    </header>
+
+    {
+      hasToc && (
+        <details class="toc toc--inline">
+          <summary>On this page</summary>
+          <Toc items={toc} />
+        </details>
+      )
+    }
+
+    <div class="doc__body prose">
+      {Content ? <Content /> : <p class="placeholder">{PLACEHOLDER}</p>}
+    </div>
+
+    {
+      hasToc && (
+        <aside class="toc toc--sidebar">
+          <nav aria-label="On this page">
+            <p class="toc__title">On this page</p>
+            <Toc items={toc} />
+          </nav>
+        </aside>
+      )
+    }
+  </article>
+</Base>

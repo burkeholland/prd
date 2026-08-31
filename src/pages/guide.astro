@@ -1,0 +1,15 @@
+---
+import { getEntry } from 'astro:content';
+import Doc from '../layouts/Doc.astro';
+import { DOC_ROUTES } from '../lib/site';
+
+const route = DOC_ROUTES['/guide'];
+const entry = await getEntry(route.collection, route.id);
+---
+
+<Doc
+  label={route.label}
+  title={entry?.data.title ?? route.label}
+  description={entry?.data.description}
+  entry={entry}
+/>
