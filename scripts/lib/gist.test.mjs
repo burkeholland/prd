@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 import {
   buildMeta,
   extractImages,
+  gistHtmlUrl,
+  gistRawUrl,
   imageFileName,
   imagePublicPath,
   isPng,
@@ -105,34 +107,27 @@ test('isPng: true for the PNG signature, false otherwise', () => {
   assert.equal(isPng(Buffer.alloc(0)), false);
 });
 
-const API_FIXTURE = {
+const GIT_FIXTURE = {
   id: 'f71d1156812fd91e4369308358892817',
   description: 'Build The Urlist - standalone Autopilot instruction',
-  owner: { login: 'burkeholland', id: 1 },
-  html_url: 'https://gist.github.com/burkeholland/f71d1156812fd91e4369308358892817',
+  owner: 'burkeholland',
+  filename: 'build-the-urlist.md',
+  revision: '8ef29d7eecb97ecbbd5a89ff4a7375482364704f',
   updated_at: '2026-08-31T13:11:39Z',
-  files: {
-    'build-the-urlist.md': {
-      filename: 'build-the-urlist.md',
-      type: 'text/markdown',
-      raw_url: 'https://gist.githubusercontent.com/burkeholland/f71d/raw/82f6f039/build-the-urlist.md',
-      size: 25389,
-    },
-  },
-  history: [
-    { version: '8ef29d7eecb97ecbbd5a89ff4a7375482364704f', committed_at: '2026-08-31T13:11:39Z' },
-    { version: '0000000000000000000000000000000000000000', committed_at: '2026-08-30T00:00:00Z' },
-  ],
+  blob_sha: '82f6f039e6bbbc8d9799b1447c6eb2f427c064d7',
 };
 
-test('buildMeta: maps the API JSON, uses history[0].version and the given fetched_at', () => {
+test('buildMeta: maps what the clone knows, derives html_url/raw_url, uses the given fetched_at', () => {
   const images = extractImages(FIXTURE);
-  const meta = buildMeta(API_FIXTURE, images, '2026-08-31T15:00:00.000Z');
-  assert.equal(meta.id, API_FIXTURE.id);
-  assert.equal(meta.description, API_FIXTURE.description);
+  const meta = buildMeta(GIT_FIXTURE, images, '2026-08-31T15:00:00.000Z');
+  assert.equal(meta.id, GIT_FIXTURE.id);
+  assert.equal(meta.description, GIT_FIXTURE.description);
   assert.equal(meta.owner, 'burkeholland');
-  assert.equal(meta.html_url, API_FIXTURE.html_url);
-  assert.equal(meta.raw_url, API_FIXTURE.files['build-the-urlist.md'].raw_url);
+  assert.equal(meta.html_url, `https://gist.github.com/burkeholland/${GIT_FIXTURE.id}`);
+  assert.equal(
+    meta.raw_url,
+    `https://gist.githubusercontent.com/burkeholland/${GIT_FIXTURE.id}/raw/${GIT_FIXTURE.blob_sha}/build-the-urlist.md`,
+  );
   assert.equal(meta.filename, 'build-the-urlist.md');
   assert.equal(meta.revision, '8ef29d7eecb97ecbbd5a89ff4a7375482364704f');
   assert.equal(meta.updated_at, '2026-08-31T13:11:39Z');
@@ -150,16 +145,28 @@ test('buildMeta: maps the API JSON, uses history[0].version and the given fetche
   assert.deepEqual(Object.keys(meta), [
     'id', 'description', 'owner', 'html_url', 'raw_url', 'filename', 'revision', 'updated_at', 'fetched_at', 'images',
   ]);
-  assert.equal(buildMeta(API_FIXTURE, [], new Date('2026-01-02T03:04:05Z')).fetched_at, '2026-01-02T03:04:05.000Z');
-  assert.equal(buildMeta({ files: {} }, [], 'x').revision, null, 'no history → null revision');
+  assert.equal(buildMeta(GIT_FIXTURE, [], new Date('2026-01-02T03:04:05Z')).fetched_at, '2026-01-02T03:04:05.000Z');
+
+  const anonymous = buildMeta({ ...GIT_FIXTURE, owner: null, description: null }, [], 'x');
+  assert.equal(anonymous.owner, null);
+  assert.equal(anonymous.description, null);
+  assert.equal(anonymous.html_url, `https://gist.github.com/${GIT_FIXTURE.id}`);
+  assert.equal(anonymous.raw_url, `https://gist.githubusercontent.com/${GIT_FIXTURE.id}/raw/${GIT_FIXTURE.blob_sha}/build-the-urlist.md`);
+  assert.equal(buildMeta({}, [], 'x').revision, null, 'nothing known → null fields');
+  assert.equal(buildMeta({}, [], 'x').raw_url, null);
+  assert.equal(gistHtmlUrl('burkeholland', 'abc'), 'https://gist.github.com/burkeholland/abc');
+  assert.equal(gistRawUrl('o', 'abc', null, 'f.md'), 'https://gist.githubusercontent.com/o/abc/raw/f.md', 'no blob sha → latest raw');
 });
 
-test('pickGistFile: single file, then markdown, then by name', () => {
-  assert.equal(pickGistFile(API_FIXTURE).filename, 'build-the-urlist.md');
-  const multi = { files: { 'a.txt': { filename: 'a.txt' }, 'b.md': { filename: 'b.md' } } };
-  assert.equal(pickGistFile(multi).filename, 'b.md');
-  assert.equal(pickGistFile(multi, 'a.txt').filename, 'a.txt');
-  assert.equal(pickGistFile(multi, 'nope.md'), null);
+test('pickGistFile: single file, then markdown, then by name — from the tree\'s file names', () => {
+  assert.equal(pickGistFile(['build-the-urlist.md']), 'build-the-urlist.md');
+  assert.equal(pickGistFile(['a.txt', 'b.md']), 'b.md');
+  assert.equal(pickGistFile(['a.txt', 'b.MARKDOWN']), 'b.MARKDOWN');
+  assert.equal(pickGistFile(['a.txt', 'b.json']), 'a.txt', 'no markdown → first file');
+  assert.equal(pickGistFile(['a.txt', 'b.md'], 'a.txt'), 'a.txt');
+  assert.equal(pickGistFile(['a.txt', 'b.md'], 'nope.md'), null);
+  assert.equal(pickGistFile([]), null);
+  assert.equal(pickGistFile(undefined), null);
 });
 
 // ---------------------------------------------------------------------------

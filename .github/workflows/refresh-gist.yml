@@ -1,9 +1,10 @@
 name: Refresh the sample PRD snapshot
 
-# Daily: re-run the gist snapshot scripts against Burke's gist. When anything under
-# content/gist, public/raw or public/mocks changed, push a gist-refresh/<revision>
-# branch and open a pull request. Never commits to main — a human or the lead merges,
-# and merging republishes /sample/.
+# Daily: re-run the gist snapshot scripts against Burke's gist. The scripts clone the
+# gist over anonymous git (a gist is a git repository) — no REST API calls, no token,
+# no API rate limit. When anything under content/gist, public/raw or public/mocks
+# changed, push a gist-refresh/<revision> branch and open a pull request. Never commits
+# to main — a human or the lead merges, and merging republishes /sample/.
 #
 # A push made with github.token does not start `on: push` workflows, so this run
 # dispatches the Deploy workflow on the PR branch itself (hence `actions: write`).
@@ -44,10 +45,9 @@ jobs:
         with:
           node-version: 24
 
-      # Zero-dependency scripts: no npm ci. Either exits non-zero → job fails, nothing partial is written.
+      # Zero-dependency scripts: no npm ci. Both clone the gist over anonymous git (~1 s): no REST
+      # calls, no token, no rate limit. Either exits non-zero → job fails, nothing partial is written.
       - name: Fetch the gist snapshot and its revision history
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
           node scripts/fetch-gist.mjs
           node scripts/fetch-gist-history.mjs
