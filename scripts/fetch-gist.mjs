@@ -207,7 +207,11 @@ async function main(argv) {
   const pngs = await Promise.all(images.map(fetchImage));
 
   const meta = reuseFetchedAt(
-    buildMeta({ id: opts.gist, owner, description, ...head }, images, fetchedAt),
+    buildMeta(
+      { id: opts.gist, owner, description, filename, revision: head.revision, updated_at: head.updated_at, blob_sha: head.blob_sha },
+      images,
+      fetchedAt,
+    ),
     previous,
   );
 

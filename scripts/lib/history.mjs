@@ -1,7 +1,7 @@
 // Pure helpers for snapshotting every revision of a GitHub gist (its "history").
 // No I/O and no dependencies beyond the language, so everything here is unit
 // testable offline (see history.test.mjs). The I/O lives in
-// scripts/fetch-gist-history.mjs.
+// scripts/fetch-gist-history.mjs and the git calls in scripts/lib/gist-git.mjs.
 
 const SHORT_LENGTH = 7;
 
