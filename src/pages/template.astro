@@ -26,3 +26,134 @@ const description = entry?.data.description;
     }
   </Fragment>
 </Doc>
+
+<!--
+  Progressive enhancement, this page only: a Copy button on each skeleton code block. Astro
+  bundles the script as a module; without JavaScript the page is exactly the rendered markdown.
+-->
+<script>
+  const RESET = 'Copy';
+  const main = document.querySelector('main');
+  let status: HTMLParagraphElement | undefined;
+
+  /** Mirrors the last result in one polite live region so screen readers hear it. */
+  const announce = (message: string) => {
+    if (!main) return;
+    if (!status) {
+      status = document.createElement('p');
+      status.className = 'copy-status';
+      status.setAttribute('role', 'status');
+      status.setAttribute('aria-live', 'polite');
+      main.append(status);
+    }
+    status.textContent = message;
+  };
+
+  for (const pre of document.querySelectorAll<HTMLPreElement>('main .prose pre')) {
+    const code = pre.querySelector('code') ?? pre;
+    const block = document.createElement('div');
+    block.className = 'code-block';
+    pre.replaceWith(block);
+    block.append(pre);
+
+    // The block is named after the nearest preceding h2 in the document.
+    let heading = block.previousElementSibling;
+    while (heading && heading.tagName !== 'H2') heading = heading.previousElementSibling;
+    const name = heading?.textContent?.trim();
+    const skeleton = name ? `the ${name} skeleton` : 'this skeleton';
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'copy-button';
+    button.textContent = RESET;
+    button.setAttribute('aria-label', `Copy ${skeleton}`);
+    block.prepend(button);
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const show = (text: string, copied: boolean, ms: number) => {
+      button.textContent = text;
+      if (copied) button.dataset.state = 'copied';
+      else delete button.dataset.state;
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        button.textContent = RESET;
+        delete button.dataset.state;
+      }, ms);
+    };
+
+    button.addEventListener('click', async () => {
+      const text = (code.textContent ?? '').replace(/\n$/, '');
+      try {
+        if (!navigator.clipboard) throw new Error('Clipboard API unavailable');
+        await navigator.clipboard.writeText(text);
+        show('Copied', true, 1500);
+        announce(`Copied ${skeleton}`);
+      } catch {
+        getSelection()?.selectAllChildren(code);
+        show('Select all → Ctrl+C', false, 3000);
+        announce('Copy failed — text selected');
+      }
+    });
+  }
+</script>
+
+<!-- Global: the buttons and wrappers are created at runtime, so scoped styles would not reach them. -->
+<style is:global>
+  .code-block {
+    position: relative;
+  }
+
+  .copy-button {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    padding: 0.25rem 0.6rem;
+    font: inherit;
+    font-size: 0.85rem;
+    line-height: 1.2;
+    color: var(--text);
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+  }
+
+  .copy-button:hover {
+    border-color: var(--text-muted);
+  }
+
+  .copy-button[data-state='copied'] {
+    color: var(--accent);
+  }
+
+  /* Screen only: room for the button so it never covers code. Print keeps its own padding. */
+  @media screen {
+    .prose .code-block pre {
+      padding-right: 4.5rem;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .copy-button {
+      transition: color 0.15s;
+    }
+  }
+
+  @media print {
+    .copy-button {
+      display: none;
+    }
+  }
+
+  /* Visually hidden, not `hidden`: a display:none live region is never announced. */
+  .copy-status {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+</style>
