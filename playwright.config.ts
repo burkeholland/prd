@@ -12,8 +12,11 @@ export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: 0,
-  reporter: [['list']],
+  // CI retries so one flaky axe timeout does not block a deploy; locally we want to see the flake.
+  retries: process.env.CI ? 2 : 0,
+  // In CI `github` annotates failing tests on the run and on PR diffs and `html` writes the
+  // playwright-report/ that deploy.yml attaches to a failed run; locally the list is enough.
+  reporter: process.env.CI ? [['github'], ['list'], ['html', { open: 'never' }]] : [['list']],
   use: {
     baseURL: ORIGIN,
     trace: 'retain-on-failure',
