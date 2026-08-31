@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
 
 const NAV = [
@@ -6,6 +8,15 @@ const NAV = [
   { href: '/guide', label: 'How to write one' },
   { href: '/walkthrough', label: 'Worked example' },
   { href: '/template', label: 'Template' },
+];
+
+// Doc pages and the repo-root content file each one renders. Other tasks add these files;
+// a page must show the placeholder while its file is absent and the real body once it exists.
+const DOCS = [
+  { path: '/guide', file: 'content/guide.md' },
+  { path: '/walkthrough', file: 'content/walkthrough.md' },
+  { path: '/template', file: 'content/template.md' },
+  { path: '/sample', file: 'content/gist/build-the-urlist.md' },
 ];
 
 const BRAND = 'PRD Field Guide';
@@ -47,11 +58,23 @@ test('every nav route responds 200 with a title that starts with its label', asy
   }
 });
 
-test('doc pages show the placeholder while content is absent', async ({ page }) => {
-  for (const path of ['/guide', '/walkthrough', '/template', '/sample']) {
-    await page.goto(path);
-    await expect(page.locator('p.placeholder'), `${path} placeholder`).toHaveText(PLACEHOLDER);
-    await expect(page.locator('p.placeholder')).toBeVisible();
+test('doc pages show the placeholder while content is absent and the body once it exists', async ({ page }) => {
+  for (const doc of DOCS) {
+    const present = existsSync(resolve(doc.file));
+    await page.goto(doc.path);
+
+    const placeholder = page.locator('p.placeholder');
+    const body = page.locator('.doc__body');
+    await expect(page.locator('h1'), `${doc.path} h1 count`).toHaveCount(1);
+
+    if (present) {
+      await expect(placeholder, `${doc.path} should render ${doc.file}`).toHaveCount(0);
+      expect(await body.locator('h2').count(), `${doc.path} rendered headings`).toBeGreaterThan(0);
+      await expect(page.locator('aside.toc--sidebar'), `${doc.path} table of contents`).toBeVisible();
+    } else {
+      await expect(placeholder, `${doc.path} placeholder`).toHaveText(PLACEHOLDER);
+      await expect(placeholder).toBeVisible();
+    }
   }
 });
 
