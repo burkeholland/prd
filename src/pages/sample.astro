@@ -19,11 +19,20 @@ const meta = loadMeta ? (await loadMeta()).default : undefined;
 
 const description =
   'This is the gist, verbatim except that screenshot URLs point at local copies.';
+
+// The gist carries its own h1, so the card only supplies one while content is absent.
+const Heading = entry ? 'p' : 'h1';
+const shortRevision = meta?.revision?.slice(0, 7);
+const fetchedAt = meta?.fetched_at ? new Date(meta.fetched_at) : undefined;
+const fetchedLabel =
+  fetchedAt && !Number.isNaN(fetchedAt.getTime())
+    ? fetchedAt.toISOString().replace('T', ' ').slice(0, 16) + ' UTC'
+    : meta?.fetched_at;
 ---
 
 <Doc label={route.label} title={route.label} description={description} entry={entry}>
   <div slot="header" class="source-card">
-    <h1>{route.label}</h1>
+    <Heading class="source-card__title">{route.label}</Heading>
     <p>{description}</p>
     <ul class="source-card__links">
       <li><a href={SITE.gistUrl}>View on GitHub</a></li>
@@ -32,11 +41,18 @@ const description =
     {
       meta && (meta.fetched_at || meta.revision) && (
         <p class="source-card__meta">
-          {meta.fetched_at && <span>Last fetched {meta.fetched_at}</span>}
+          {meta.fetched_at && (
+            <span>
+              Last fetched <time datetime={meta.fetched_at}>{fetchedLabel}</time>
+            </span>
+          )}
           {meta.fetched_at && meta.revision && ' · '}
           {meta.revision && (
             <span>
-              Revision <code>{meta.revision}</code>
+              Revision{' '}
+              <a href={`${SITE.gistUrl}/${meta.revision}`} title={meta.revision}>
+                <code>{shortRevision}</code>
+              </a>
             </span>
           )}
         </p>
