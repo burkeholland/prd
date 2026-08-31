@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 // The site is published under this base path (astro.config.mjs). Playwright resolves
 // `page.goto('/sample/')` against the origin only, so every path goes through `to()`.
@@ -12,6 +12,14 @@ const FIRST_SECTION = 'Mission and stop condition';
 
 // The clipboard API is permission-gated in Chromium; readText() in the page checks the result.
 test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
+
+/** The clipboard text with LF line endings: the Windows clipboard stores text as CRLF. */
+const readClipboard = async (page: Page) =>
+  (await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g, '\n');
+
+/** What the button should copy: the block's code text with one trailing newline stripped. */
+const skeletonText = (pre: Locator) =>
+  pre.evaluate((el) => (el.querySelector('code') ?? el).textContent?.replace(/\n$/, '') ?? '');
 
 test('/template/ gives each of the 14 skeleton blocks a Copy button named after its section', async ({ page }) => {
   await page.goto(to('/template/'));
@@ -38,10 +46,7 @@ test('clicking Copy puts the block text on the clipboard, says Copied, then rese
   await page.goto(to('/template/'));
 
   const button = page.locator('button.copy-button').first();
-  const expected = await page
-    .locator('main .prose pre')
-    .first()
-    .evaluate((pre) => (pre.querySelector('code') ?? pre).textContent?.replace(/\n$/, '') ?? '');
+  const expected = await skeletonText(page.locator('main .prose pre').first());
   expect(expected.startsWith('Build the complete {Product Name} application'), 'first skeleton text').toBe(true);
 
   await button.click();
@@ -49,7 +54,7 @@ test('clicking Copy puts the block text on the clipboard, says Copied, then rese
   await expect(button).toHaveAttribute('data-state', 'copied');
   await expect(button).toHaveAttribute('aria-label', `Copy the ${FIRST_SECTION} skeleton`);
 
-  const clipboard = await page.evaluate(() => navigator.clipboard.readText());
+  const clipboard = await readClipboard(page);
   expect(clipboard).toBe(expected);
   expect(clipboard.endsWith('\n'), 'trailing newline stripped').toBe(false);
 
@@ -70,22 +75,20 @@ test('Copy works from the keyboard: focus, Enter', async ({ page }) => {
   await expect(button).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(button).toHaveText('Copied', { timeout: 500 });
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(/^Build the complete \{Product Name\}/);
+  expect(await readClipboard(page)).toMatch(/^Build the complete \{Product Name\}/);
 });
 
-test('every block copies its own text (the last one is the Completion skeleton)', async ({ page }) => {
+test('every block copies its own text (the last one is the multi-line Completion skeleton)', async ({ page }) => {
   await page.goto(to('/template/'));
 
   const last = page.locator('button.copy-button').last();
   await expect(last).toHaveAttribute('aria-label', 'Copy the Completion skeleton');
-  const expected = await page
-    .locator('main .prose pre')
-    .last()
-    .evaluate((pre) => (pre.querySelector('code') ?? pre).textContent?.replace(/\n$/, '') ?? '');
+  const expected = await skeletonText(page.locator('main .prose pre').last());
+  expect(expected.split('\n').length, 'the Completion skeleton spans several lines').toBeGreaterThan(5);
 
   await last.click();
   await expect(last).toHaveText('Copied', { timeout: 500 });
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(expected);
+  expect(await readClipboard(page)).toBe(expected);
   await expect(page.locator('main .copy-status')).toHaveText('Copied the Completion skeleton');
 });
 
