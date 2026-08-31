@@ -82,3 +82,17 @@ Public URL: **https://burkeholland.github.io/prd/**
 - Custom domain later: set `base: '/'` and `site: 'https://<domain>'` in
   `astro.config.mjs`, add `public/CNAME` with the domain, and create one DNS
   record (CNAME to `burkeholland.github.io`). Nothing else changes.
+
+## Social preview and sitemap
+
+- Every page's `<head>` (`src/layouts/Base.astro`) has one `<link rel="canonical">`, Open Graph
+  (`og:type/site_name/title/description/url/image/locale`) and Twitter (`summary_large_image`)
+  tags built from its `title`/`description` props and `src/lib/seo.ts` (`canonicalUrl()`,
+  `OG_IMAGE`). A `noindex` prop emits `robots: noindex` and drops the canonical and `og:url`.
+- Preview image `public/og.png` (1200×630, < 200 KB) is rendered from `scripts/og.html`;
+  regenerate with `npm ci && node scripts/make-og.mjs` and commit the PNG.
+- `@astrojs/sitemap` writes `dist/sitemap-index.xml` + `sitemap-0.xml` (five pages, canonical
+  form, no 404), linked from every page via `<link rel="sitemap">`. No `robots.txt`: crawlers
+  never read one under a project-site path.
+- `deploy.yml` pins the actions to their Node 24 majors (`checkout@v7`, `setup-node@v7`,
+  `upload-pages-artifact@v5`, `deploy-pages@v5`); bump them together.

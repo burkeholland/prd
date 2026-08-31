@@ -1,5 +1,6 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
+import sitemap from '@astrojs/sitemap';
 import rehypeBase from './src/lib/rehype-base.mjs';
 import rehypeFigures from './src/lib/rehype-figures.mjs';
 
@@ -14,6 +15,9 @@ export default defineConfig({
   site: 'https://burkeholland.github.io',
   base,
   output: 'static',
+  // Emits dist/sitemap-index.xml + sitemap-0.xml with the five pages in their canonical
+  // (trailing-slash) form; the 404 page is a status page and never listed. <head> links to it.
+  integrations: [sitemap({ filter: (page) => !/\/(404|500)\/?$/.test(page) })],
   markdown: {
     shikiConfig: {
       // Both themes are emitted; global.css switches them with prefers-color-scheme.
