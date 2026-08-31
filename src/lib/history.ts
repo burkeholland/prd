@@ -63,6 +63,8 @@ export interface HistoryRow {
   n: number;
   short: string;
   url: string;
+  /** The revision's `committed_at` as given (ISO 8601). */
+  committedAt: string;
   /** `YYYY-MM-DD` (UTC). */
   date: string;
   /** `HH:MM UTC`. */
@@ -205,6 +207,7 @@ export function rows(
       n: rev.n,
       short: rev.short,
       url: rev.url,
+      committedAt: rev.committed_at,
       date,
       time,
       additions: rev.additions,
