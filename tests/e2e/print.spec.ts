@@ -72,6 +72,7 @@ async function expectPrintsCleanly(page: Page, path: string) {
         color: style.color,
         background: style.backgroundColor,
         border: style.borderTopColor,
+        radius: style.borderTopLeftRadius,
         cutOff: el.scrollWidth > el.clientWidth,
       };
     }),
@@ -82,22 +83,30 @@ async function expectPrintsCleanly(page: Page, path: string) {
     expect(pre.color, `${path} pre color`).toBe('rgb(0, 0, 0)');
     expect(pre.background, `${path} pre background`).toBe('rgb(244, 244, 244)');
     expect(pre.border, `${path} pre border`).toBe('rgb(153, 153, 153)');
+    expect(pre.radius, `${path} pre corners`).toBe('0px');
     expect(pre.cutOff, `${path} pre content cut off`).toBe(false);
   }
 
-  // Links: internal ones are plain text, external ones are followed by their URL.
-  const links = await page.locator('.doc__body a[href]').evaluateAll((nodes) =>
-    nodes.map((el) => ({
-      href: el.getAttribute('href') ?? '',
-      color: getComputedStyle(el).color,
-      decoration: getComputedStyle(el).textDecorationLine,
-      after: getComputedStyle(el, '::after').content,
-    })),
+  // Links: internal ones are plain text, external ones are followed by their URL. `main` rather
+  // than `.doc__body`: the sample's external links sit in its source-card header. Only rendered
+  // links count — the hidden TOC and download links keep their screen colours.
+  const links = await page.locator('main a[href]').evaluateAll((nodes) =>
+    nodes
+      .filter((el) => el.getClientRects().length > 0)
+      .map((el) => ({
+        href: el.getAttribute('href') ?? '',
+        color: getComputedStyle(el).color,
+        parentColor: getComputedStyle(el.parentElement as Element).color,
+        decoration: getComputedStyle(el).textDecorationLine,
+        after: getComputedStyle(el, '::after').content,
+      })),
   );
   for (const link of links) {
-    expect(link.color, `${path} ${link.href} color`).toBe('rgb(0, 0, 0)');
+    // `color: inherit` — the link is the colour of the text around it, never the accent green.
+    expect(link.color, `${path} ${link.href} color`).toBe(link.parentColor);
+    expect(link.color, `${path} ${link.href} color`).not.toBe('rgb(15, 110, 86)');
     if (link.href.startsWith('http')) {
-      expect(link.after, `${path} ${link.href} ::after`).toContain('attr(href)');
+      expect(link.after, `${path} ${link.href} ::after`).toContain(`(${link.href})`);
     } else {
       expect(link.decoration, `${path} ${link.href} decoration`).toBe('none');
       expect(link.after, `${path} ${link.href} ::after`).toBe('none');
@@ -164,15 +173,19 @@ test('/sample/ prints content only with its seven screenshots and saves as an A4
   const pdf = await page.pdf({ path, format: 'A4', printBackground: true });
 
   // Chromium writes its page tree uncompressed: count `/Type /Page` objects (not `/Pages`) and
-  // cross-check with the root `/Count`.
+  // cross-check against the page tree's root `/Count` (the largest; Skia nests intermediate nodes).
   const text = pdf.toString('latin1');
   const pages = (text.match(/\/Type\s*\/Page(?![s\w])/g) ?? []).length;
-  const count = Number(/\/Type\s*\/Pages[^>]*?\/Count\s+(\d+)/.exec(text)?.[1] ?? 0);
-  const message = `sample.pdf: ${pages} A4 pages (root /Count ${count}), ${pdf.length} bytes at ${path}`;
+  const count = Math.max(
+    0,
+    ...Array.from(text.matchAll(/\/Type\s*\/Pages[^>]*?\/Count\s+(\d+)/g), (m) => Number(m[1])),
+  );
+  const message = `sample.pdf: ${pages} A4 pages (page tree /Count ${count}), ${pdf.length} bytes at ${path}`;
   console.log(message);
   testInfo.annotations.push({ type: 'pdf', description: message });
 
   expect(pdf.length).toBeGreaterThan(10_000);
+  expect(count, 'page tree count matches page objects').toBe(pages);
   expect(pages, 'page count').toBeGreaterThanOrEqual(5);
   expect(pages, 'page count').toBeLessThanOrEqual(40);
 });

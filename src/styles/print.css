@@ -98,7 +98,8 @@
     page-break-inside: avoid;
   }
 
-  img {
+  img,
+  .prose img {
     max-width: 100%;
     height: auto;
     border-radius: 0;
@@ -111,7 +112,8 @@
 
   /* Code wraps instead of scrolling (nothing scrolls on paper) and prints black on light
      grey. Astro's Shiki output carries `background-color`, `color` and `overflow-x: auto`
-     inline on the <pre>, so those need !important. */
+     inline on the <pre>, so those need !important; `.prose pre` keeps the specificity above
+     global.css's own `.prose pre` rule. */
   pre,
   code {
     color: #000;
@@ -121,6 +123,7 @@
   }
 
   pre,
+  .prose pre,
   .astro-code {
     white-space: pre-wrap !important;
     overflow-wrap: anywhere;
