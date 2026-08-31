@@ -165,7 +165,7 @@ jobs:
           git commit --quiet -m "Refresh sample PRD snapshot: $OLD → $NEW"
           git push origin "$BRANCH"
 
-      # github.token pushes do not trigger deploy.yml's `on: push`; dispatch it so the PR gets check + test + build.
+      # github.token pushes do not trigger deploy.yml's `on: push`; dispatch it so the PR gets check + unit tests + build, and the browser suite.
       - name: Start CI on the branch
         id: ci
         if: steps.branch.outputs.exists == 'false'
@@ -194,9 +194,9 @@ jobs:
             echo "Pull request already exists: $url — not opening a second one"
           else
             if [ "$CI_OUTCOME" = success ]; then
-              echo "CI: the Deploy workflow was dispatched on this branch by the refresh run (a push by github-actions[bot] does not trigger it): $DEPLOY_RUNS?query=branch%3A$BRANCH" >> "$BODY"
+              echo "CI: the Deploy workflow (check + unit tests + build, and the browser suite) was dispatched on this branch by the refresh run (a push by github-actions[bot] does not trigger it): $DEPLOY_RUNS?query=branch%3A$BRANCH" >> "$BODY"
             else
-              echo "CI: dispatching the Deploy workflow on this branch failed; run it by hand: \`gh workflow run deploy.yml --ref $BRANCH\`" >> "$BODY"
+              echo "CI: dispatching the Deploy workflow (check + unit tests + build, and the browser suite) on this branch failed; run it by hand: \`gh workflow run deploy.yml --ref $BRANCH\`" >> "$BODY"
             fi
             url=$(gh pr create --base main --head "$BRANCH" --title "$TITLE" --body-file "$BODY")
             echo "Pull request opened: $url"

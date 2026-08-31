@@ -1,7 +1,7 @@
 name: Deploy to GitHub Pages
 
 on:
-  push: # every branch: CI. The deploy job runs only from main (see its `if:`).
+  push: # every branch: the build and e2e jobs run as CI. Only the deploy job is main-only (see its `if:`).
   workflow_dispatch:
 
 # Pages deploys with the workflow's OIDC token (id-token). No secrets are needed.
@@ -31,8 +31,43 @@ jobs:
         with:
           path: dist
 
+  # The Playwright suite (tests/e2e). Its webServer builds and serves the site inside this job, so
+  # there is no build or server step here; `build` above is what produces the Pages artifact.
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Cache the browser binary by the locked Playwright version. The `--with-deps` system
+      # libraries are not cached (~20 s).
+      - id: pw
+        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test
+        env:
+          CI: true
+      # The HTML report and the failure traces, kept for a week.
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
   deploy:
-    needs: build
+    needs: [build, e2e]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
