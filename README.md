@@ -85,17 +85,14 @@ Public URL: **https://burkeholland.github.io/prd/**
 
 ## Social preview and sitemap
 
-- Every page's `<head>` (`src/layouts/Base.astro`) carries one
-  `<link rel="canonical">`, Open Graph (`og:type/site_name/title/description/url/image/locale`)
-  and Twitter card (`summary_large_image`) tags, built from the page's `title`/`description`
-  props and `src/lib/seo.ts` (`canonicalUrl()` — absolute, trailing slash for pages — and
-  `OG_IMAGE`). Pass `noindex` to the layout for pages that must not be indexed (404):
-  it emits `robots: noindex` and drops the canonical and `og:url`.
-- Preview image: `public/og.png` (1200×630, < 200 KB) is rendered from `scripts/og.html`
-  by Playwright. Regenerate after editing the HTML or the tagline:
-  `npm ci && node scripts/make-og.mjs`, then commit the PNG.
-- Sitemap: `@astrojs/sitemap` writes `dist/sitemap-index.xml` + `sitemap-0.xml` (the five
-  pages, canonical form, no 404); each page links to it with `<link rel="sitemap">`. No
-  `robots.txt` — crawlers never read one under a project-site path.
-- CI actions in `deploy.yml` are pinned to their Node 24 majors (`checkout@v7`,
-  `setup-node@v7`, `upload-pages-artifact@v5`, `deploy-pages@v5`); bump them together.
+- Every page's `<head>` (`src/layouts/Base.astro`) has one `<link rel="canonical">`, Open Graph
+  (`og:type/site_name/title/description/url/image/locale`) and Twitter (`summary_large_image`)
+  tags built from its `title`/`description` props and `src/lib/seo.ts` (`canonicalUrl()`,
+  `OG_IMAGE`). A `noindex` prop emits `robots: noindex` and drops the canonical and `og:url`.
+- Preview image `public/og.png` (1200×630, < 200 KB) is rendered from `scripts/og.html`;
+  regenerate with `npm ci && node scripts/make-og.mjs` and commit the PNG.
+- `@astrojs/sitemap` writes `dist/sitemap-index.xml` + `sitemap-0.xml` (five pages, canonical
+  form, no 404), linked from every page via `<link rel="sitemap">`. No `robots.txt`: crawlers
+  never read one under a project-site path.
+- `deploy.yml` pins the actions to their Node 24 majors (`checkout@v7`, `setup-node@v7`,
+  `upload-pages-artifact@v5`, `deploy-pages@v5`); bump them together.
