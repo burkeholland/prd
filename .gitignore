@@ -1,0 +1,30 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+.astro/
+
+# tests
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# task scratch (never commit)
+report.md
+report-*.md
+*.log
+shots/
+data/
+
+# os / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# env
+.env
+.env.*
+!.env.example
