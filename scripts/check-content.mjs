@@ -14,7 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkFile, extractBlockquotes, extractHeadings, extractInternalLinks, parseFrontmatter, quoteFragments } from './lib/content.mjs';
 
-const PAGE_ROUTES = ['/', '/sample', '/guide', '/walkthrough', '/template'];
+const PAGE_ROUTES = ['/', '/sample', '/guide', '/walkthrough', '/history', '/template'];
 const FILE_ROUTES = ['/prd-template.md', '/raw/build-the-urlist.md'];
 
 function resolveRoot() {

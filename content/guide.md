@@ -171,3 +171,5 @@ Ten yeses means the agent can start.
 ## Start writing
 
 Copy the skeleton on the [template page](/template); it has a slot for every habit above. Then read the [walkthrough](/walkthrough), which takes the sample PRD section by section and shows how each decision was made.
+
+The sample PRD was not written in one sitting: it went through more than a dozen revisions over three weeks, and its biggest revision cut far more than it added. [See how it evolved](/history) — what grew, what was rewritten, and when.

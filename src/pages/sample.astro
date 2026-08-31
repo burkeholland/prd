@@ -5,6 +5,8 @@ import { DOC_ROUTES, SITE } from '../lib/site';
 import { withBase } from '../lib/base';
 // Written by scripts/fetch-gist.mjs next to the snapshot: html_url, revision, fetched_at, updated_at.
 import meta from '../../content/gist/meta.json';
+// Written by scripts/fetch-gist-history.mjs: one entry per gist revision, oldest → newest.
+import history from '../../content/gist/history.json';
 
 const route = DOC_ROUTES['/sample'];
 const entry = await getEntry(route.collection, route.id);
@@ -23,6 +25,9 @@ const fetchedLabel =
   fetchedAt && !Number.isNaN(fetchedAt.getTime())
     ? fetchedAt.toISOString().replace('T', ' ').slice(0, 16) + ' UTC'
     : meta.fetched_at;
+// Where the snapshot sits in the gist's history ("16 of 16"). Undefined when the snapshot and
+// the history were fetched out of step; the card then shows the revision alone.
+const current = history.revisions.find((rev) => rev.version === meta.revision);
 ---
 
 <Doc label={route.label} title={route.label} description={description} entry={entry}>
@@ -32,6 +37,7 @@ const fetchedLabel =
     <ul class="source-card__links">
       <li><a href={gistUrl}>View on GitHub</a></li>
       <li><a href={withBase('/raw/build-the-urlist.md')} download>Download .md</a></li>
+      <li><a href={withBase('/history/')}>How it evolved</a></li>
     </ul>
     {
       (fetchedLabel || revision) && (
@@ -48,6 +54,7 @@ const fetchedLabel =
               <a href={`${gistUrl}/${revision}`} title={revision}>
                 <code>{shortRevision}</code>
               </a>
+              {current && ` (${current.n} of ${history.count})`}
             </span>
           )}
         </p>
