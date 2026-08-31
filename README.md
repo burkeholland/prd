@@ -67,6 +67,14 @@ Styles live in `src/styles/global.css` (screen) and `src/styles/print.css` (`@me
 only: the document pages print / save as PDF as content only, black on white, code wrapped,
 external links followed by their URL; covered by `tests/e2e/print.spec.ts`).
 
+Performance (Lighthouse; nothing to install, it reuses Playwright's Chromium; run against `npm run preview`):
+`$env:CHROME_PATH = (node -e "console.log(require('playwright').chromium.executablePath())"); npx --yes lighthouse@latest http://localhost:4411/prd/ --chrome-flags="--headless=new" --output=json --output-path=lh.json --only-categories=performance,accessibility,best-practices,seo`
+— add `--preset=desktop` for desktop and `--ignore-status-code` for the 404 page; the `EPERM` on Chrome's temp
+profile at exit is harmless. Measured 2026-08-31 with Lighthouse 13.4.1 (HeadlessChrome 151), mobile and desktop:
+perf 98–100, a11y 98–100, best-practices 100, SEO 100 on every page; the 404 page scores SEO 50 by design (it
+returns 404 and is `noindex`). Never optimise `public/mocks/**` or `public/raw/**` in place — they are byte-verbatim
+copies of the gist and the daily fetch workflow would revert the change; a lighter screenshot is a new derived copy.
+
 ## Deploy
 
 Public URL: **https://burkeholland.github.io/prd/**
