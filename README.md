@@ -47,6 +47,7 @@ npm run check          astro check (types, 0 errors expected)
 npm test               vitest unit tests (tests/unit) + node:test script tests (scripts/**/*.test.mjs, scripts/check-*.mjs)
 npm run test:unit      vitest alone
 npm run test:e2e       Playwright, Chromium only (tests/e2e) — builds, then runs against preview on 4411
+npx playwright test tests/e2e/a11y.spec.ts   axe-core (WCAG 2.1 AA) on every page, light + dark, plus keyboard path
 ```
 
 Ports: **4410** dev, **4411** preview / Playwright by default; `PREVIEW_PORT`
