@@ -3,6 +3,7 @@ import Base from '../../layouts/Base.astro';
 import { SITE } from '../../lib/site';
 import { withBase } from '../../lib/base';
 import { diffLines, hunkHeader, hunks, lineEndings, lines, normalise, summary, type OpType } from '../../lib/diff';
+import { noteFor } from '../../lib/history-notes';
 // Written by scripts/fetch-gist-history.mjs: one entry per gist revision, oldest → newest.
 import history from '../../../content/gist/history.json';
 // `revision` is the version the /sample page renders.
@@ -67,15 +68,20 @@ const MARK: Record<OpType, string> = { equal: '', add: '+', del: '−' };
 
 const heading = `Revision ${rev.n} of ${count}`;
 const title = `${heading} · ${SITE.gistTitle} · ${SITE.name}`;
-const description = prev
-  ? `What changed in revision ${rev.n} of ${SITE.gistTitle}: +${counts.added} −${counts.deleted} lines of text vs revision ${prev.n}.`
-  : `The first draft of ${SITE.gistTitle}: ${int(rev.lines)} lines, ${kb(rev.bytes)} KB, committed ${date}.`;
+// The hand-written sentence for this revision (content/gist/history-notes.json), when there is one.
+const note = noteFor(rev.version);
+const description =
+  note ??
+  (prev
+    ? `What changed in revision ${rev.n} of ${SITE.gistTitle}: +${counts.added} −${counts.deleted} lines of text vs revision ${prev.n}.`
+    : `The first draft of ${SITE.gistTitle}: ${int(rev.lines)} lines, ${kb(rev.bytes)} KB, committed ${date}.`);
 ---
 
 <Base title={title} description={description} noindex>
   <article class="revision">
     <header class="revision__header">
       <h1>{heading}</h1>
+      {note && <p class="lede">{note}</p>}
       <p class="meta">
         <time datetime={rev.committed_at}>{date} {time}</time>
         <span class="meta__sep" aria-hidden="true">·</span>
@@ -191,6 +197,14 @@ const description = prev
   .revision__header {
     display: grid;
     gap: 0.75rem;
+  }
+
+  /* The one-sentence note: a lead, so full text colour rather than the muted meta line below it. */
+  .revision .lede {
+    max-width: 60ch;
+    font-size: 1.15em;
+    line-height: 1.5;
+    color: var(--text);
   }
 
   .revision .meta {

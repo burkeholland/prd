@@ -3,6 +3,7 @@ import Base from '../layouts/Base.astro';
 import { SITE } from '../lib/site';
 import { withBase } from '../lib/base';
 import { barScale, describeDelta, kb, rows, summary } from '../lib/history';
+import { noteFor } from '../lib/history-notes';
 // Written by scripts/fetch-gist-history.mjs: one entry per gist revision, oldest → newest.
 import history from '../../content/gist/history.json';
 // `revision` is the version the /sample page renders.
@@ -20,6 +21,10 @@ const snapshots = Object.fromEntries(
 );
 
 const list = rows(history, snapshots, meta.revision);
+// Hand-written sentence per revision (content/gist/history-notes.json), keyed by the commit sha;
+// rows carry only `n`, so look the sha up here.
+const versionOf = new Map(history.revisions.map((rev) => [rev.n, rev.version]));
+const noteOf = (n: number) => noteFor(versionOf.get(n) ?? '');
 const totals = summary(history, list);
 const bars = barScale(list);
 const current = list.find((row) => row.isCurrent);
@@ -50,6 +55,7 @@ const BAR_SPACE = 160; // barScale's default maxPx: the inner chart's viewBox wi
         {totals.firstSections} sections in {kb(totals.firstBytes, 0)} KB; the version on the{' '}
         <a href={withBase('/sample/')}>sample page</a> has {totals.lastSections} sections in {kb(totals.lastBytes, 0)} KB.
         The specificity Burke credits for the one-shot build was earned in revisions, not written in one sitting.
+        Click a revision number to read the exact text that changed.
       </p>
     </header>
 
@@ -124,7 +130,11 @@ const BAR_SPACE = 160; // barScale's default maxPx: the inner chart's viewBox wi
             {
               list.map((row) => (
                 <tr class:list={{ 'is-current': row.isCurrent }} aria-current={row.isCurrent ? 'true' : undefined}>
-                  <th scope="row">{row.n}</th>
+                  <th scope="row">
+                    <a href={withBase(`/history/${row.n}/`)} aria-label={`Revision ${row.n}: what changed`}>
+                      {row.n}
+                    </a>
+                  </th>
                   <td>
                     <time datetime={row.committedAt}>
                       {row.date}
@@ -145,10 +155,15 @@ const BAR_SPACE = 160; // barScale's default maxPx: the inner chart's viewBox wi
                         </mark>
                       </>
                     )}
+                    {noteOf(row.n) && <p class="history__note">{noteOf(row.n)}</p>}
                   </td>
-                  <td>
+                  <td class="history__view">
+                    <a href={withBase(`/history/${row.n}/`)} aria-label={`Diff of revision ${row.n}`}>
+                      Diff
+                    </a>
+                    {' · '}
                     <a href={row.url} rel="noopener" title={`Revision ${row.n} on GitHub`}>
-                      <code>{row.short}</code>
+                      GitHub
                     </a>
                   </td>
                 </tr>
