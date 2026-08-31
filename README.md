@@ -83,9 +83,13 @@ Public URL: **https://burkeholland.github.io/prd/**
 
 - Pages source = **GitHub Actions**, workflow `.github/workflows/deploy.yml`.
   Every push to `main` runs `npm ci`, `npm run check`, `npm test`,
-  `npm run build` and publishes `dist/` in about 2 minutes; pushes to other
-  branches run the same build job as CI and skip the deploy job. No secrets:
-  Pages deploys with the workflow's own OIDC token.
+  `npm run build` and publishes `dist/`; a parallel `e2e` job runs the
+  Playwright suite on every push and the deploy waits for both (the two checks
+  take about 75 s, the Pages deploy itself 10 s to 3 min). Browser failures
+  appear as annotations on the run and the HTML report is attached to the run
+  as an artifact for a week. Pushes to other branches run the same `build` and
+  `e2e` jobs as CI and skip the deploy job. No secrets: Pages deploys with the
+  workflow's own OIDC token.
 - Base path: this is a *project* site, so every URL lives under **`/prd`**. The
   value is set once in `astro.config.mjs` (`base`, next to `site`). Only two
   places know it from there: `withBase()` in `src/lib/base.ts` (reads
