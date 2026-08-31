@@ -6,12 +6,14 @@ export const SITE = {
   gistTitle: 'Build The Urlist',
 } as const;
 
+// Internal page hrefs carry a trailing slash (GitHub Pages serves the directory form
+// without a redirect). Render them through `withBase()` from ./base.
 export const NAV = [
   { href: '/', label: 'Home' },
-  { href: '/sample', label: 'The sample PRD' },
-  { href: '/guide', label: 'How to write one' },
-  { href: '/walkthrough', label: 'Worked example' },
-  { href: '/template', label: 'Template' },
+  { href: '/sample/', label: 'The sample PRD' },
+  { href: '/guide/', label: 'How to write one' },
+  { href: '/walkthrough/', label: 'Worked example' },
+  { href: '/template/', label: 'Template' },
 ] as const;
 
 // Fixed route → content entry map. Pages look entries up by id, never by listing.

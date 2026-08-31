@@ -25,6 +25,9 @@ Content files carry YAML frontmatter with at least `title` and `description`.
 ## Ports
 
 Dev servers for this project use **4410–4499**. Each task spec names its ports.
+The defaults are **4410** (dev) and **4411** (preview / Playwright); set
+`PREVIEW_PORT` to run the e2e suite's preview server on another port, e.g.
+`$env:PREVIEW_PORT = '4431'; npm run test:e2e`.
 
 ## Develop
 
@@ -36,12 +39,37 @@ failing the build.
 
 ```
 npm install            install dependencies (Playwright: npx playwright install chromium)
-npm run dev            dev server on http://localhost:4410
+npm run dev            dev server on http://localhost:4410/prd/
 npm run build          production build to dist/
-npm run preview        serve dist/ on http://localhost:4411
+npm run preview        serve dist/ on http://localhost:4411/prd/
 npm run check          astro check (types, 0 errors expected)
 npm test               vitest unit tests (tests/unit)
 npm run test:e2e       Playwright, Chromium only (tests/e2e) — builds, then runs against preview on 4411
 ```
 
-Ports: **4410** dev, **4411** preview / Playwright.
+Ports: **4410** dev, **4411** preview / Playwright by default; `PREVIEW_PORT`
+overrides the e2e preview port. The site lives under the `/prd` base path
+locally too, so open `http://localhost:4410/prd/` — the bare `/` is not served.
+
+## Deploy
+
+Public URL: **https://burkeholland.github.io/prd/**
+
+- Pages source = **GitHub Actions**, workflow `.github/workflows/deploy.yml`.
+  Every push to `main` runs `npm ci`, `npm run check`, `npm test`,
+  `npm run build` and publishes `dist/` in about 2 minutes; pushes to other
+  branches run the same build job as CI and skip the deploy job. No secrets:
+  Pages deploys with the workflow's own OIDC token.
+- Base path: this is a *project* site, so every URL lives under **`/prd`**. The
+  value is set once in `astro.config.mjs` (`base`, next to `site`). Only two
+  places know it from there: `withBase()` in `src/lib/base.ts` (reads
+  `import.meta.env.BASE_URL`; every internal `href`/`src` in `src/**` goes
+  through it) and the rehype plugin `src/lib/rehype-base.mjs` (prefixes
+  root-relative links and images inside rendered markdown, adding a trailing
+  slash to page paths). Content in `content/` stays base-agnostic.
+- Rollback: `git revert <merge commit>` and push to `main`, which redeploys the
+  previous state; or rerun the last good deploy with
+  `gh workflow run deploy.yml --ref main`.
+- Custom domain later: set `base: '/'` and `site: 'https://<domain>'` in
+  `astro.config.mjs`, add `public/CNAME` with the domain, and create one DNS
+  record (CNAME to `burkeholland.github.io`). Nothing else changes.

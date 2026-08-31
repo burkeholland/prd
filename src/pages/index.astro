@@ -1,20 +1,21 @@
 ---
 import Base from '../layouts/Base.astro';
 import { SITE } from '../lib/site';
+import { withBase } from '../lib/base';
 
 const cards = [
   {
-    href: '/sample',
+    href: withBase('/sample/'),
     title: 'The sample PRD',
     text: 'Build The Urlist: the complete instruction Burke Holland gave an agent to build a link-sharing app — mocks, stack, routes, exact copy, tests, and a definition of done.',
   },
   {
-    href: '/guide',
+    href: withBase('/guide/'),
     title: 'How to write one',
     text: 'Seven habits that separate a PRD an agent can execute from one it has to guess at.',
   },
   {
-    href: '/walkthrough',
+    href: withBase('/walkthrough/'),
     title: 'Worked example',
     text: 'The sample, section by section: what each part does, why it works, and what to steal.',
   },
@@ -53,7 +54,7 @@ const differences = [
   <section class="strip" aria-label="Start here">
     <p class="strip__label">Start here</p>
     <p>
-      <a href="/template">Template</a>
+      <a href={withBase('/template/')}>Template</a>
       <span class="strip__text">— Copy the skeleton and fill it in.</span>
     </p>
   </section>

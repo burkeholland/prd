@@ -1,18 +1,21 @@
 ---
 import { NAV } from '../lib/site';
+import { withBase } from '../lib/base';
 
 interface Props {
+  /** `Astro.url.pathname` of the page being rendered; it already includes the base. */
   current: string;
 }
 
 const normalize = (path: string) => path.replace(/\/+$/, '') || '/';
 const current = normalize(Astro.props.current);
+const items = NAV.map((item) => ({ ...item, href: withBase(item.href) }));
 ---
 
 <nav class="site-nav" aria-label="Main">
   <ul>
     {
-      NAV.map((item) => (
+      items.map((item) => (
         <li>
           <a href={item.href} aria-current={normalize(item.href) === current ? 'page' : undefined}>
             {item.label}
