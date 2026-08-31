@@ -10,6 +10,8 @@ To use it: keep the section order, delete nothing without deciding it does not a
 
 ## Section by section
 
+Fourteen sections, in the order the sample uses them.
+
 ## Mission and stop condition
 
 **Write here:** One paragraph, first, directly under the title as in the sample: what to build, where, and when to stop. Without a stop condition the model decides what counts as done.
