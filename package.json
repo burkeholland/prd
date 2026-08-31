@@ -5,7 +5,9 @@
   "type": "module",
   "description": "PRD Field Guide — how to write a product requirements doc an AI agent can build from, with a real one as the worked example.",
   "scripts": {
+    "predev": "node scripts/make-mocks.mjs",
     "dev": "astro dev --port 4410",
+    "prebuild": "node scripts/make-mocks.mjs",
     "build": "astro build",
     "preview": "astro preview --port 4411",
     "check": "astro check",
@@ -22,6 +24,7 @@
     "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.62.1",
     "@types/node": "^24.13.3",
+    "sharp": "0.34.5",
     "typescript": "^5.9.3",
     "vitest": "^4.1.11"
   }
