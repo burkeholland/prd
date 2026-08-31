@@ -43,13 +43,22 @@ npm run dev            dev server on http://localhost:4410/prd/
 npm run build          production build to dist/
 npm run preview        serve dist/ on http://localhost:4411/prd/
 npm run check          astro check (types, 0 errors expected)
-npm test               vitest unit tests (tests/unit)
+npm test               vitest unit tests (tests/unit) + node:test script tests (scripts/**/*.test.mjs, scripts/check-*.mjs)
+npm run test:unit      vitest alone
 npm run test:e2e       Playwright, Chromium only (tests/e2e) — builds, then runs against preview on 4411
 ```
 
 Ports: **4410** dev, **4411** preview / Playwright by default; `PREVIEW_PORT`
 overrides the e2e preview port. The site lives under the `/prd` base path
 locally too, so open `http://localhost:4410/prd/` — the bare `/` is not served.
+
+Rendered markdown goes through two rehype plugins (`astro.config.mjs`):
+`src/lib/rehype-base.mjs` prefixes root-relative URLs with the base, and
+`src/lib/rehype-figures.mjs` turns each block-level image into a lazy-loaded
+`<figure>` captioned from the nearest preceding `####` heading — this is how the
+gist's screenshots render on `/sample`. The root `.gitattributes` marks
+`content/gist/**` and `public/raw/**` `-text` so the CRLF gist snapshot stays
+byte-exact on every checkout.
 
 ## Deploy
 

@@ -25,6 +25,7 @@ const differences = [
   'No follow-up questions — every decision must already be in the document.',
   'Exactness where it matters: routes, copy strings, limits, error messages.',
   'Done is defined by checks the agent can run itself.',
+  'The more the document decides, the less the model guesses — and guessing is where one-shot builds fail.',
 ];
 ---
 
@@ -32,9 +33,10 @@ const differences = [
   <section class="hero">
     <h1>Write a PRD an agent can build.</h1>
     <p class="lede">
-      A product requirements doc used to be a conversation starter. When the reader is an
-      autonomous coding agent, it is the whole conversation. This site shows a real one, explains
-      what makes it work, and gives you a template.
+      A PRD this specific gets a model to one-shot the app — or close to it. Build The Urlist is
+      the proof: one document, handed to an agent, turned into a working app with no follow-up
+      questions. This site shows that document, explains what makes it work, and gives you a
+      template.
     </p>
   </section>
 
@@ -60,7 +62,7 @@ const differences = [
   </section>
 
   <section class="different">
-    <h2>What is different about a PRD for an agent?</h2>
+    <h2>Why specificity wins</h2>
     <ul>
       {differences.map((point) => <li>{point}</li>)}
     </ul>

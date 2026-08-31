@@ -1,0 +1,4 @@
+# The gist snapshot (content/gist/**, its history and meta.json) and the download copy
+# (public/raw/**) are CRLF as fetched and must stay byte-exact on every checkout.
+content/gist/** -text
+public/raw/** -text

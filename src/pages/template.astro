@@ -2,14 +2,27 @@
 import { getEntry } from 'astro:content';
 import Doc from '../layouts/Doc.astro';
 import { DOC_ROUTES } from '../lib/site';
+import { withBase } from '../lib/base';
 
 const route = DOC_ROUTES['/template'];
 const entry = await getEntry(route.collection, route.id);
+const title = entry?.data.title ?? route.label;
+const description = entry?.data.description;
 ---
 
-<Doc
-  label={route.label}
-  title={entry?.data.title ?? route.label}
-  description={entry?.data.description}
-  entry={entry}
-/>
+<Doc label={route.label} title={title} description={description} entry={entry}>
+  <Fragment slot="header">
+    <h1>{title}</h1>
+    {description && <p class="doc__description">{description}</p>}
+    {
+      entry && (
+        <p class="doc__actions">
+          <a class="button" href={withBase('/prd-template.md')} download>
+            Download the clean template
+          </a>
+          <span class="doc__actions-note">Markdown, no annotations — the skeleton to fill in.</span>
+        </p>
+      )
+    }
+  </Fragment>
+</Doc>
