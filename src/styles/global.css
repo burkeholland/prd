@@ -826,3 +826,14 @@ table.history tr.is-current > * {
 .history-page__outro {
   max-width: var(--measure);
 }
+
+/* One hand-written sentence per revision, under the "What changed" summary. */
+.history__note {
+  margin: 0.25rem 0 0;
+  font-size: 0.9em;
+  color: var(--text-muted);
+}
+
+.history__view {
+  white-space: nowrap;
+}

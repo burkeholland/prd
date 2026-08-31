@@ -10,6 +10,13 @@ interface Props {
 const normalize = (path: string) => path.replace(/\/+$/, '') || '/';
 const current = normalize(Astro.props.current);
 const items = NAV.map((item) => ({ ...item, href: withBase(item.href) }));
+// An item is current on its own page and on pages under it (`/history/3/` keeps "How it evolved" lit);
+// the prefix rule skips the site root, or Home would be current everywhere.
+const root = normalize(withBase('/'));
+const isCurrent = (href: string) => {
+  const target = normalize(href);
+  return current === target || (target !== root && current.startsWith(`${target}/`));
+};
 ---
 
 <nav class="site-nav" aria-label="Main">
@@ -17,7 +24,7 @@ const items = NAV.map((item) => ({ ...item, href: withBase(item.href) }));
     {
       items.map((item) => (
         <li>
-          <a href={item.href} aria-current={normalize(item.href) === current ? 'page' : undefined}>
+          <a href={item.href} aria-current={isCurrent(item.href) ? 'page' : undefined}>
             {item.label}
           </a>
         </li>

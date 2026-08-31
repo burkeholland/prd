@@ -15,9 +15,11 @@ content/              authored markdown rendered by the site
   template.md         Reusable PRD template (annotated)             -> /template
   gist/               snapshot of the gist + metadata               -> /sample
   gist/history/       every revision of the gist                    -> /history
+  gist/history-notes.json  one hand-written sentence per revision, keyed by sha (the refresh never touches it)
 public/               static files served as-is (mocks/, prd-template.md, favicon)
 scripts/              zero-dependency Node scripts (fetch-gist) + node:test tests
 src/                  Astro site (layouts, components, pages, styles)
+  pages/history/[n].astro  one text-diff page per gist revision       -> /history/<n>
 tests/                vitest unit tests and Playwright e2e
 ```
 

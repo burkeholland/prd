@@ -1,0 +1,21 @@
+{
+  "$comment": "One sentence per gist revision, keyed by the revision's commit sha (history.json `version`). Hand-written; the daily refresh never touches this file. A new revision with no note renders without one.",
+  "notes": {
+    "2a8d004750914fbb98719b92f4c5ef76c5690591": "First draft: The Urlist on Next.js and SQLite, with anonymous and account-owned lists, soft delete and restore, live metadata, QR codes and a mock GitHub login.",
+    "aba7318a8e8b7bfeb134d7fc0bdf03b1412deef9": "Adds a Required design skill section that mandates the Postrboard design language and makes drag-and-drop the primary way to reorder links.",
+    "f7b0aa140d6d644dc113638e996e5038811ae892": "Condenses the whole document: one exact stack list, a five-row routes table, and the metadata, alias, login and accessibility rules cut to a paragraph each.",
+    "3fb7ac35ff5de91758fd8f5adc01bbf8c31f7496": "Makes the server authoritative on every write, moves the edit and public routes to catch-all alias segments, and folds the reorder and test lists into prose.",
+    "b5c6580939d876a6a233487f87280fe485523502": "Adds a Completion step: walk every user journey in a real Chromium browser before declaring the app done.",
+    "4a9f7ff9b94db49b41eea832c1055228b096de9d": "Adds the Technical specification and checklist section: commit a spec with a verifiable checkbox per requirement and reconcile it before finishing.",
+    "f3d7c702dd8db7d5de822f6d02eead7a3cfc19c6": "Makes the reference Blazor app the source of truth: exact copy per screen, Bulma tokens, one-segment vanity routes, and permanent delete replacing soft delete.",
+    "91d8de389199a7580f49f064f103f48259cc024c": "Reverses the styling call: the reference app now defines behavior and copy only, and every screen is restyled with Postrboard instead of Bulma and Font Awesome.",
+    "40dda421deff6f9402976e5df59d99a61233433b": "Makes structure part of the UX: the publish bar is a full-width band, link rows are cards of plain text edited in place, and My Lists tiles get exact anatomy.",
+    "146f7b7d8efaf15b69099aec2fea97e3f8146bd2": "Details the Home page layout: top-aligned columns, a hero of three cascading browser windows, and a full-bleed Get Started band with a full-width link input.",
+    "cc663f0ef9360fa6ff6361b28bd0c55a336f6164": "Adds a Mocks section with six screenshots of the reference app in place of the paragraph pointing at its source repository.",
+    "453e813605b167e1d3b03284b8edcd818b0475e9": "Drops Postrboard and the replicate-the-reference rules; the design system is now simply Bulma CSS with Font Awesome icons.",
+    "9631dfead3c278914fda40b6fe8ecf7ce3307ea0": "Spells out the Bulma choice: no second framework, Font Awesome placeholder and not-found icons, an inline SVG hero in Bulma colors, and Bulma's own dark mode.",
+    "df7f13bd50b2187484323492c6899fc087edb0af": "Replaces the six unlabeled screenshots with seven captioned ones: Home, New List, validation states, login modal, My Lists, published list and its QR code.",
+    "05ce1c964abbce4ac1ea86ee6a6b29f91bd383ae": "Adds a Finally section asking the agent to open the finished site in a browser for the user to evaluate.",
+    "8ef29d7eecb97ecbbd5a89ff4a7375482364704f": "Removes the Finally section added in revision 15, restoring the text of revision 14."
+  }
+}
