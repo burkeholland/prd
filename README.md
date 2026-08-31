@@ -14,6 +14,7 @@ content/              authored markdown rendered by the site
   walkthrough.md      The sample PRD, section by section            -> /walkthrough
   template.md         Reusable PRD template (annotated)             -> /template
   gist/               snapshot of the gist + metadata               -> /sample
+  gist/history/       every revision of the gist                    -> /history
 public/               static files served as-is (mocks/, prd-template.md, favicon)
 scripts/              zero-dependency Node scripts (fetch-gist) + node:test tests
 src/                  Astro site (layouts, components, pages, styles)
@@ -59,6 +60,10 @@ Rendered markdown goes through two rehype plugins (`astro.config.mjs`):
 gist's screenshots render on `/sample`. The root `.gitattributes` marks
 `content/gist/**` and `public/raw/**` `-text` so the CRLF gist snapshot stays
 byte-exact on every checkout.
+
+Styles live in `src/styles/global.css` (screen) and `src/styles/print.css` (`@media print`
+only: the document pages print / save as PDF as content only, black on white, code wrapped,
+external links followed by their URL; covered by `tests/e2e/print.spec.ts`).
 
 ## Deploy
 

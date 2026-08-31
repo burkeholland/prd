@@ -1,0 +1,184 @@
+---
+import Base from '../layouts/Base.astro';
+import { SITE } from '../lib/site';
+import { withBase } from '../lib/base';
+import { barScale, describeDelta, kb, rows, summary } from '../lib/history';
+// Written by scripts/fetch-gist-history.mjs: one entry per gist revision, oldest → newest.
+import history from '../../content/gist/history.json';
+// `revision` is the version the /sample page renders.
+import meta from '../../content/gist/meta.json';
+
+// Every revision's file, byte-verbatim. Only derived rows reach the HTML; the snapshots stay
+// in the build.
+const files = import.meta.glob<string>('../../content/gist/history/*.md', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+});
+const snapshots = Object.fromEntries(
+  Object.entries(files).map(([path, text]) => [`history/${path.split('/').pop()}`, text]),
+);
+
+const list = rows(history, snapshots, meta.revision);
+const totals = summary(history, list);
+const bars = barScale(list);
+const current = list.find((row) => row.isCurrent);
+const largest = list.reduce((max, row) => (row.bytes > max.bytes ? row : max), list[0]!);
+const smallest = list.reduce((min, row) => (row.bytes < min.bytes ? row : min), list[0]!);
+const withoutCounts = list.filter((row) => !row.hasCounts);
+const eolFlips = list.filter((row) => row.delta.eol.changed);
+// The first revision is "everything added". The API gives it no counts; a later data source may.
+const added = (row: (typeof list)[number]) => (row.n === 1 ? row.additions || row.lines : row.additions);
+
+const title = 'How this PRD evolved';
+const description = `${SITE.gistTitle} went through ${totals.count} revisions over ${totals.days} days — what grew, what was rewritten, and when.`;
+
+const ROW_HEIGHT = 22;
+const BAR_HEIGHT = 14;
+const chartHeight = list.length * ROW_HEIGHT;
+const BAR_SPACE = 160; // barScale's default maxPx: the inner chart's viewBox width
+---
+
+<Base title={`${title} · ${SITE.name}`} description={description}>
+  <article class="history-page">
+    <header class="history-page__header">
+      <h1>{title}</h1>
+      <p class="lede">
+        <a href={SITE.gistUrl} rel="noopener">{SITE.gistTitle}</a> went through {totals.count} revisions
+        over {totals.days} days, from <time datetime={history.first_committed_at}>{totals.firstDate}</time> to{' '}
+        <time datetime={history.last_committed_at}>{totals.lastDate}</time>. The first draft ran to{' '}
+        {totals.firstSections} sections in {kb(totals.firstBytes, 0)} KB; the version on the{' '}
+        <a href={withBase('/sample/')}>sample page</a> has {totals.lastSections} sections in {kb(totals.lastBytes, 0)} KB.
+        The specificity Burke credits for the one-shot build was earned in revisions, not written in one sitting.
+      </p>
+    </header>
+
+    <section class="history-chart" aria-labelledby="size-chart-heading">
+      <h2 id="size-chart-heading">Size at each revision</h2>
+      <p class="history-note">
+        One bar per revision, length = file size in bytes; the highlighted bar is the revision the sample page shows.
+      </p>
+      <svg
+        class="size-chart"
+        role="img"
+        aria-labelledby="size-chart-title size-chart-desc"
+        width="100%"
+        height={chartHeight}
+        style={`height:${chartHeight}px`}
+      >
+        <title id="size-chart-title">Document size at each of the {totals.count} revisions</title>
+        <desc id="size-chart-desc">
+          From {kb(totals.firstBytes)} KB at revision 1 to {kb(totals.lastBytes)} KB at revision {totals.count}; smallest{' '}
+          {kb(smallest.bytes)} KB at revision {smallest.n}, largest {kb(largest.bytes)} KB at revision {largest.n}.
+          {current && ` Revision ${current.n} is the one on the sample page.`}
+        </desc>
+        {
+          list.map((row, i) => (
+            <text class="size-chart__label" x="0" y={i * ROW_HEIGHT + BAR_HEIGHT + 3}>
+              #{row.n}
+            </text>
+          ))
+        }
+        <svg
+          x="3.2em"
+          y="0"
+          width="85%"
+          height={chartHeight}
+          viewBox={`0 0 ${BAR_SPACE} ${chartHeight}`}
+          preserveAspectRatio="none"
+          style={`height:${chartHeight}px`}
+        >
+          {
+            list.map((row, i) => (
+              <g class:list={['size-chart__bar', { 'size-chart__bar--current': row.isCurrent }]}>
+                <title>{`#${row.n} · ${kb(row.bytes)} KB · ${row.date}`}</title>
+                <rect x="0" y={i * ROW_HEIGHT + 4} width={bars[i]?.px ?? 0} height={BAR_HEIGHT} />
+              </g>
+            ))
+          }
+        </svg>
+      </svg>
+    </section>
+
+    <section class="history-table" aria-labelledby="revisions-heading">
+      <h2 id="revisions-heading">Every revision</h2>
+      <div class="table-scroll">
+        <table class="history">
+          <caption>
+            The {totals.count} revisions of the gist, oldest first: GitHub's line counts, the file's size and
+            section count, and which sections were added, changed or removed.
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">#</th>
+              <th scope="col">Date</th>
+              <th scope="col" class="num" abbr="Lines added">+</th>
+              <th scope="col" class="num" abbr="Lines removed">−</th>
+              <th scope="col" class="num">KB</th>
+              <th scope="col" class="num">Sections</th>
+              <th scope="col">What changed</th>
+              <th scope="col">View</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              list.map((row) => (
+                <tr class:list={{ 'is-current': row.isCurrent }} aria-current={row.isCurrent ? 'true' : undefined}>
+                  <th scope="row">{row.n}</th>
+                  <td>
+                    <time datetime={row.committedAt}>
+                      {row.date}
+                      <span class="history__time">{row.time}</span>
+                    </time>
+                  </td>
+                  <td class="num">{row.hasCounts ? added(row) : '—'}</td>
+                  <td class="num">{row.hasCounts ? row.deletions : '—'}</td>
+                  <td class="num">{kb(row.bytes)}</td>
+                  <td class="num">{row.sectionCount}</td>
+                  <td class="history__delta">
+                    {describeDelta(row)}
+                    {row.isCurrent && (
+                      <>
+                        {' '}
+                        <mark class="history__badge">
+                          <a href={withBase('/sample/')}>on the sample page</a>
+                        </mark>
+                      </>
+                    )}
+                  </td>
+                  <td>
+                    <a href={row.url} rel="noopener" title={`Revision ${row.n} on GitHub`}>
+                      <code>{row.short}</code>
+                    </a>
+                  </td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+      {
+        (withoutCounts.length > 0 || eolFlips.length > 0) && (
+          <p class="history-note" id="counts-note">
+            {withoutCounts.length > 0 && (
+              <span class="history-note__counts">
+                {`GitHub reports no line counts for the earliest revisions (#${withoutCounts[0]!.n}–#${withoutCounts[withoutCounts.length - 1]!.n}); the first draft counts every line as added. `}
+              </span>
+            )}
+            {eolFlips.length > 0 && (
+              <span class="history-note__eol">
+                When a revision flips the line endings (CRLF ↔ LF), GitHub counts every line as changed, so + and −
+                overstate the edit.
+              </span>
+            )}
+          </p>
+        )
+      }
+    </section>
+
+    <p class="history-page__outro">
+      The habits behind these revisions are in <a href={withBase('/guide/')}>How to write one</a>; the result is{' '}
+      <a href={withBase('/sample/')}>the sample PRD</a>.
+    </p>
+  </article>
+</Base>
