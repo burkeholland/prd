@@ -105,7 +105,7 @@ describe('pictureTag', () => {
         `sizes="${SIZES}">${img}</picture>`,
     );
     expect(asked).toEqual(['mocks/derived/01-home-page-760.webp', 'mocks/derived/01-home-page-1320.webp']);
-    expect(SIZES).toMatch(/^\(min-width: \d+em\) \d+px, calc\(100vw - [\d.]+rem\)$/);
+    expect(SIZES).toMatch(/^\(min-width: \d+em\) \d+px, calc\(100vw - \d+(?:\.\d+)?(?:px|rem)\)$/);
   });
 
   it('keeps the <img> byte-identical inside the wrapper', () => {

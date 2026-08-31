@@ -145,25 +145,70 @@ test('the sample PRD renders the gist with one h1 and seven local, captioned, la
       const figure = node.closest('figure');
       let heading = figure?.previousElementSibling ?? null;
       while (heading && heading.tagName !== 'H4') heading = heading.previousElementSibling;
+      const picture = node.closest('picture');
+      const sources = picture ? Array.from(picture.querySelectorAll('source[type="image/webp"]')) : [];
       return {
         src: node.getAttribute('src') ?? '',
         loading: node.getAttribute('loading'),
+        fetchpriority: node.getAttribute('fetchpriority'),
         decoding: node.getAttribute('decoding'),
         caption: figure?.querySelector('figcaption')?.textContent?.trim() ?? null,
         heading: heading?.textContent?.trim() ?? null,
+        picture: picture !== null,
+        sources: sources.length,
+        srcset: sources[0]?.getAttribute('srcset') ?? '',
+        sizes: sources[0]?.getAttribute('sizes') ?? '',
       };
     }),
   );
-  for (const img of details) {
-    expect(img.loading, `${img.src} loading`).toBe('lazy');
+
+  // Bytes actually served: the seven PNG fallbacks against each set of derived WebP copies.
+  const bytes = { png: 0, 760: 0, 1320: 0 };
+  const sizeOf = async (url: string, type: string) => {
+    const response = await page.request.get(url);
+    expect(response.status(), `${url} status`).toBe(200);
+    expect(response.headers()['content-type'], `${url} content-type`).toContain(type);
+    const length = Number(response.headers()['content-length']);
+    return Number.isFinite(length) && length > 0 ? length : (await response.body()).length;
+  };
+
+  for (const [index, img] of details.entries()) {
+    // The first screenshot is the desktop LCP element: eager and high priority; the rest lazy.
+    expect(img.loading, `${img.src} loading`).toBe(index === 0 ? 'eager' : 'lazy');
+    expect(img.fetchpriority, `${img.src} fetchpriority`).toBe(index === 0 ? 'high' : null);
     expect(img.decoding, `${img.src} decoding`).toBe('async');
     expect(img.caption, `${img.src} caption`).toBeTruthy();
     expect(img.caption, `${img.src} caption matches the preceding #### heading`).toBe(img.heading);
 
-    const response = await page.request.get(img.src);
-    expect(response.status(), `${img.src} status`).toBe(200);
-    expect(response.headers()['content-type'], `${img.src} content-type`).toContain('image/png');
+    // <picture> with one WebP <source>: "<stem>-760.webp 760w, <stem>-1320.webp 1320w" under the base.
+    expect(img.picture, `${img.src} is inside a <picture>`).toBe(true);
+    expect(img.sources, `${img.src} WebP sources`).toBe(1);
+    expect(img.sizes, `${img.src} sizes`).not.toBe('');
+    const stem = img.src.slice(MOCKS.length).replace(/\.png$/, '');
+    expect(stem, `${img.src} is a PNG under ${MOCKS}`).not.toBe(img.src);
+    const candidates = img.srcset.split(',').map((candidate) => candidate.trim());
+    expect(candidates, `${img.src} srcset candidates`).toEqual([
+      `${MOCKS}derived/${stem}-760.webp 760w`,
+      `${MOCKS}derived/${stem}-1320.webp 1320w`,
+    ]);
+
+    bytes.png += await sizeOf(img.src, 'image/png');
+    bytes[760] += await sizeOf(`${MOCKS}derived/${stem}-760.webp`, 'image/webp');
+    bytes[1320] += await sizeOf(`${MOCKS}derived/${stem}-1320.webp`, 'image/webp');
   }
+
+  // At the default viewport (1280×720, DPR 1) the browser takes the 760w WebP, not the PNG.
+  await page.waitForLoadState('load');
+  const currentSrc = await images.first().evaluate((node) => (node as HTMLImageElement).currentSrc);
+  expect(currentSrc, 'first screenshot currentSrc').toMatch(/-760\.webp$/);
+
+  const kb = (n: number) => `${Math.round(n / 1024)} KB`;
+  test.info().annotations.push({
+    type: 'screenshot bytes',
+    description: `7 PNG ${kb(bytes.png)} · 7 × 760w WebP ${kb(bytes[760])} · 7 × 1320w WebP ${kb(bytes[1320])}`,
+  });
+  expect(bytes[760], `760w set (${kb(bytes[760])}) lighter than the PNGs (${kb(bytes.png)})`).toBeLessThan(bytes.png);
+  expect(bytes[1320], `1320w set (${kb(bytes[1320])}) lighter than the PNGs (${kb(bytes.png)})`).toBeLessThan(bytes.png);
 });
 
 test('the sample PRD offers the gist as a download that matches the file on disk', async ({ page }) => {

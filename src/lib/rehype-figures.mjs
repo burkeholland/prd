@@ -15,7 +15,7 @@
  *     <picture>
  *       <source type="image/webp"
  *               srcset="/prd/mocks/derived/01-home-page-760.webp 760w, /prd/mocks/derived/01-home-page-1320.webp 1320w"
- *               sizes="(min-width: 48em) 658px, calc(100vw - 2rem)">
+ *               sizes="(min-width: 48em) 660px, calc(100vw - 34px)">
  *       <img alt="Home Page" src="/prd/mocks/01-home-page.png" loading="eager" fetchpriority="high" decoding="async" />
  *     </picture>
  *     <figcaption>Home Page</figcaption>
@@ -77,12 +77,13 @@ const MOCK_SRC = /^(?<prefix>.*)\/mocks\/(?<stem>[^/]+)\.png$/i;
 export const DERIVED_WIDTHS = [760, 1320];
 
 /**
- * How wide a screenshot renders, for `<source sizes>`: the content column caps
- * at ≈658 CSS px from 48em up; below that the figure fills the viewport minus
- * the page padding. A phone at DPR 2 and a desktop at DPR 1 pick the 760w copy,
- * a desktop at DPR 2 the 1320w one.
+ * How wide a screenshot renders, for `<source sizes>` (measured on /sample:
+ * 378 CSS px at a 412-px viewport, 659.8 px at 1350): the content column caps
+ * at ≈660 CSS px from 48em up; below that the figure fills the viewport minus
+ * 34 px of page padding. A phone at DPR 2 and a desktop at DPR 1 pick the 760w
+ * copy, a desktop at DPR 2 the 1320w one.
  */
-export const SIZES = '(min-width: 48em) 658px, calc(100vw - 2rem)';
+export const SIZES = '(min-width: 48em) 660px, calc(100vw - 34px)';
 
 /**
  * Default `exists`: looks under `public/` of the current working directory
