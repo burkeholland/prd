@@ -1,0 +1,367 @@
+---
+import Base from '../../layouts/Base.astro';
+import { SITE } from '../../lib/site';
+import { withBase } from '../../lib/base';
+import { diffLines, hunkHeader, hunks, lineEndings, lines, normalise, summary, type OpType } from '../../lib/diff';
+// Written by scripts/fetch-gist-history.mjs: one entry per gist revision, oldest → newest.
+import history from '../../../content/gist/history.json';
+// `revision` is the version the /sample page renders.
+import meta from '../../../content/gist/meta.json';
+
+// One page per revision, served at /history/<n>/ beside the /history/ table.
+export function getStaticPaths() {
+  return history.revisions.map((rev) => ({ params: { n: String(rev.n) } }));
+}
+
+// Every revision's file, byte-verbatim; only the diff of this page's pair reaches the HTML.
+const files = import.meta.glob<string>('../../../content/gist/history/*.md', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+});
+const snapshots = Object.fromEntries(
+  Object.entries(files).map(([path, text]) => [`history/${path.split('/').pop()}`, text]),
+);
+const snapshotOf = (file: string): string => {
+  const text = snapshots[file];
+  if (text === undefined) throw new Error(`history: no snapshot for ${file}`);
+  return text;
+};
+
+const ordered = [...history.revisions].sort((a, b) => a.n - b.n);
+const index = ordered.findIndex((rev) => String(rev.n) === Astro.params.n);
+if (index === -1) throw new Error(`history: no revision ${Astro.params.n}`);
+const rev = ordered[index]!;
+const prev = index > 0 ? ordered[index - 1] : undefined;
+const next = ordered[index + 1];
+const count = history.count;
+const isCurrent = rev.version === meta.revision;
+
+const raw = snapshotOf(rev.file);
+const prevRaw = prev ? snapshotOf(prev.file) : undefined;
+// Diff the text, not the bytes: CRLF ↔ LF flips are reported in a note instead of as every line.
+const ops = prevRaw === undefined ? [] : diffLines(normalise(prevRaw), normalise(raw));
+const counts = summary(ops);
+const blocks = hunks(ops);
+const eol = { from: prevRaw === undefined ? null : lineEndings(prevRaw), to: lineEndings(raw) };
+const eolChanged = eol.from !== null && eol.from !== eol.to;
+// Only some revisions have GitHub's own counts; the note quotes them when they exist.
+const githubCounts = rev.additions + rev.deletions > 0 ? ` +${rev.additions} −${rev.deletions}` : '';
+
+const PREVIEW_LINES = 40;
+const allLines = lines(raw);
+const preview = allLines.slice(0, PREVIEW_LINES);
+
+const utc = new Date(rev.committed_at).toISOString();
+const date = utc.slice(0, 10);
+const time = `${utc.slice(11, 16)} UTC`;
+const int = (value: number) => value.toLocaleString('en-US');
+const kb = (bytes: number) => (bytes / 1000).toFixed(1);
+
+const MARK: Record<OpType, string> = { equal: '', add: '+', del: '−' };
+
+// The <style> below is page-local but not Astro-scoped, and the diff cells carry no classes:
+// scoping stamps a data attribute on every element, and revision 3 renders ~950 rows × 4 cells
+// (that alone was 125 KB against a 120 KB budget). Rules are prefixed with `.revision` and
+// address cells by column position instead.
+
+const heading = `Revision ${rev.n} of ${count}`;
+const title = `${heading} · ${SITE.gistTitle} · ${SITE.name}`;
+const description = prev
+  ? `What changed in revision ${rev.n} of ${SITE.gistTitle}: +${counts.added} −${counts.deleted} lines of text vs revision ${prev.n}.`
+  : `The first draft of ${SITE.gistTitle}: ${int(rev.lines)} lines, ${kb(rev.bytes)} KB, committed ${date}.`;
+---
+
+<Base title={title} description={description} noindex>
+  <article class="revision">
+    <header class="revision__header">
+      <h1>{heading}</h1>
+      <p class="meta">
+        <time datetime={rev.committed_at}>{date} {time}</time>
+        <span class="meta__sep" aria-hidden="true">·</span>
+        <span title={`${int(rev.bytes)} bytes`}>{kb(rev.bytes)} KB</span>
+        <span class="meta__sep" aria-hidden="true">·</span>
+        <a href={rev.url} rel="noopener">View on GitHub</a>
+        <span class="meta__sep" aria-hidden="true">·</span>
+        <a href={withBase('/history/')}>All revisions</a>
+        {
+          prev && (
+            <>
+              <span class="meta__sep" aria-hidden="true">·</span>
+              <a href={withBase(`/history/${prev.n}/`)} rel="prev">Previous</a>
+            </>
+          )
+        }
+        {
+          next && (
+            <>
+              <span class="meta__sep" aria-hidden="true">·</span>
+              <a href={withBase(`/history/${next.n}/`)} rel="next">Next</a>
+            </>
+          )
+        }
+        {
+          isCurrent && (
+            <mark class="badge">
+              <a href={withBase('/sample/')}>the version on the sample page</a>
+            </mark>
+          )
+        }
+      </p>
+    </header>
+
+    {
+      prev ? (
+        <section class="revision__diff" aria-labelledby="diff-summary">
+          <p class="summary" id="diff-summary">
+            +{counts.added} −{counts.deleted} lines of text vs revision {prev.n}
+          </p>
+          {eolChanged && (
+            <p class="note">
+              This revision also changed the line endings ({eol.from} → {eol.to}); GitHub counts that as every line
+              changed{githubCounts && `, which is why it reports${githubCounts}`}.
+            </p>
+          )}
+          {blocks.length > 0 ? (
+            <div class="table-scroll">
+              <table class="diff">
+                <caption>
+                  The text of revision {rev.n} against revision {prev.n}: old and new line numbers, then the line; +
+                  marks an added line, − a removed one, with three unchanged lines of context around each change.
+                </caption>
+                <colgroup>
+                  <col class="diff__col-num" />
+                  <col class="diff__col-num" />
+                  <col class="diff__col-mark" />
+                  <col />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th scope="col" abbr="Old line number">Old</th>
+                    <th scope="col" abbr="New line number">New</th>
+                    <th scope="col"><span class="sr-only">Change</span></th>
+                    <th scope="col">Line</th>
+                  </tr>
+                </thead>
+                {
+                  blocks.map((hunk) => (
+                    <tbody>
+                      <tr class="diff__hunk"><td colspan="4">{hunkHeader(hunk)}</td></tr>
+                      {hunk.ops.map((op) => (
+                        <tr class={op.type === 'equal' ? undefined : `diff__${op.type}`}><td>{op.aLine ?? ''}</td><td>{op.bLine ?? ''}</td><td>{MARK[op.type]}</td><td>{op.text}</td></tr>
+                      ))}
+                    </tbody>
+                  ))
+                }
+              </table>
+            </div>
+          ) : (
+            <p class="note">No text changed in this revision.</p>
+          )}
+        </section>
+      ) : (
+        <section class="revision__first" aria-labelledby="first-draft">
+          <h2 id="first-draft">
+            First draft — {int(rev.lines)} lines, {int(rev.bytes)} bytes
+          </h2>
+          <p class="note">
+            Nothing to compare against yet; the first {int(preview.length)} lines follow.{' '}
+            <a href={rev.url} rel="noopener">The whole file is on GitHub</a>.
+          </p>
+          <pre class="preview" tabindex="0"><code>{preview.join('\n')}</code></pre>
+        </section>
+      )
+    }
+  </article>
+</Base>
+
+<style is:global>
+  .revision {
+    display: grid;
+    gap: 2rem;
+    --del: #b42318;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .revision {
+      --del: #f97066;
+    }
+  }
+
+  .revision__header {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .revision .meta {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    line-height: 1.7;
+  }
+
+  .revision .meta time {
+    white-space: nowrap;
+  }
+
+  .revision .meta__sep {
+    margin: 0 0.35em;
+  }
+
+  .revision .badge {
+    display: inline-block;
+    margin-left: 0.5em;
+    padding: 0 0.6em;
+    font-size: 0.8rem;
+    font-weight: 650;
+    color: var(--accent-contrast);
+    background: var(--accent);
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+
+  .revision .badge a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .revision .badge a:hover,
+  .revision .badge a:focus-visible {
+    text-decoration: underline;
+  }
+
+  .revision__diff,
+  .revision__first {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .revision .summary {
+    font-size: 1.15rem;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .revision .note {
+    max-width: var(--measure);
+    font-size: 0.92rem;
+    color: var(--text-muted);
+  }
+
+  .revision .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* One row per line: old number, new number, marker, text. Fixed layout plus wrapping text
+     keeps it inside 320 px; .table-scroll (global) is the fallback should anything overflow. */
+  .revision table.diff {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+    border: 1px solid var(--border);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .revision table.diff caption {
+    caption-side: bottom;
+    padding-top: 0.75rem;
+    text-align: left;
+    font-family: var(--font-sans);
+    font-size: 0.88rem;
+    color: var(--text-muted);
+  }
+
+  .revision .diff__col-num {
+    width: 3.6em;
+  }
+
+  .revision .diff__col-mark {
+    width: 1.5em;
+  }
+
+  .revision table.diff th,
+  .revision table.diff td {
+    padding: 0.1em 0.5em;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .revision table.diff thead th {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    font-weight: 650;
+    color: var(--text-muted);
+  }
+
+  /* Columns 1–2: line numbers; 3: marker; 4: the line. */
+  .revision table.diff th:nth-child(-n + 2),
+  .revision table.diff td:nth-child(-n + 2) {
+    text-align: right;
+    color: var(--text-muted);
+    user-select: none;
+  }
+
+  .revision table.diff th:nth-child(3),
+  .revision table.diff td:nth-child(3) {
+    text-align: center;
+    user-select: none;
+  }
+
+  .revision table.diff td:nth-child(4) {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .revision table.diff tr.diff__hunk td {
+    padding: 0.35em 0.5em;
+    text-align: left;
+    background: var(--surface);
+    color: var(--text-muted);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    user-select: auto;
+  }
+
+  .revision table.diff tr.diff__add > td {
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  }
+
+  .revision table.diff tr.diff__del > td {
+    background: color-mix(in srgb, var(--del) 14%, var(--surface));
+  }
+
+  .revision table.diff tr.diff__add > td:nth-child(3) {
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  .revision table.diff tr.diff__del > td:nth-child(3) {
+    color: var(--del);
+    font-weight: 700;
+  }
+
+  .revision .preview {
+    margin: 0;
+    padding: 1rem;
+    max-width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .revision .preview code {
+    font-size: inherit;
+  }
+</style>
