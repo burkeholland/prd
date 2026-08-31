@@ -84,6 +84,7 @@ test('home states the thesis: the lede and "Why specificity wins" with four poin
 
   await expect(page.locator('p.lede')).toContainText('one-shot the app');
   await expect(page.locator('p.lede')).toContainText("Burke Holland's claim");
+  await expect(page.locator('p.lede')).toContainText('traces how it evolved');
 
   const heading = page.locator('h2', { hasText: 'Why specificity wins' });
   await expect(heading).toHaveCount(1);
@@ -191,12 +192,35 @@ test('the sample source card reads the gist metadata', async ({ page }) => {
   const card = page.locator('.source-card');
   await expect(card.locator('h1')).toHaveCount(0);
   await expect(card.locator('a', { hasText: 'View on GitHub' })).toHaveAttribute('href', meta.html_url);
+  await expect(card.locator('.source-card__links a', { hasText: 'How it evolved' })).toHaveAttribute(
+    'href',
+    to('/history/'),
+  );
   await expect(card.locator('.source-card__meta')).toContainText('Last fetched');
   await expect(card.locator('.source-card__meta time')).toHaveAttribute('datetime', meta.fetched_at);
 
   const revision = card.locator('.source-card__meta a');
   await expect(revision).toHaveText(meta.revision.slice(0, 7));
   await expect(revision).toHaveAttribute('href', `${meta.html_url}/${meta.revision}`);
+
+  // "Revision 8ef29d7 (16 of 16)": the snapshot's place in the gist history, from the data.
+  if (present(CONTENT.history)) {
+    const history = JSON.parse(readFileSync(resolve(CONTENT.history), 'utf8')) as {
+      count: number;
+      revisions: { n: number; version: string }[];
+    };
+    const current = history.revisions.find((rev) => rev.version === meta.revision);
+    if (current) {
+      await expect(card.locator('.source-card__meta')).toContainText(`(${current.n} of ${history.count})`);
+    }
+  }
+});
+
+test('the guide links to the history page', async ({ page }) => {
+  await page.goto(to('/guide/'));
+  const links = page.locator(`main a[href="${to('/history/')}"]`);
+  expect(await links.count(), 'guide → history links').toBeGreaterThanOrEqual(1);
+  await expect(links.filter({ hasText: 'See how it evolved' })).toHaveCount(1);
 });
 
 test('the template page has a download button for the clean template', async ({ page }) => {
