@@ -15,6 +15,11 @@ Options: `--gist <id>`, `--out <repo root>`, `--dry-run` (fetch + validate, writ
 Exit codes: 0 ok · 1 fetch/validation failure (nothing partial is written) · 2 usage.
 Set `GITHUB_TOKEN` to raise the unauthenticated GitHub API limit (60 requests/hour); it is never printed.
 
+Automatic refresh: the workflow **Refresh the sample PRD snapshot** (`.github/workflows/refresh-gist.yml`) reruns this
+script and `fetch-gist-history.mjs` daily at 13:00 UTC. When the gist changed it pushes `gist-refresh/<revision>` and
+opens a pull request (gist revision link, diff stat, a `Checks: pass` / `Checks: FAIL` line from `node --test`); it
+never commits to `main`. By hand: `gh workflow run refresh-gist.yml -f dry_run=true` (fetch + diff only, no push, no PR).
+
 Tests: `node --test "scripts/**/*.test.mjs"` — offline unit tests for `scripts/lib/gist.mjs` plus one
 integration test over the committed snapshot (skips when it has not been generated yet).
 
