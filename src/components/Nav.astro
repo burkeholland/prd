@@ -1,0 +1,24 @@
+---
+import { NAV } from '../lib/site';
+
+interface Props {
+  current: string;
+}
+
+const normalize = (path: string) => path.replace(/\/+$/, '') || '/';
+const current = normalize(Astro.props.current);
+---
+
+<nav class="site-nav" aria-label="Main">
+  <ul>
+    {
+      NAV.map((item) => (
+        <li>
+          <a href={item.href} aria-current={normalize(item.href) === current ? 'page' : undefined}>
+            {item.label}
+          </a>
+        </li>
+      ))
+    }
+  </ul>
+</nav>

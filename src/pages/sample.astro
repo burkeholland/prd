@@ -1,0 +1,46 @@
+---
+import { getEntry } from 'astro:content';
+import Doc from '../layouts/Doc.astro';
+import { DOC_ROUTES, SITE } from '../lib/site';
+
+interface GistMeta {
+  fetched_at?: string;
+  revision?: string;
+}
+
+const route = DOC_ROUTES['/sample'];
+const entry = await getEntry(route.collection, route.id);
+
+// `content/gist/meta.json` is written by the fetch-gist task and may not exist yet.
+// A glob import resolves to an empty map instead of failing the build when it is missing.
+const metaModules = import.meta.glob<{ default: GistMeta }>('../../content/gist/meta.json');
+const loadMeta = Object.values(metaModules)[0];
+const meta = loadMeta ? (await loadMeta()).default : undefined;
+
+const description =
+  'This is the gist, verbatim except that screenshot URLs point at local copies.';
+---
+
+<Doc label={route.label} title={route.label} description={description} entry={entry}>
+  <div slot="header" class="source-card">
+    <h1>{route.label}</h1>
+    <p>{description}</p>
+    <ul class="source-card__links">
+      <li><a href={SITE.gistUrl}>View on GitHub</a></li>
+      <li><a href="/raw/build-the-urlist.md" download>Download .md</a></li>
+    </ul>
+    {
+      meta && (meta.fetched_at || meta.revision) && (
+        <p class="source-card__meta">
+          {meta.fetched_at && <span>Last fetched {meta.fetched_at}</span>}
+          {meta.fetched_at && meta.revision && ' · '}
+          {meta.revision && (
+            <span>
+              Revision <code>{meta.revision}</code>
+            </span>
+          )}
+        </p>
+      )
+    }
+  </div>
+</Doc>

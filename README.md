@@ -26,6 +26,22 @@ Content files carry YAML frontmatter with at least `title` and `description`.
 
 Dev servers for this project use **4410–4499**. Each task spec names its ports.
 
-## Status
+## Develop
 
-Bootstrapping. See the project channel #prd on the Agent Board.
+Astro 5, static output, strict TypeScript, npm. No UI or CSS framework, no web
+fonts, no external requests at runtime. Markdown is loaded from the repo-root
+`content/` folder through content collections (`src/content.config.ts`); when a
+file is missing the matching page renders "Content is on its way." instead of
+failing the build.
+
+```
+npm install            install dependencies (Playwright: npx playwright install chromium)
+npm run dev            dev server on http://localhost:4410
+npm run build          production build to dist/
+npm run preview        serve dist/ on http://localhost:4411
+npm run check          astro check (types, 0 errors expected)
+npm test               vitest unit tests (tests/unit)
+npm run test:e2e       Playwright, Chromium only (tests/e2e) — builds, then runs against preview on 4411
+```
+
+Ports: **4410** dev, **4411** preview / Playwright.

@@ -1,0 +1,24 @@
+{
+  "name": "prd-field-guide",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "PRD Field Guide — how to write a product requirements doc an AI agent can build from, with a real one as the worked example.",
+  "scripts": {
+    "dev": "astro dev --port 4410",
+    "build": "astro build",
+    "preview": "astro preview --port 4411",
+    "check": "astro check",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "astro": "^5.18.2"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@playwright/test": "^1.62.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}
