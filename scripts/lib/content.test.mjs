@@ -122,6 +122,7 @@ test('extractHeadings: depth, rendered text, per-document slugs; fenced and non-
     '#hashtag is not a heading',
     '### Routes',
     '### Routes',
+    '> #### Quoted heading',
     'Setext',
     '------',
   ].join('\n');
@@ -130,6 +131,7 @@ test('extractHeadings: depth, rendered text, per-document slugs; fenced and non-
     { line: 2, depth: 2, text: 'Use npm test and links', slug: 'use-npm-test-and-links' },
     { line: 7, depth: 3, text: 'Routes', slug: 'routes' },
     { line: 8, depth: 3, text: 'Routes', slug: 'routes-1' },
+    { line: 9, depth: 4, text: 'Quoted heading', slug: 'quoted-heading' },
   ]);
   assert.equal(inlineText('**Bold** _em_ ![alt](/x.png) &amp; <span>tag</span>'), 'Bold em alt & tag');
 });

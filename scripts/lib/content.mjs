@@ -184,7 +184,8 @@ export function extractHeadings(body) {
   const headings = [];
   for (let i = 0; i < lines.length; i++) {
     if (fenced[i]) continue;
-    const m = HEADING_RE.exec(lines[i]);
+    // Headings inside blockquotes render as headings too (with ids), so they count.
+    const m = HEADING_RE.exec(lines[i].replace(/^(?: {0,3}> ?)+/, ''));
     if (!m) continue;
     const raw = (m[2] ?? '').replace(/(^|[ \t])#+$/, '').trim();
     const text = inlineText(raw);
