@@ -4,9 +4,9 @@ description: "Seven habits that separate a PRD an agent can execute from one it 
 order: 2
 ---
 
-Burke Holland's [*Build The Urlist*](https://gist.github.com/burkeholland/f71d1156812fd91e4369308358892817) is a PRD written for a coding agent, not a product team: a repository, seven screenshots, and a document that expects a finished application back. The full text is on the [sample page](/sample); this guide uses it as the running example.
+Burke Holland reports that a coding agent given the sample PRD, [*Build The Urlist*](/sample), built the app in one shot, or close to it. That is this site's claim, and the sample is its proof: the agent builds what you wrote and guesses at every gap, so a PRD specific enough gets built in one pass.
 
-Everything below serves one idea: the agent will build exactly what you wrote, and it will fill every gap you left with its own guess.
+This guide covers the habits that make a PRD that specific; the [walkthrough](/walkthrough) shows them at work in the sample, and the [template](/template) gives you the skeleton.
 
 ## Who is reading your PRD now
 

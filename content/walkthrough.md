@@ -4,14 +4,15 @@ description: "What each part of Build The Urlist does, why it works, and what to
 order: 3
 ---
 
-Burke Holland wrote [*Build The Urlist*](https://gist.github.com/burkeholland/f71d1156812fd91e4369308358892817) as a single instruction to a coding agent: about 3,700 words, seven screenshots, and one order at the top: "Build the complete application in this repository. Work autonomously from start to finish and stop only when the app is complete." The agent turned it into a working app without asking a question.
+Burke Holland wrote the sample PRD, [*Build The Urlist*](/sample), as a single instruction to a coding agent: about 3,700 words, seven screenshots, and one order at the top: "Build the complete application in this repository. Work autonomously from start to finish and stop only when the app is complete." It was written to be handed over once, with no follow-up questions, and by Burke's account that is how it went: the agent built the app in one shot, or close to it.
 
-That is the thesis of this site. Specificity is what lets a model build the whole thing in one pass, one shot or close to it: every decision the document makes is one the model does not have to guess at, and guesses are where one-shot builds fail. This PRD was written to be handed over once, with no follow-up questions, and it worked.
+That report is the thesis of this site, and the sample is its proof: every decision the document makes is one the agent does not have to guess at, and guesses are where one-shot builds fail, so a PRD this specific gets built in one pass.
 
-This page walks the gist in order: each of its seventeen sections gets a verbatim excerpt, what it pins down for the agent, why it works, and one line to reuse. The full text is on the [sample page](/sample); the [guide](/guide) and [template](/template) build on it.
+This page walks the sample in order: each of its seventeen sections gets a verbatim excerpt, what it pins down for the agent, why it works, and one line to reuse. The [guide](/guide) names the habits behind those decisions; the [template](/template) gives you the same sections to fill in.
 
 ## Mocks
 
+<!-- quote: not-gist -->
 > Home Page  
 > New List  
 > New List: Validation States  
@@ -43,6 +44,8 @@ This page walks the gist in order: each of its seventeen sections gets a verbati
 > - Next.js App Router, React, strict TypeScript, Node.js, and npm
 > - SQLite with direct parameterized SQL through `better-sqlite3`; no ORM
 >
+> …
+>
 > Design system: use Bulma CSS for every screen … and Font Awesome for all icons. Do not add a custom design system or a second CSS framework.
 
 **What it does** — [Names every layer](/sample#stack-and-design): framework, language, database, test runners, CSS framework, icon set, runtime, and rules alternatives out: no ORM, not Edge, no second CSS framework.
@@ -54,6 +57,8 @@ This page walks the gist in order: each of its seventeen sections gets a verbati
 ## Product
 
 > Publishing requires a signed-in user; there is no anonymous publishing. … There is no soft delete, restore, tombstone, or anonymous list in this product.
+>
+> …
 >
 > The server is authoritative: revalidate input, ownership, and alias availability on every write; ignore client-supplied owner IDs.
 
@@ -67,6 +72,7 @@ This page walks the gist in order: each of its seventeen sections gets a verbati
 
 > | Route | Behavior |
 > |---|---|
+> | … | … |
 > | `/{vanity}` | Public list — **a single path segment only** |
 >
 > 404 page (everything else, including multi-segment paths): show the text **"Sorry, there's nothing at this address."**
@@ -105,6 +111,8 @@ This page walks the gist in order: each of its seventeen sections gets a verbati
 ## Live metadata
 
 > - Title: `<title>` tag → `og:title` → `twitter:title` → first `<h1>` → `og:site_name`
+>
+> …
 >
 > The fetcher must be SSRF-safe: HTTP/HTTPS only, no credentials embedded, reject non-public and internal addresses, revalidate DNS on every redirect to prevent rebinding, follow at most five redirects, limit content to 2 MiB, accept only HTML/XHTML, and never forward app credentials. …
 
@@ -168,6 +176,8 @@ This page walks the gist in order: each of its seventeen sections gets a verbati
 
 > While loading show a large primary-colored H2 reading **"Loading {vanity}"** followed by 5 skeleton link rows.
 >
+> …
+>
 > When the alias does not resolve to an active list, show the not-found state instead: … H2 **"We couldn't find that Urlist"**, and H3 **"But don't be sad! That means {vanity} is still available."** …
 
 **What it does** — [The public page](/sample#public-list): a loading state, the success layout (heading, share row, List/QR toggle, read-only cards, a "Report this list" mailto), and a not-found state with its own copy.
@@ -191,6 +201,8 @@ This page walks the gist in order: each of its seventeen sections gets a verbati
 ## Storage and security
 
 > … Enable SQLite foreign keys. Use transactions for publish, save, delete, and reset.
+>
+> …
 >
 > Treat user text and fetched metadata as untrusted when rendering, prevent stored/reflected script execution, encode share parameters, apply CSRF protection, and keep internals out of errors.
 
