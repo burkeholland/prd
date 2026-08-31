@@ -80,6 +80,7 @@ test('home states the thesis: the lede and "Why specificity wins" with four poin
   await page.goto(to('/'));
 
   await expect(page.locator('p.lede')).toContainText('one-shot the app');
+  await expect(page.locator('p.lede')).toContainText("Burke Holland's claim");
 
   const heading = page.locator('h2', { hasText: 'Why specificity wins' });
   await expect(heading).toHaveCount(1);

@@ -6,7 +6,7 @@ import { withBase } from '../lib/base';
 // Astro writes this route to dist/404.html; GitHub Pages serves it for unknown paths under the base.
 ---
 
-<Base title={`Not found · ${SITE.name}`} description="There is nothing at this address.">
+<Base title={`Not found · ${SITE.name}`} description="There is nothing at this address." noindex>
   <article class="doc">
     <header class="doc__header">
       <h1>Not found</h1>
