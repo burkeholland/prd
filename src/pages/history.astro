@@ -131,9 +131,7 @@ const BAR_SPACE = 160; // barScale's default maxPx: the inner chart's viewBox wi
               list.map((row) => (
                 <tr class:list={{ 'is-current': row.isCurrent }} aria-current={row.isCurrent ? 'true' : undefined}>
                   <th scope="row">
-                    <a href={withBase(`/history/${row.n}/`)} aria-label={`Revision ${row.n}: what changed`}>
-                      {row.n}
-                    </a>
+                    <a href={withBase(`/history/${row.n}/`)} aria-label={`Revision ${row.n}: what changed`}>{row.n}</a>
                   </th>
                   <td>
                     <time datetime={row.committedAt}>
@@ -158,13 +156,9 @@ const BAR_SPACE = 160; // barScale's default maxPx: the inner chart's viewBox wi
                     {noteOf(row.n) && <p class="history__note">{noteOf(row.n)}</p>}
                   </td>
                   <td class="history__view">
-                    <a href={withBase(`/history/${row.n}/`)} aria-label={`Diff of revision ${row.n}`}>
-                      Diff
-                    </a>
+                    <a href={withBase(`/history/${row.n}/`)} aria-label={`Diff of revision ${row.n}`}>Diff</a>
                     {' · '}
-                    <a href={row.url} rel="noopener" title={`Revision ${row.n} on GitHub`}>
-                      GitHub
-                    </a>
+                    <a href={row.url} rel="noopener" title={`Revision ${row.n} on GitHub`}>GitHub</a>
                   </td>
                 </tr>
               ))

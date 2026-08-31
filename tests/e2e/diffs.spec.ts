@@ -122,8 +122,9 @@ test('the history table links every row to its diff page and keeps the + and −
   await expect(table.locator('tbody th[scope="row"] a')).toHaveCount(count);
 
   // The View cell: one "Diff" link (distinct name per row) and still exactly one gist link.
-  const diffs = table.locator('tbody a', { hasText: /^Diff$/ });
+  const diffs = table.locator('tbody a[aria-label^="Diff of revision "]');
   await expect(diffs).toHaveCount(count);
+  await expect(diffs.nth(2)).toHaveText('Diff');
   await expect(diffs.nth(2)).toHaveAttribute('href', to('/history/3/'));
   await expect(diffs.nth(2)).toHaveAttribute('aria-label', 'Diff of revision 3');
   await expect(table.locator('tbody a[href^="https://gist.github.com/"]')).toHaveCount(count);
