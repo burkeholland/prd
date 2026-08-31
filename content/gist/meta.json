@@ -1,0 +1,76 @@
+{
+  "id": "f71d1156812fd91e4369308358892817",
+  "description": "Build The Urlist - standalone Autopilot instruction",
+  "owner": "burkeholland",
+  "html_url": "https://gist.github.com/burkeholland/f71d1156812fd91e4369308358892817",
+  "raw_url": "https://gist.githubusercontent.com/burkeholland/f71d1156812fd91e4369308358892817/raw/82f6f039e6bbbc8d9799b1447c6eb2f427c064d7/build-the-urlist.md",
+  "filename": "build-the-urlist.md",
+  "revision": "8ef29d7eecb97ecbbd5a89ff4a7375482364704f",
+  "updated_at": "2026-08-31T13:11:39Z",
+  "fetched_at": "2026-08-31T15:45:35.371Z",
+  "images": [
+    {
+      "n": 1,
+      "slug": "home-page",
+      "file": "/mocks/01-home-page.png",
+      "alt": "Screenshot 2026-08-31 080518",
+      "width": 1452,
+      "height": 1580,
+      "source": "https://gist.github.com/user-attachments/assets/1e3d90fb-c1e1-430a-ae88-cfba74b7847c"
+    },
+    {
+      "n": 2,
+      "slug": "new-list",
+      "file": "/mocks/02-new-list.png",
+      "alt": "Screenshot 2026-08-31 080549",
+      "width": 1452,
+      "height": 1580,
+      "source": "https://gist.github.com/user-attachments/assets/27e0389f-e8b4-4394-9093-58e7fd10944d"
+    },
+    {
+      "n": 3,
+      "slug": "new-list-validation-states",
+      "file": "/mocks/03-new-list-validation-states.png",
+      "alt": "Screenshot 2026-08-31 080609",
+      "width": 1452,
+      "height": 1580,
+      "source": "https://gist.github.com/user-attachments/assets/edc10506-f18d-48c9-b075-3b35b675f5bc"
+    },
+    {
+      "n": 4,
+      "slug": "login-modal",
+      "file": "/mocks/04-login-modal.png",
+      "alt": "Screenshot 2026-08-31 080616",
+      "width": 1452,
+      "height": 1580,
+      "source": "https://gist.github.com/user-attachments/assets/35bb22c4-83f8-473e-b3e6-949f3ca51d80"
+    },
+    {
+      "n": 5,
+      "slug": "my-lists-logged-in",
+      "file": "/mocks/05-my-lists-logged-in.png",
+      "alt": "Screenshot 2026-08-31 080631",
+      "width": 1452,
+      "height": 1580,
+      "source": "https://gist.github.com/user-attachments/assets/dc49fea0-ea8a-4f11-9bb8-f91f3c143e27"
+    },
+    {
+      "n": 6,
+      "slug": "published-list",
+      "file": "/mocks/06-published-list.png",
+      "alt": "Screenshot 2026-08-31 080639",
+      "width": 1452,
+      "height": 1580,
+      "source": "https://gist.github.com/user-attachments/assets/7d8db7b5-7c01-4cb5-a0b0-81004e6170f3"
+    },
+    {
+      "n": 7,
+      "slug": "published-list-qr-code",
+      "file": "/mocks/07-published-list-qr-code.png",
+      "alt": "Screenshot 2026-08-31 080648",
+      "width": 1452,
+      "height": 1580,
+      "source": "https://gist.github.com/user-attachments/assets/dd59ff8c-886d-4746-8073-636cb1b2c639"
+    }
+  ]
+}
