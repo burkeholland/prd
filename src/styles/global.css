@@ -501,6 +501,12 @@ main:focus {
   margin-top: 1.1em;
 }
 
+/* The gist snapshot carries its own h1 below the source card. */
+.prose h1 {
+  font-size: 1.8rem;
+  margin-top: 1.5em;
+}
+
 .prose h2 {
   margin-top: 2.4em;
   padding-top: 0.6em;
