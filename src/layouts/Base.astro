@@ -4,13 +4,22 @@ import Nav from '../components/Nav.astro';
 import Footer from '../components/Footer.astro';
 import { SITE } from '../lib/site';
 import { withBase } from '../lib/base';
+import { canonicalUrl, OG_IMAGE } from '../lib/seo';
 
 interface Props {
   title: string;
   description?: string;
+  /** Pages that must not be indexed or shared (the 404 page): emits `robots: noindex`, no canonical, no `og:url`. */
+  noindex?: boolean;
 }
 
-const { title, description = SITE.tagline } = Astro.props;
+const { title, description = SITE.tagline, noindex = false } = Astro.props;
+
+if (!Astro.site) {
+  throw new Error('astro.config.mjs must set `site`: canonical URLs and the social preview need an absolute origin.');
+}
+const canonical = noindex ? undefined : canonicalUrl(Astro.url.pathname, Astro.site);
+const ogImage = new URL(withBase(OG_IMAGE.path), Astro.site).href;
 ---
 
 <!doctype html>
@@ -21,8 +30,27 @@ const { title, description = SITE.tagline } = Astro.props;
     <meta name="color-scheme" content="light dark" />
     <title>{title}</title>
     <meta name="description" content={description} />
+    {noindex && <meta name="robots" content="noindex" />}
+    {canonical && <link rel="canonical" href={canonical} />}
     <link rel="icon" href={withBase('/favicon.svg')} type="image/svg+xml" />
+    <link rel="sitemap" href={withBase('/sitemap-index.xml')} />
     <meta name="generator" content={Astro.generator} />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={SITE.name} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    {canonical && <meta property="og:url" content={canonical} />}
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content={String(OG_IMAGE.width)} />
+    <meta property="og:image:height" content={String(OG_IMAGE.height)} />
+    <meta property="og:image:alt" content={OG_IMAGE.alt} />
+    <meta property="og:locale" content="en_US" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>

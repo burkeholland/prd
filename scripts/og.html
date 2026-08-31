@@ -1,0 +1,111 @@
+<!doctype html>
+<!--
+  Source of public/og.png (1200×630), rendered by scripts/make-og.mjs — edit this, then regenerate.
+  Inline CSS only, system fonts, no external requests. Colours are the dark theme from
+  src/styles/global.css; the tagline mirrors SITE.tagline in src/lib/site.ts (make-og.mjs
+  re-applies it from there, so site.ts stays the single source of truth).
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>PRD Field Guide — social preview</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+        background: #141614;
+        color: #e7e8e2;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .card {
+        box-sizing: border-box;
+        position: relative;
+        width: 1200px;
+        height: 630px;
+        padding: 96px 88px 64px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        background: #141614;
+      }
+      .card::before {
+        content: "";
+        position: absolute;
+        inset: 0 0 auto 0;
+        height: 12px;
+        background: #3ddc97;
+      }
+      .panel {
+        position: absolute;
+        right: 88px;
+        top: 84px;
+        width: 132px;
+        height: 132px;
+        box-sizing: border-box;
+        border: 3px solid #343935;
+        border-radius: 22px;
+        background: #1c1f1d;
+        color: #3ddc97;
+        font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+        font-weight: 700;
+        font-size: 44px;
+        letter-spacing: 0.04em;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      h1 {
+        margin: 0;
+        max-width: 860px;
+        font-size: 104px;
+        line-height: 1.02;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        color: #e7e8e2;
+      }
+      .tagline {
+        margin: 44px 0 0;
+        max-width: 840px;
+        font-size: 38px;
+        line-height: 1.32;
+        color: #a2a59d;
+      }
+      .footer {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        color: #a2a59d;
+        font-size: 26px;
+      }
+      .footer .dot {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #3ddc97;
+      }
+      .footer .url {
+        color: #e7e8e2;
+        font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div>
+        <h1>PRD Field Guide</h1>
+        <p class="tagline" id="tagline">
+          How to write a product requirements doc an AI agent can build from — with a real one as the worked example.
+        </p>
+      </div>
+      <div class="panel" aria-hidden="true">PRD</div>
+      <p class="footer"><span class="dot"></span><span class="url">burkeholland.github.io/prd</span></p>
+    </div>
+  </body>
+</html>
