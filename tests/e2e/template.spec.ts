@@ -97,12 +97,13 @@ test('every block copies its own text (the last one is the multi-line Completion
   await expect(page.locator('main .copy-status')).toHaveText('Copied the Completion skeleton');
 });
 
-test('the other pages ship no Copy buttons and no script at all', async ({ page }) => {
+test('the other pages ship no Copy buttons and no script beyond the nav helper', async ({ page }) => {
   for (const path of ['/', '/sample/', '/guide/', '/walkthrough/']) {
     await page.goto(to(path));
     await expect(page.locator('button.copy-button'), `${path} copy buttons`).toHaveCount(0);
-    // /sample/ ships its own page-scoped "Copy the PRD" script (tests/e2e/sample.spec.ts covers it).
-    if (path !== '/sample/') await expect(page.locator('script'), `${path} script elements`).toHaveCount(0);
+    // /sample/ ships its own page-scoped "Copy the PRD" script (tests/e2e/sample.spec.ts covers it); every
+    // page carries the inline phone-nav helper, `script[data-nav]` (tests/e2e/site.spec.ts covers it).
+    if (path !== '/sample/') await expect(page.locator('script:not([data-nav])'), `${path} script elements`).toHaveCount(0);
   }
 });
 

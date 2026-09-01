@@ -171,12 +171,15 @@ test('home on a phone (390×844): one-row header under 110px, no sideways scroll
 test('phone nav (390×844, and 640–767 e.g. 700×400 / 760×400): one swipeable row that starts with the current page\'s item in view, Home at 0; 768 keeps the wrapped list', async ({
   page,
 }) => {
-  // Chromium-only progressive enhancement (`scroll-initial-target: nearest`, Chromium 133+); Safari and
-  // Firefox ignore it and start the row at Home. Playwright here runs Chromium only (playwright.config.ts).
+  // Chromium 133+ lands the row on the current item natively (`scroll-initial-target: nearest`); Safari and
+  // Firefox lack it and get the same landing from the inline `script[data-nav]` in Nav.astro (task #1508).
+  // Playwright here runs Chromium only (playwright.config.ts), so the script's path is forced at the end.
   await page.setViewportSize({ width: 390, height: 844 });
   type Edges = { left: number; right: number };
   type Geometry = {
     scrollLeft: number;
+    /** The page must not scroll vertically when the row lands on its item. */
+    scrollY: number;
     list: Edges;
     current: Edges;
     /** The item the list's left edge cuts through, if any (its start is off the scrollport). */
@@ -200,6 +203,14 @@ test('phone nav (390×844, and 640–767 e.g. 700×400 / 760×400): one swipeabl
     before: string;
     after: string;
     brandHeight: number;
+    /** What the engine (or a test override) claims to support, whether the left fade's scroll-driven
+     *  animation has a live timeline (WebKit 26 passes `@supports` but never attaches one), and the
+     *  `data-scrolled` the script sets where it does not: present = the script owns the fade, `true` = scrolled. */
+    initialTarget: boolean;
+    scrollTimeline: boolean;
+    fadeTimeline: boolean;
+    jsFade: boolean;
+    isScrolled: boolean;
   };
   const geometry = () =>
     page.evaluate(
@@ -222,6 +233,7 @@ test('phone nav (390×844, and 640–767 e.g. 700×400 / 760×400): one swipeabl
               const brand = document.querySelector('.brand')!.getBoundingClientRect();
               resolve({
                 scrollLeft: ul.scrollLeft,
+                scrollY: window.scrollY,
                 list: { left: list.left, right: list.right },
                 current: { left: current.left, right: current.right },
                 cut: cut ? { left: cut.left, right: cut.right } : null,
@@ -242,11 +254,23 @@ test('phone nav (390×844, and 640–767 e.g. 700×400 / 760×400): one swipeabl
                 before: fade.content,
                 after: getComputedStyle(nav, '::after').content,
                 brandHeight: brand.height,
+                initialTarget: CSS.supports('scroll-initial-target: nearest'),
+                scrollTimeline: CSS.supports('animation-timeline: scroll()'),
+                fadeTimeline: nav.getAnimations({ subtree: true }).some((animation) => animation.timeline !== null),
+                jsFade: 'scrolled' in nav.dataset,
+                isScrolled: nav.dataset.scrolled === 'true',
               });
             }),
           ),
         ),
     );
+  // Home is never under the left fade: at scrollLeft 0 it is not painted in any engine — animated to 0 in
+  // Chromium, hidden by the script's `data-scrolled` where the fade animation has no live timeline (Firefox,
+  // WebKit 26), and the script never reports the row scrolled at rest.
+  const expectHomeClearOfFade = (g: Geometry, label: string) => {
+    expect(g.isScrolled, `${label} data-scrolled not true at scrollLeft 0`).toBe(false);
+    expect(g.fade.opacity, `${label} left fade hidden at scrollLeft 0`).toBe(0);
+  };
 
   // The template is the last item and the walkthrough the fourth: both start off the right edge otherwise.
   for (const path of ['/template/', '/walkthrough/']) {
@@ -256,12 +280,18 @@ test('phone nav (390×844, and 640–767 e.g. 700×400 / 760×400): one swipeabl
     // 40px = the 2.5rem fades: the lit item must sit clear of both, not under either.
     expect(g.current.left, `${path} current item clear of the left fade`).toBeGreaterThanOrEqual(g.list.left + 40);
     expect(g.current.right, `${path} current item right edge`).toBeLessThanOrEqual(g.list.right - 40);
+    expect(g.scrollY, `${path} the page itself did not scroll`).toBe(0);
     expect(g.scrollWidth, `${path} no horizontal scroll`).toBe(390);
     // A pre-scrolled row fades in at the left instead of cutting the first visible item mid-word: the
     // fade starts where the list does, is at least 2.5rem wide, and is painted (opacity 1) once scrolled.
     expect(g.fade.left, `${path} left fade starts at the list's left edge`).toBeCloseTo(g.list.left, 1);
     expect(g.fade.width, `${path} left fade width`).toBeGreaterThanOrEqual(40);
     expect(g.fade.opacity, `${path} left fade painted when scrolled`).toBe(1);
+    // The script owns (paints and widens) the fade exactly where no scroll-driven animation does — Firefox has
+    // none, WebKit 26 leaves it without a timeline; Chromium's is live, so it never sees `data-scrolled`.
+    expect(g.jsFade, `${path} script owns the fade exactly where the fade animation has no live timeline`).toBe(!g.fadeTimeline);
+    expect(g.isScrolled, `${path} data-scrolled is true where the script owns the fade`).toBe(g.jsFade);
+    if (g.initialTarget) expect(g.jsFade, `${path} Chromium: the CSS animation owns the fade, no data-scrolled`).toBe(false);
     if (path === '/template/') {
       // The row is scrolled to its end here, so an item really is cut by the list's left edge.
       expect(g.cut, `${path} an item spans the list's left edge`).not.toBeNull();
@@ -277,7 +307,7 @@ test('phone nav (390×844, and 640–767 e.g. 700×400 / 760×400): one swipeabl
   expect(home.scrollWidth, '/ no horizontal scroll').toBe(390);
   expect(home.homeLeft, '/ Home link left edge').toBeCloseTo(17, 1);
   expect(home.homeLeft, '/ Home lines up with the brand').toBeCloseTo(home.brandLeft, 1);
-  expect(home.fade.opacity, '/ left fade hidden at scrollLeft 0').toBe(0);
+  expectHomeClearOfFade(home, '/');
   // The brand link is a thumb-sized target (task #1475) without making the header taller: 97.83 at 390
   // is the height from before it had any block padding.
   expect(home.brandHeight, '/ 390: a.brand height').toBeGreaterThanOrEqual(32);
@@ -304,7 +334,7 @@ test('phone nav (390×844, and 640–767 e.g. 700×400 / 760×400): one swipeabl
   const home700 = await geometry();
   expect(home700.scrollLeft, '/ 700: row scrollLeft').toBe(0);
   expect(home700.homeLeft, '/ 700: Home lines up with the brand').toBeCloseTo(home700.brandLeft, 1);
-  expect(home700.fade.opacity, '/ 700: left fade hidden at scrollLeft 0').toBe(0);
+  expectHomeClearOfFade(home700, '/ 700:');
 
   // 760, the last width before the list wraps: the row needs its start gutter, 1rem gaps and 2.5rem end
   // padding, so on Windows fonts the six labels are still 7 px short of fitting (737 vs 730) and the row
@@ -321,7 +351,7 @@ test('phone nav (390×844, and 640–767 e.g. 700×400 / 760×400): one swipeabl
   ).toBeGreaterThan(home760.ul.clientWidth);
   expect(home760.scrollLeft, '/ 760: row scrollLeft').toBe(0);
   expect(home760.homeLeft, '/ 760: Home lines up with the brand').toBeCloseTo(home760.brandLeft, 1);
-  expect(home760.fade.opacity, '/ 760: left fade hidden at scrollLeft 0').toBe(0);
+  expectHomeClearOfFade(home760, '/ 760:');
   expect(home760.scrollWidth, '/ 760: no horizontal scroll').toBe(760);
 
   // 768 (portrait tablet): untouched — brand row plus the wrapped list, no fades, nothing scrolls. How many
@@ -351,6 +381,58 @@ test('phone nav (390×844, and 640–767 e.g. 700×400 / 760×400): one swipeabl
   expect(desktop.header, '/guide/ 1280: .site-header height (unchanged)').toBeCloseTo(69.28, 0);
   expect(desktop.after, '/guide/ 1280: no right fade').toBe('none');
   expect(desktop.brandHeight, '/guide/ 1280: a.brand height').toBeGreaterThanOrEqual(32);
+
+  // The landing helper is the one script every page carries: inline (no `src`), marked `data-nav` so the
+  // "no script" assertions elsewhere can exclude it, and small. Nothing else may hide behind the marker.
+  const pages = [...NAV.map((item) => item.href), ...(present(CONTENT.history) ? ['/history/1/'] : [])];
+  for (const path of pages) {
+    await page.goto(to(path));
+    const helper = page.locator('script[data-nav]');
+    await expect(helper, `${path} nav helper`).toHaveCount(1);
+    await expect(helper, `${path} nav helper is inline`).not.toHaveAttribute('src');
+    expect((await helper.textContent())!.length, `${path} nav helper size`).toBeLessThanOrEqual(700);
+  }
+
+  // Chromium takes the native path above, so the script's landing is proven by forcing its path here: the
+  // bundled stylesheet gets the property neutralised before first layout (`addStyleTag` would be too late)
+  // and `CSS.supports` denies it, exactly what Safari and Firefox present. The landing must be the same.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route('**/_astro/*.css', async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ response, body: `${await response.text()}\n.site-nav li { scroll-initial-target: none !important; }` });
+  });
+  await page.addInitScript(() => {
+    const native = CSS.supports.bind(CSS);
+    CSS.supports = ((...args: [string, string?]) =>
+      args.join(':').includes('scroll-initial-target') ? false : native(...args)) as typeof CSS.supports;
+  });
+  for (const path of ['/template/', '/walkthrough/']) {
+    await page.goto(to(path));
+    const g = await geometry();
+    expect(g.initialTarget, `${path} forced: scroll-initial-target reported unsupported`).toBe(false);
+    expect(g.scrollLeft, `${path} forced: the script scrolled the row`).toBeGreaterThan(0);
+    expect(g.current.left, `${path} forced: current item clear of the left fade`).toBeGreaterThanOrEqual(g.list.left + 40);
+    expect(g.current.right, `${path} forced: current item right edge`).toBeLessThanOrEqual(g.list.right - 40);
+    expect(g.scrollY, `${path} forced: the page itself did not scroll`).toBe(0);
+    expect(g.scrollWidth, `${path} forced: no horizontal scroll`).toBe(390);
+    expect(g.jsFade, `${path} forced: the script owns the fade only where the fade animation has no live timeline`).toBe(!g.fadeTimeline);
+  }
+
+  // Negative control: the same page with the helper stripped from its HTML lands at scrollLeft 0 with the
+  // current item off the right edge — the assertions above would have caught the Safari/Firefox bug.
+  await page.route(`**${to('/template/')}`, async (route) => {
+    const response = await route.fetch();
+    const html = await response.text();
+    await route.fulfill({ response, body: html.replace(/<script[^>]*\bdata-nav\b[^>]*>[\s\S]*?<\/script>/, '') });
+  });
+  await page.goto(to('/template/'));
+  await expect(page.locator('script[data-nav]'), '/template/ control: helper stripped').toHaveCount(0);
+  const control = await geometry();
+  expect(control.initialTarget, '/template/ control: scroll-initial-target reported unsupported').toBe(false);
+  expect(control.scrollLeft, '/template/ control: without the helper the row stays at 0').toBe(0);
+  expect(control.current.left, '/template/ control: without the helper the current item is off the right edge').toBeGreaterThanOrEqual(
+    control.list.right,
+  );
 });
 
 test('every nav route responds 200 with a title that starts with its label', async ({ page }) => {
@@ -709,7 +791,8 @@ test('the history page lists every gist revision, badges the published one, and 
   const values = page.locator('svg.size-chart text.size-chart__value');
   await expect(values).toHaveCount(2);
   await expect(values).toHaveText([kb(Math.max(...bytes)), kb(Math.min(...bytes))]);
-  await expect(page.locator('script')).toHaveCount(0);
+  // No script beyond the inline phone-nav helper every page carries (the phone nav test covers it).
+  await expect(page.locator('script:not([data-nav])')).toHaveCount(0);
 });
 
 test('the history page tells the story in numbers from the data and labels whose counts are whose', async ({ page }) => {
