@@ -108,3 +108,38 @@ test('the buttons do not widen /template/ at 320px', async ({ page }) => {
   const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(scrollWidth).toBeLessThanOrEqual(320);
 });
+
+test('on a phone every Copy button is thumb-sized (>= 32 px tall) and stays clear of the code', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(to('/template/'));
+  const buttons = page.locator('button.copy-button');
+  await expect(buttons).toHaveCount(BLOCKS);
+
+  const rects = await buttons.evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const { width, height } = node.getBoundingClientRect();
+      return { width, height };
+    }),
+  );
+  for (const [i, rect] of rects.entries()) {
+    expect(rect.height, `button ${i + 1} height`).toBeGreaterThanOrEqual(32);
+    expect(rect.width, `button ${i + 1} width`).toBeGreaterThanOrEqual(32);
+  }
+
+  // The first block's button sits in the pre's right padding, not over any glyph of its code.
+  const overlaps = await page.locator('.code-block').first().evaluate((block) => {
+    const button = block.querySelector('button')!.getBoundingClientRect();
+    const code = block.querySelector('pre code') ?? block.querySelector('pre')!;
+    const range = document.createRange();
+    range.selectNodeContents(code);
+    return Array.from(range.getClientRects()).some(
+      (glyphs) =>
+        glyphs.width > 0 &&
+        glyphs.left < button.right &&
+        glyphs.right > button.left &&
+        glyphs.top < button.bottom &&
+        glyphs.bottom > button.top,
+    );
+  });
+  expect(overlaps, 'first Copy button overlaps its code').toBe(false);
+});

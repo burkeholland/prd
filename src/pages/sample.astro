@@ -136,18 +136,35 @@ const revisionLabel = current ? `Gist revision ${current.n} of ${history.count}`
   them. At rest the button reads as one of the card's links (global.css `a` + `.source-card__links a`).
 -->
 <style is:global>
+  /* Same negative-margin hit area as `.source-card__links a`: >= 32 px tall, text and row unmoved. */
   .copy-prd {
-    margin: 0;
-    padding: 0;
+    display: inline-block;
+    margin: -0.25em -0.6em;
+    padding: 0.25em 0.6em;
     font: inherit;
     font-weight: 600;
     color: var(--accent);
     background: none;
     border: 0;
     cursor: pointer;
+    /* Top-aligned, not baseline: the hidden ::after below would otherwise lower the button's
+       baseline and grow the row by its own height. */
+    vertical-align: top;
+    text-align: start;
     text-decoration: underline;
     text-decoration-thickness: 1px;
     text-underline-offset: 0.15em;
+  }
+
+  /* Reserves the width of the resting label in whatever system font is rendering it, so the
+     shorter "Copied" does not narrow the button and shove "How it evolved" sideways. Zero height
+     and hidden: never painted, never read out. The failure label is longer and may grow the button. */
+  .copy-prd::after {
+    content: 'Copy the PRD';
+    display: block;
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
   }
 
   .copy-prd:hover {

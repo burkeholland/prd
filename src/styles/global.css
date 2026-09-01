@@ -478,8 +478,13 @@ main:focus {
   gap: 0.5rem 1.5rem;
 }
 
+/* Thumb-sized hit area (>= 32 px tall) without moving the text or growing the row: the padding is
+   cancelled by an equal negative margin. sample.astro's .copy-prd button mirrors this. */
 .source-card__links a {
   font-weight: 600;
+  display: inline-block;
+  padding: 0.25em 0.6em;
+  margin: -0.25em -0.6em;
 }
 
 .source-card__meta {
@@ -534,21 +539,24 @@ main:focus {
   padding: 0;
 }
 
+/* Rows are spaced by the links' own padding (see .toc__list a), so the gap between items is small. */
 .toc__list li + li {
-  margin-top: 0.35rem;
+  margin-top: 0.25rem;
 }
 
 .toc__list ul {
-  margin: 0.35rem 0 0 0.9rem;
+  margin: 0.25rem 0 0 0.9rem;
   padding-left: 0.6rem;
   border-left: 1px solid var(--border);
 }
 
+/* Each link is a >= 32 px tall block so phone taps land on one row, not the neighbour. */
 .toc__list a {
   color: var(--text-muted);
   text-decoration: none;
   font-size: 0.92rem;
   display: block;
+  padding-block: 0.3em;
 }
 
 .toc__list a:hover {
