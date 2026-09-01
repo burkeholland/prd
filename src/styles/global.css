@@ -217,6 +217,53 @@ samp {
   .site-header__inner {
     flex-direction: column;
     align-items: flex-start;
+    padding-block: 0.75rem;
+  }
+
+  /* Phones: one swipeable row of nav items instead of three wrapped ones. The right-edge fade says
+     "more"; the list's end padding keeps the last item clear of the fade once scrolled to the end.
+     The scrollbar is hidden: on a phone it is an overlay anyway, and a classic one would add its own
+     height to the header. Block padding with a matching negative margin gives the focus ring room
+     inside the scroll container without adding to the header's height. */
+  .site-nav {
+    position: relative;
+    width: 100%;
+  }
+
+  .site-nav ul {
+    flex-wrap: nowrap;
+    gap: 1rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline-start: 0.4rem;
+    padding: 0.4rem 2.5rem 0.4rem 0.4rem;
+    margin: -0.4rem 0 -0.4rem -0.4rem;
+  }
+
+  .site-nav ul::-webkit-scrollbar {
+    display: none;
+  }
+
+  .site-nav li {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+  }
+
+  .site-nav a {
+    white-space: nowrap;
+  }
+
+  .site-nav::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 2.5rem;
+    background: linear-gradient(to right, transparent, var(--bg));
+    pointer-events: none;
   }
 }
 

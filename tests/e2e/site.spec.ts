@@ -138,6 +138,36 @@ test('home puts a reading order above the cards and a template line below them',
   await expect(strip.locator('h1, h2, h3, h4, h5, h6')).toHaveCount(0);
 });
 
+test('home on a phone (390×844): one-row header under 110px, no sideways scroll, reading order above the fold', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(to('/'));
+
+  const geometry = await page.evaluate(() => {
+    const rect = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
+    const items = Array.from(document.querySelectorAll('nav.site-nav li'), (li) => li.getBoundingClientRect());
+    const links = Array.from(document.querySelectorAll('nav.site-nav a'), (a) => a.getBoundingClientRect().height);
+    const lede = document.querySelector<HTMLElement>('p.lede')!;
+    return {
+      header: rect('.site-header').height,
+      navRows: new Set(items.map((item) => Math.round(item.top))).size,
+      linkMinHeight: Math.min(...links),
+      scrollWidth: document.documentElement.scrollWidth,
+      stripBottom: rect('section.strip').bottom,
+      ledeWords: lede.innerText.trim().split(/\s+/).length,
+    };
+  });
+  expect(geometry.header, '.site-header height').toBeLessThanOrEqual(110);
+  expect(geometry.navRows, 'nav rows').toBe(1);
+  expect(geometry.linkMinHeight, 'nav link tap target').toBeGreaterThanOrEqual(32);
+  expect(geometry.scrollWidth, 'no horizontal scroll').toBe(390);
+  expect(geometry.stripBottom, 'the "New here?" strip ends on the first screen').toBeLessThanOrEqual(844);
+  expect(geometry.ledeWords, 'lede word count').toBeLessThanOrEqual(70);
+  // The row scrolls; nothing is hidden, so every route stays reachable from the header.
+  await expect(page.locator('nav.site-nav a')).toHaveCount(6);
+});
+
 test('every nav route responds 200 with a title that starts with its label', async ({ page }) => {
   for (const item of NAV) {
     const response = await page.goto(to(item.href));
