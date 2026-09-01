@@ -10,7 +10,7 @@ import { canonicalUrl, OG_IMAGE, socialCard } from '../lib/seo';
 interface Props {
   title: string;
   description?: string;
-  /** Pages that must not be indexed or shared (the 404 page): emits `robots: noindex`, no canonical, no `og:url`. */
+  /** Pages that must not be indexed or shared (the 404 page and the per-revision diff pages under /history/): emits `robots: noindex`, no canonical, no `og:url`. */
   noindex?: boolean;
 }
 
