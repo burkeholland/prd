@@ -563,7 +563,11 @@ test('at 390px the history table stacks each revision — number, date, note, co
   page,
 }) => {
   test.skip(!present(CONTENT.history), 'gist history not merged yet');
-  const history = JSON.parse(readFileSync(resolve(CONTENT.history), 'utf8')) as { count: number };
+  const history = JSON.parse(readFileSync(resolve(CONTENT.history), 'utf8')) as {
+    count: number;
+    revisions: { n: number; additions: number; deletions: number }[];
+  };
+  const noCounts = history.revisions.filter((rev) => rev.additions + rev.deletions === 0 && rev.n !== 1);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(to('/history/'));
@@ -602,10 +606,13 @@ test('at 390px the history table stacks each revision — number, date, note, co
       if (typeof right === 'number') expect(right, `revision ${box.n} ${name} right edge`).toBeLessThanOrEqual(390);
     }
   }
-  // Rows that GitHub gives no counts for hide their `—` cells instead of showing "+— −—".
-  const row2 = rows.nth(1);
-  await expect(row2.locator('.history__plus')).toBeHidden();
+  // A row GitHub gives no counts for hides its `—` cells instead of showing "+— −—" (none in today's data).
+  for (const rev of noCounts) {
+    await expect(rows.nth(rev.n - 1).locator('.history__plus'), `revision ${rev.n} + cell`).toBeHidden();
+  }
   expect(boxes[0]?.plus, 'the first revision still shows its counts').not.toBeNull();
+  await expect(rows.nth(2).locator('.history__plus')).toHaveClass(/\bnum\b/);
+  await expect(rows.nth(2).locator('.history__plus')).not.toHaveClass(/\bis-empty\b/);
 
   // The header row is for assistive tech only at this width; the caption stays readable.
   await expect(table.locator('thead')).not.toBeInViewport();
