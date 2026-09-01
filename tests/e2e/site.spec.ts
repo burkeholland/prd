@@ -8,13 +8,14 @@ const BASE = '/prd';
 const to = (path: string) => `${BASE}${path}`;
 
 // `title` is set only where the page's <title> does not start with the nav label.
+// One name per page: these labels are also the card titles on `/` and how prose names each page.
 const NAV: { href: string; label: string; title?: string }[] = [
   { href: '/', label: 'Home' },
   { href: '/sample/', label: 'The sample PRD' },
-  { href: '/guide/', label: 'How to write one' },
-  { href: '/walkthrough/', label: 'Worked example' },
+  { href: '/guide/', label: 'The guide' },
+  { href: '/walkthrough/', label: 'The walkthrough' },
   { href: '/history/', label: 'How it evolved', title: 'How this PRD evolved' },
-  { href: '/template/', label: 'Template' },
+  { href: '/template/', label: 'The template' },
 ];
 
 // Doc pages and the repo-root content file each one renders. Files that other tasks may not
@@ -57,7 +58,7 @@ async function expectTocResolves(page: Page, path: string, minHeadings: number) 
   return { headings: h2s, links: hrefs.length };
 }
 
-test('home has one h1, three cards and makes no cross-origin requests', async ({ page }) => {
+test('home has one h1, four cards named like the nav, and makes no cross-origin requests', async ({ page }) => {
   const origins = new Set<string>();
   page.on('request', (request) => origins.add(new URL(request.url()).origin));
 
@@ -68,28 +69,72 @@ test('home has one h1, three cards and makes no cross-origin requests', async ({
   await expect(h1).toHaveText('Write a PRD an agent can build.');
 
   const cards = page.locator('a.card');
-  await expect(cards).toHaveCount(3);
+  await expect(cards).toHaveCount(4);
   await expect(cards.nth(0)).toHaveAttribute('href', to('/sample/'));
   await expect(cards.nth(1)).toHaveAttribute('href', to('/guide/'));
   await expect(cards.nth(2)).toHaveAttribute('href', to('/walkthrough/'));
+  await expect(cards.nth(3)).toHaveAttribute('href', to('/history/'));
+  // One name per page: each card carries the nav label of the page it leads to.
+  const labelOf = (href: string) => NAV.find((item) => item.href === href)?.label ?? '';
+  await expect(cards.locator('h2')).toHaveText(
+    ['/sample/', '/guide/', '/walkthrough/', '/history/'].map(labelOf),
+  );
 
   await expect(page.locator('nav.site-nav a')).toHaveCount(6);
+  await expect(page.locator('nav.site-nav a')).toHaveText(NAV.map((item) => item.label));
 
   const own = new URL(page.url()).origin;
   expect([...origins]).toEqual([own]);
 });
 
-test('home states the thesis: the lede and "Why specificity wins" with four points', async ({ page }) => {
+test('home states the thesis once: the lede defines PRD and names Burke; "Why specificity wins" has four points', async ({
+  page,
+}) => {
   await page.goto(to('/'));
 
-  await expect(page.locator('p.lede')).toContainText('one-shot the app');
-  await expect(page.locator('p.lede')).toContainText("Burke Holland's claim");
-  await expect(page.locator('p.lede')).toContainText('traces how it evolved');
+  const lede = page.locator('p.lede');
+  await expect(lede).toContainText('product requirements document (PRD)');
+  await expect(lede).toContainText('Burke Holland');
+  await expect(lede.locator('a[href="https://github.com/burkeholland"]')).toHaveText('Burke Holland');
+  await expect(lede).toContainText('a link-sharing app');
+  await expect(lede).toContainText('traces how it evolved');
+  // The lede says "agent" for the actor, never "model", and the page does not repeat the thesis.
+  const text = (await page.locator('main').innerText()).toLowerCase();
+  expect(text.includes('model'), 'the word "model" on /').toBe(false);
+  expect(text.split('build the whole app').length - 1, 'thesis stated once').toBe(1);
 
   const heading = page.locator('h2', { hasText: 'Why specificity wins' });
   await expect(heading).toHaveCount(1);
   await expect(heading).toHaveText('Why specificity wins');
   await expect(heading.locator('xpath=following-sibling::ul[1]/li')).toHaveCount(4);
+});
+
+test('home puts a reading order above the cards and a template line below them', async ({ page }) => {
+  await page.goto(to('/'));
+
+  const strip = page.locator('section.strip');
+  await expect(strip).toHaveCount(1);
+  await expect(strip.locator('.strip__label')).toHaveText('New here?');
+  await expect(strip).toContainText(
+    'Read the sample PRD (about ten minutes), then the seven habits in the guide, then copy the template.',
+  );
+  await expect(strip.locator('a')).toHaveCount(3);
+  await expect(strip.locator('a', { hasText: 'the sample PRD' })).toHaveAttribute('href', to('/sample/'));
+  await expect(strip.locator('a', { hasText: 'the guide' })).toHaveAttribute('href', to('/guide/'));
+  await expect(strip.locator('a', { hasText: 'the template' })).toHaveAttribute('href', to('/template/'));
+
+  // DOM order: hero → reading order → cards → "Ready to write?" → "Why specificity wins".
+  const order = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('main > *'), (el) => el.className || el.tagName.toLowerCase()),
+  );
+  expect(order.indexOf('strip'), 'strip precedes the cards').toBeLessThan(order.indexOf('cards'));
+  expect(order.indexOf('cards'), 'cards precede the template line').toBeLessThan(order.indexOf('ready'));
+
+  const ready = page.locator('p.ready');
+  await expect(ready).toHaveText('Ready to write? The template →');
+  await expect(ready.locator('a')).toHaveAttribute('href', to('/template/'));
+  // No heading of its own in the strip or the line, so the outline stays h1 → h2s (axe heading-order).
+  await expect(strip.locator('h1, h2, h3, h4, h5, h6')).toHaveCount(0);
 });
 
 test('every nav route responds 200 with a title that starts with its label', async ({ page }) => {
@@ -254,19 +299,26 @@ test('the sample source card reads the gist metadata', async ({ page }) => {
 
   const card = page.locator('.source-card');
   await expect(card.locator('h1')).toHaveCount(0);
+  // The intro says whose document it is, that it is unaltered, and what the screenshots show.
+  const intro = card.locator('.source-card__title + p');
+  await expect(intro).toContainText('Burke Holland’s real PRD for The Urlist, word for word from his GitHub gist');
+  await expect(intro).toContainText('the target, not what the agent built');
+  await expect(card).not.toContainText('verbatim');
   await expect(card.locator('a', { hasText: 'View on GitHub' })).toHaveAttribute('href', meta.html_url);
   await expect(card.locator('.source-card__links a', { hasText: 'How it evolved' })).toHaveAttribute(
     'href',
     to('/history/'),
   );
-  await expect(card.locator('.source-card__meta')).toContainText('Last fetched');
+  await expect(card.locator('.source-card__meta')).toContainText('mirrored');
+  await expect(card.locator('.source-card__meta')).not.toContainText('fetched');
   await expect(card.locator('.source-card__meta time')).toHaveAttribute('datetime', meta.fetched_at);
+  await expect(card.locator('.source-card__meta time')).toHaveText(meta.fetched_at.slice(0, 10));
 
   const revision = card.locator('.source-card__meta a');
   await expect(revision).toHaveText(meta.revision.slice(0, 7));
   await expect(revision).toHaveAttribute('href', `${meta.html_url}/${meta.revision}`);
 
-  // "Revision 8ef29d7 (16 of 16)": the snapshot's place in the gist history, from the data.
+  // "Gist revision 16 of 16 (8ef29d7)": the snapshot's place in the gist history, from the data.
   if (present(CONTENT.history)) {
     const history = JSON.parse(readFileSync(resolve(CONTENT.history), 'utf8')) as {
       count: number;
@@ -274,7 +326,9 @@ test('the sample source card reads the gist metadata', async ({ page }) => {
     };
     const current = history.revisions.find((rev) => rev.version === meta.revision);
     if (current) {
-      await expect(card.locator('.source-card__meta')).toContainText(`(${current.n} of ${history.count})`);
+      await expect(card.locator('.source-card__meta')).toContainText(
+        `Gist revision ${current.n} of ${history.count} (${meta.revision.slice(0, 7)})`,
+      );
     }
   }
 });

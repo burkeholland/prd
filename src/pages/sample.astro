@@ -11,8 +11,12 @@ import history from '../../content/gist/history.json';
 const route = DOC_ROUTES['/sample'];
 const entry = await getEntry(route.collection, route.id);
 
-const description =
-  'This is the gist, verbatim except that screenshot URLs point at local copies.';
+// The card's intro. Its first sentence alone is the page's <meta name="description">.
+const intro = {
+  lead: 'Burke Holland\u2019s real PRD for The Urlist, word for word from his GitHub gist \u2014 the exact text he handed to the agent.',
+  rest: 'Only the screenshots have been copied locally. The document points at an app it calls \u201Cthe reference\u201D for behaviour and copy, so the seven screenshots below show that reference \u2014 the target, not what the agent built.',
+};
+const description = intro.lead;
 
 // The gist carries its own h1 (`# Build The Urlist`), so the card's heading is an h1 only
 // while the content is absent and the placeholder shows.
@@ -20,41 +24,37 @@ const Heading = entry ? 'p' : 'h1';
 const gistUrl = meta.html_url || SITE.gistUrl;
 const revision = meta.revision || undefined;
 const shortRevision = revision?.slice(0, 7);
-const fetchedAt = meta.fetched_at ? new Date(meta.fetched_at) : undefined;
-const fetchedLabel =
-  fetchedAt && !Number.isNaN(fetchedAt.getTime())
-    ? fetchedAt.toISOString().replace('T', ' ').slice(0, 16) + ' UTC'
-    : meta.fetched_at;
-// Where the snapshot sits in the gist's history ("16 of 16"). Undefined when the snapshot and
-// the history were fetched out of step; the card then shows the revision alone.
+// The day the snapshot was taken, as a date only ("mirrored 2026-08-31"); no time of day.
+const mirroredAt = meta.fetched_at ? new Date(meta.fetched_at) : undefined;
+const mirroredLabel =
+  mirroredAt && !Number.isNaN(mirroredAt.getTime()) ? mirroredAt.toISOString().slice(0, 10) : meta.fetched_at;
+// Where the snapshot sits in the gist's history ("Gist revision 16 of 16"). Undefined when the
+// snapshot and the history were fetched out of step; the card then shows the revision alone.
 const current = history.revisions.find((rev) => rev.version === meta.revision);
+const revisionLabel = current ? `Gist revision ${current.n} of ${history.count}` : 'Gist revision';
 ---
 
 <Doc label={route.label} title={route.label} description={description} entry={entry}>
   <div slot="header" class="source-card">
     <Heading class="source-card__title">{route.label}</Heading>
-    <p>{description}</p>
+    <p>{intro.lead} {intro.rest}</p>
     <ul class="source-card__links">
       <li><a href={gistUrl}>View on GitHub</a></li>
       <li><a href={withBase('/raw/build-the-urlist.md')} download>Download .md</a></li>
       <li><a href={withBase('/history/')}>How it evolved</a></li>
     </ul>
     {
-      (fetchedLabel || revision) && (
+      (mirroredLabel || revision) && (
         <p class="source-card__meta">
-          {fetchedLabel && (
-            <span>
-              Last fetched <time datetime={meta.fetched_at}>{fetchedLabel}</time>
-            </span>
-          )}
-          {fetchedLabel && revision && ' · '}
           {revision && (
             <span>
-              Revision{' '}
-              <a href={`${gistUrl}/${revision}`} title={revision}>
-                <code>{shortRevision}</code>
-              </a>
-              {current && ` (${current.n} of ${history.count})`}
+              {revisionLabel} (<a href={`${gistUrl}/${revision}`} title={revision}><code>{shortRevision}</code></a>)
+            </span>
+          )}
+          {revision && mirroredLabel && ' · '}
+          {mirroredLabel && (
+            <span>
+              mirrored <time datetime={meta.fetched_at}>{mirroredLabel}</time>
             </span>
           )}
         </p>
