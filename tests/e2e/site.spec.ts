@@ -174,34 +174,84 @@ test('phone nav (390×844): the row starts with the current page\'s item in view
   // Chromium-only progressive enhancement (`scroll-initial-target: nearest`, Chromium 133+); Safari and
   // Firefox ignore it and start the row at Home. Playwright here runs Chromium only (playwright.config.ts).
   await page.setViewportSize({ width: 390, height: 844 });
+  type Edges = { left: number; right: number };
+  type Geometry = {
+    scrollLeft: number;
+    list: Edges;
+    current: Edges;
+    /** The item the list's left edge cuts through, if any (its start is off the scrollport). */
+    cut: Edges | null;
+    homeLeft: number;
+    brandLeft: number;
+    /** The left-edge fade, `.site-nav::before`; `left` is where it starts on the page. */
+    fade: { left: number; width: number; opacity: number };
+    scrollWidth: number;
+  };
   const geometry = () =>
-    page.evaluate(() => {
-      const ul = document.querySelector<HTMLElement>('nav.site-nav ul')!;
-      const list = ul.getBoundingClientRect();
-      const current = document.querySelector('nav.site-nav a[aria-current="page"]')!.getBoundingClientRect();
-      return {
-        scrollLeft: ul.scrollLeft,
-        list: { left: list.left, right: list.right },
-        current: { left: current.left, right: current.right },
-        scrollWidth: document.documentElement.scrollWidth,
-      };
-    });
+    page.evaluate(
+      () =>
+        // Two frames in: the left fade is a scroll-driven animation that samples its timeline in the
+        // frame's animation step, so a style read straight after `load` still sees the pre-frame opacity.
+        new Promise<Geometry>((resolve) =>
+          requestAnimationFrame(() =>
+            requestAnimationFrame(() => {
+              const nav = document.querySelector<HTMLElement>('nav.site-nav')!;
+              const ul = nav.querySelector('ul')!;
+              const list = ul.getBoundingClientRect();
+              const current = nav.querySelector('a[aria-current="page"]')!.getBoundingClientRect();
+              const cut = Array.from(ul.querySelectorAll('li'), (li) => li.getBoundingClientRect()).find(
+                (li) => li.left < list.left && li.right > list.left,
+              );
+              const fade = getComputedStyle(nav, '::before');
+              resolve({
+                scrollLeft: ul.scrollLeft,
+                list: { left: list.left, right: list.right },
+                current: { left: current.left, right: current.right },
+                cut: cut ? { left: cut.left, right: cut.right } : null,
+                homeLeft: nav.querySelector('a')!.getBoundingClientRect().left,
+                brandLeft: document.querySelector('.brand')!.getBoundingClientRect().left,
+                fade: {
+                  left: nav.getBoundingClientRect().left + parseFloat(fade.left),
+                  width: parseFloat(fade.width),
+                  opacity: parseFloat(fade.opacity),
+                },
+                scrollWidth: document.documentElement.scrollWidth,
+              });
+            }),
+          ),
+        ),
+    );
 
   // The template is the last item and the walkthrough the fourth: both start off the right edge otherwise.
   for (const path of ['/template/', '/walkthrough/']) {
     await page.goto(to(path));
     const g = await geometry();
     expect(g.current.left, `${path} current item left edge`).toBeGreaterThanOrEqual(g.list.left);
-    // 40px = the 2.5rem right-edge fade: the lit item must sit clear of it, not under it.
+    // 40px = the 2.5rem fades: the lit item must sit clear of both, not under either.
+    expect(g.current.left, `${path} current item clear of the left fade`).toBeGreaterThanOrEqual(g.list.left + 40);
     expect(g.current.right, `${path} current item right edge`).toBeLessThanOrEqual(g.list.right - 40);
     expect(g.scrollWidth, `${path} no horizontal scroll`).toBe(390);
+    // A pre-scrolled row fades in at the left instead of cutting the first visible item mid-word: the
+    // fade starts where the list does, is at least 2.5rem wide, and is painted (opacity 1) once scrolled.
+    expect(g.fade.left, `${path} left fade starts at the list's left edge`).toBeCloseTo(g.list.left, 1);
+    expect(g.fade.width, `${path} left fade width`).toBeGreaterThanOrEqual(40);
+    expect(g.fade.opacity, `${path} left fade painted when scrolled`).toBe(1);
+    if (path === '/template/') {
+      // The row is scrolled to its end here, so an item really is cut by the list's left edge.
+      expect(g.cut, `${path} an item spans the list's left edge`).not.toBeNull();
+      expect(g.cut!.left, `${path} cut item starts off the scrollport`).toBeLessThan(g.list.left);
+    }
   }
 
-  // Home is the first item: nothing moves.
+  // Home is the first item: nothing moves. Its left edge is the brand's (17px at 390 wide, the value
+  // before the left fade existed), and the fade is not painted at scrollLeft 0, so Home is never under it.
   await page.goto(to('/'));
   const home = await geometry();
   expect(home.scrollLeft, '/ row scrollLeft').toBe(0);
   expect(home.scrollWidth, '/ no horizontal scroll').toBe(390);
+  expect(home.homeLeft, '/ Home link left edge').toBeCloseTo(17, 1);
+  expect(home.homeLeft, '/ Home lines up with the brand').toBeCloseTo(home.brandLeft, 1);
+  expect(home.fade.opacity, '/ left fade hidden at scrollLeft 0').toBe(0);
 });
 
 test('every nav route responds 200 with a title that starts with its label', async ({ page }) => {
