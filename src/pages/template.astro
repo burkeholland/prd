@@ -133,6 +133,14 @@ const description = entry?.data.description;
     }
   }
 
+  /* Skeleton blocks wrap on narrow screens instead of scrolling sideways (task #1376). This page's
+     styles are emitted for /template/ only, so the sample's code blocks keep scrolling. Copy reads
+     the code's textContent, which wrapping does not change. */
+  .prose pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
   @media (prefers-reduced-motion: no-preference) {
     .copy-button {
       transition: color 0.15s;
