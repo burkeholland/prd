@@ -31,6 +31,8 @@ Both halves matter. "Build the complete application" rules out a scaffold or a p
 
 Without it, an agent unsure of its mandate stops early, delivers a partial build with a list of *next steps*, or asks a question nobody is there to answer.
 
+*See it:* [the opening line](/sample) and [Completion](/sample#completion) in the sample · [the walkthrough on completion](/walkthrough#completion).
+
 ### 2. Show, don't describe
 
 Layout is the most expensive thing to specify in prose and the cheapest to show. The gist opens with a Mocks section of seven screenshots (Home Page, New List, New List: Validation States, Login Modal, My Lists (Logged In), Published List, Published List: QR Code), and the text refers back to "the reference" whenever a visual decision would otherwise take a paragraph.
@@ -41,6 +43,8 @@ Layout is the most expensive thing to specify in prose and the cheapest to show.
 The mock anchors the shape; the sentence settles what a screenshot leaves ambiguous: a band, not a card, separated by a shadow, stacking on mobile. Words can also say how much is negotiable. For the Get Started band the gist writes "a full-width band with a subtle rounded or straight top edge is fine", so the agent does not have to guess how faithfully to copy the picture.
 
 Without it, the agent produces a layout that complies with every sentence you wrote and looks nothing like what you meant.
+
+*See it:* [Mocks](/sample#mocks), [Home page](/sample#home-page-1) and [Draft and editor](/sample#draft-and-editor) in the sample · [the walkthrough on mocks](/walkthrough#mocks).
 
 ### 3. Make the agent write its own checklist
 
@@ -53,6 +57,8 @@ Before it writes any product code, the gist has the agent produce a second docum
 This does three things. It forces the agent to read the whole PRD before coding. It makes the verification method, "unit test, browser test, command, or direct inspection", an up-front decision rather than an afterthought. And it leaves you a document to audit line by line against your own.
 
 Without it, requirements buried in the middle of a long section get silently dropped, and you find out by using the app.
+
+*See it:* [Technical specification and checklist](/sample#technical-specification-and-checklist) in the sample · [the walkthrough on the checklist](/walkthrough#technical-specification-and-checklist).
 
 ### 4. Pin the stack and name the alternatives you are ruling out
 
@@ -71,6 +77,8 @@ An agent will choose a stack if you do not, and a different one on a different d
 
 Without it, you get a dependency you never wanted, a design system layered on top of the one you asked for, or a runtime that cannot open the database.
 
+*See it:* [Stack and design](/sample#stack-and-design) in the sample · [the walkthrough on stack and design](/walkthrough#stack-and-design).
+
 ### 5. Be exact where exactness matters
 
 Some things a user or a test would notice if they were off by one word or one pixel. For those, the gist gives the exact value, bolded, in quotation marks. The Publish button reads "Login to Publish". A bad URL gets "That doesn't look like a valid URL". The 404 page shows one sentence and nothing else.
@@ -85,6 +93,8 @@ The rule: be exact when a user or a test would notice, free otherwise. The route
 
 Without it, every string is a paraphrase, every limit is whatever the library defaulted to, and your end-to-end tests fail on text you did not write.
 
+*See it:* [Routes](/sample#routes) and [Draft and editor](/sample#draft-and-editor) in the sample · [the walkthrough on routes](/walkthrough#routes).
+
 ### 6. State the invariants the code must never violate
 
 Features describe what the app does. Invariants describe what it must never do, whichever feature is running. An agent cannot infer them from a screenshot, and breaking one produces the bugs that matter: data owned by the wrong user, a deleted list that comes back, a server that trusts the browser. The gist states them as flat declarations.
@@ -98,6 +108,8 @@ Notice the form. "The server is authoritative" applies to every write, not one e
 > The fetcher must be SSRF-safe: HTTP/HTTPS only, no credentials embedded, reject non-public and internal addresses, revalidate DNS on every redirect to prevent rebinding, follow at most five redirects, limit content to 2 MiB, accept only HTML/XHTML, and never forward app credentials. Empty metadata is a successful result.
 
 Without it, you get a fetcher that can reach your internal network, a Deleted section nobody asked for, and an ownership check that lives in the browser.
+
+*See it:* [Login and ownership](/sample#login-and-ownership) and [Storage and security](/sample#storage-and-security) in the sample · [the walkthrough on patterns](/walkthrough#patterns-that-repeat).
 
 ### 7. Define done as checks the agent can run
 
@@ -117,6 +129,8 @@ Step three lists every user journey to complete "In a real Chromium browser"; th
 Each of these is a check, not a judgement. *The app should be production-ready* cannot be run; `npm run build` can. The last sentence gives the agent a way to fail honestly, which matters, because an agent told to finish will otherwise report success.
 
 Without it, the agent declares itself done at the point where the code compiles, and the first real browser session finds that the login modal does not open.
+
+*See it:* [Completion](/sample#completion) and [Scripts, tests, and documentation](/sample#scripts-tests-and-documentation) in the sample · [the walkthrough on completion](/walkthrough#completion).
 
 ## What to leave out
 
