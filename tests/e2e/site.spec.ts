@@ -7,15 +7,16 @@ import { expect, test, type Page } from '@playwright/test';
 const BASE = '/prd';
 const to = (path: string) => `${BASE}${path}`;
 
-// `title` is set only where the page's <title> does not start with the nav label.
-// One name per page: these labels are also the card titles on `/` and how prose names each page.
+// `title` is set only where the page's <title> does not start with the nav label (doc pages
+// title themselves by their h1, see Doc.astro). One name per page: these labels are also the
+// card titles on `/` and how prose names each page.
 const NAV: { href: string; label: string; title?: string }[] = [
   { href: '/', label: 'Home' },
   { href: '/sample/', label: 'The sample PRD' },
-  { href: '/guide/', label: 'The guide' },
-  { href: '/walkthrough/', label: 'The walkthrough' },
+  { href: '/guide/', label: 'The guide', title: 'How to write a PRD an agent can build from' },
+  { href: '/walkthrough/', label: 'The walkthrough', title: 'The sample PRD, section by section' },
   { href: '/history/', label: 'How it evolved', title: 'How this PRD evolved' },
-  { href: '/template/', label: 'The template' },
+  { href: '/template/', label: 'The template', title: 'PRD template' },
 ];
 
 // Doc pages and the repo-root content file each one renders. Files that other tasks may not
