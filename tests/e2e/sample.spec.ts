@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 // The site is published under this base path (astro.config.mjs). Playwright resolves
 // `page.goto('/sample/')` against the origin only, so every path goes through `to()`.
@@ -24,6 +24,12 @@ const readClipboard = async (page: Page) => normalise(await page.evaluate(() => 
 
 const copyButton = (page: Page) => page.locator('button.copy-prd');
 const statusRegion = (page: Page) => page.locator('.source-card .copy-prd-status[role="status"]');
+const evolvedLink = (page: Page) => page.locator('.source-card__links a', { hasText: 'How it evolved' });
+// Phone tap targets: every control in the card is at least this tall (task #1435).
+const MIN_TAP = 32;
+
+/** The neighbour's left edge: it must not move while the button's label is shorter than at rest. */
+const leftOf = (locator: Locator) => locator.evaluate((el) => el.getBoundingClientRect().left);
 
 test('/sample/ adds Copy the PRD as the third action, after Download .md, and keeps its three links', async ({ page }) => {
   await page.goto(to('/sample/'));
@@ -47,11 +53,15 @@ test('/sample/ adds Copy the PRD as the third action, after Download .md, and ke
 test('clicking Copy the PRD puts the whole gist on the clipboard, says Copied, then resets', async ({ page }) => {
   await page.goto(to('/sample/'));
   const button = copyButton(page);
+  const neighbour = evolvedLink(page);
+  const restingLeft = await leftOf(neighbour);
 
   await button.click();
   await expect(button).toHaveText('Copied', { timeout: 3000 });
   await expect(button).toHaveAttribute('data-state', 'copied');
   await expect(button).not.toHaveAttribute('aria-busy');
+  // The button keeps its resting width while it says Copied, so How it evolved does not slide over.
+  expect(await leftOf(neighbour), 'How it evolved left while Copied').toBe(restingLeft);
 
   const expected = normalise(readFileSync(RAW, 'utf8'));
   expect(expected.length, 'the gist is a long document').toBeGreaterThan(20_000);
@@ -65,6 +75,7 @@ test('clicking Copy the PRD puts the whole gist on the clipboard, says Copied, t
 
   await expect(button).toHaveText(RESET, { timeout: RESET_TIMEOUT });
   await expect(button).not.toHaveAttribute('data-state');
+  expect(await leftOf(neighbour), 'How it evolved left after the reset').toBe(restingLeft);
 });
 
 test('Copy the PRD works from the keyboard: focus, Enter', async ({ page }) => {
@@ -111,4 +122,30 @@ test('the button does not widen /sample/ at 320px', async ({ page }) => {
   await expect(copyButton(page)).toHaveCount(1);
   const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(scrollWidth).toBeLessThanOrEqual(320);
+});
+
+test('on a phone the four card controls are thumb-sized (>= 32 px tall) and the card is no taller for it', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(to('/sample/'));
+  await expect(copyButton(page)).toHaveCount(1);
+
+  const controls = page.locator('.source-card__links a, .source-card__links button.copy-prd');
+  await expect(controls).toHaveCount(4);
+  const rects = await controls.evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const { width, height } = node.getBoundingClientRect();
+      return { text: node.textContent?.trim() ?? '', width, height };
+    }),
+  );
+  for (const rect of rects) {
+    expect(rect.height, `${rect.text} height`).toBeGreaterThanOrEqual(MIN_TAP);
+    expect(rect.width, `${rect.text} width`).toBeGreaterThanOrEqual(MIN_TAP);
+  }
+
+  // The hit area comes from padding cancelled by a negative margin: each row is still one line tall.
+  const rowHeights = await page
+    .locator('.source-card__links > li')
+    .evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().height));
+  const lineHeight = await page.locator('.source-card__links').evaluate((el) => parseFloat(getComputedStyle(el).lineHeight));
+  for (const height of rowHeights) expect(height, 'row height').toBeLessThanOrEqual(lineHeight + 0.5);
 });
