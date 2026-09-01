@@ -139,9 +139,7 @@ const baseline = (row: (typeof list)[number]) => list.indexOf(row) * ROW_HEIGHT 
         >
           {
             labelled.map((row) => (
-              <text class="size-chart__value" x={barEnd(row)} dx="0.4em" y={baseline(row)}>
-                {kb(row.bytes)} KB
-              </text>
+              <text class="size-chart__value" x={barEnd(row)} dx="0.4em" y={baseline(row)}>{`${kb(row.bytes)} KB`}</text>
             ))
           }
         </svg>
@@ -184,12 +182,8 @@ const baseline = (row: (typeof list)[number]) => list.indexOf(row) * ROW_HEIGHT 
                       <span class="history__time">{row.time}</span>
                     </time>
                   </td>
-                  <td role="cell" class:list={['num', 'history__plus', { 'is-empty': !row.hasCounts }]}>
-                    {row.hasCounts ? added(row) : '—'}
-                  </td>
-                  <td role="cell" class:list={['num', 'history__minus', { 'is-empty': !row.hasCounts }]}>
-                    {row.hasCounts ? row.deletions : '—'}
-                  </td>
+                  <td role="cell" class:list={['num', 'history__plus', { 'is-empty': !row.hasCounts }]}>{row.hasCounts ? added(row) : '—'}</td>
+                  <td role="cell" class:list={['num', 'history__minus', { 'is-empty': !row.hasCounts }]}>{row.hasCounts ? row.deletions : '—'}</td>
                   <td role="cell" class="num history__kb">{kb(row.bytes)}</td>
                   <td role="cell" class="num history__sections">{row.sectionCount}</td>
                   <td role="cell" class:list={['history__delta', { 'has-note': noteOf(row.n) !== undefined }]}>

@@ -483,7 +483,7 @@ test('the history page lists every gist revision, badges the published one, and 
   test.skip(!present(CONTENT.history), 'gist history not merged yet');
   const history = JSON.parse(readFileSync(resolve(CONTENT.history), 'utf8')) as {
     count: number;
-    revisions: { n: number; additions: number; deletions: number }[];
+    revisions: { n: number; additions: number; deletions: number; bytes: number }[];
   };
   // Derived from the data, never hard-coded: revisions GitHub reports no counts for show `—` in
   // `+` and `−`; the first revision always shows counts. Today that is 2–6; a later data source may make it 0.
@@ -510,7 +510,120 @@ test('the history page lists every gist revision, badges the published one, and 
   expect(dashes[0]?.plus, 'the first revision shows counts').toBe(false);
   await expect(page.locator('.history-note__counts'), 'footnote only when a row lacks counts').toHaveCount(noCounts > 0 ? 1 : 0);
 
-  await expect(page.locator('svg.size-chart text')).toHaveCount(history.count);
+  await expect(page.locator('svg.size-chart text.size-chart__label')).toHaveCount(history.count);
   await expect(page.locator('svg.size-chart rect')).toHaveCount(history.count);
+  // The largest and the smallest bar carry their size as visible text (not only a <title>).
+  const bytes = history.revisions.map((rev) => rev.bytes);
+  const kb = (value: number) => `${(value / 1000).toFixed(1)} KB`;
+  const values = page.locator('svg.size-chart text.size-chart__value');
+  await expect(values).toHaveCount(2);
+  await expect(values).toHaveText([kb(Math.max(...bytes)), kb(Math.min(...bytes))]);
   await expect(page.locator('script')).toHaveCount(0);
+});
+
+test('the history page tells the story in numbers from the data and labels whose counts are whose', async ({ page }) => {
+  test.skip(!present(CONTENT.history), 'gist history not merged yet');
+  const history = JSON.parse(readFileSync(resolve(CONTENT.history), 'utf8')) as {
+    count: number;
+    revisions: { n: number; version: string; bytes: number }[];
+  };
+  const meta = JSON.parse(readFileSync(resolve(CONTENT.gistMeta), 'utf8')) as { revision: string };
+  const wholeKb = (value: number) => (value / 1000).toFixed(0);
+  const first = history.revisions.find((rev) => rev.n === 1)!;
+  const third = history.revisions.find((rev) => rev.n === 3)!;
+  const shown = history.revisions.find((rev) => rev.version === meta.revision) ?? history.revisions.at(-1)!;
+
+  await page.goto(to('/history/'));
+
+  // The lede names the document and links it to the sample page, not to GitHub.
+  const lede = page.locator('.history-page__header p.lede');
+  await expect(lede.locator('a', { hasText: 'Build The Urlist' })).toHaveAttribute('href', to('/sample/'));
+  await expect(lede).toContainText(`went through ${history.count} revisions`);
+
+  // Three sentences: first-draft size, the revision-3 cut, the size on the sample page today — all from history.json.
+  const story = page.locator('.history-page__header .history-page__story');
+  await expect(story).toContainText(`The first draft was ${wholeKb(first.bytes)} KB and 32 sections.`);
+  await expect(story).toContainText(`Revision 3 cut it to ${wholeKb(third.bytes)} KB and 13 sections.`);
+  await expect(story).toContainText(`grew again to the ${wholeKb(shown.bytes)} KB on the sample page.`);
+  await expect(story.locator('a', { hasText: 'the sample page' })).toHaveAttribute('href', to('/sample/'));
+
+  // The + and − columns are GitHub's counts; the caption says so too, and the outro names the guide by its nav name.
+  const headers = page.locator('table.history thead th');
+  await expect(headers).toHaveText(['#', 'Date', '+ (GitHub)', '− (GitHub)', 'KB', 'Sections', 'What changed', 'View']);
+  await expect(page.locator('table.history caption')).toContainText("GitHub's per-revision line counts");
+  await expect(page.locator('.history-page__outro a', { hasText: 'the guide' })).toHaveAttribute('href', to('/guide/'));
+  await expect(page.locator('.history-page__outro')).not.toContainText('How to write one');
+
+  // The diff page marks its own count as this site's, so it is not mistaken for GitHub's.
+  await page.goto(to('/history/3/'));
+  await expect(page.locator('#diff-summary')).toContainText(/lines of text vs revision 2 \(this site's diff\)/);
+});
+
+test('at 390px the history table stacks each revision — number, date, note, counts — with no sideways scroll', async ({
+  page,
+}) => {
+  test.skip(!present(CONTENT.history), 'gist history not merged yet');
+  const history = JSON.parse(readFileSync(resolve(CONTENT.history), 'utf8')) as { count: number };
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(to('/history/'));
+  expect(await page.evaluate(() => document.documentElement.scrollWidth), 'scrollWidth').toBeLessThanOrEqual(390);
+
+  const table = page.locator('table.history');
+  await expect(table).toHaveAttribute('role', 'table');
+  const rows = table.locator('tbody tr');
+  await expect(rows).toHaveCount(history.count);
+
+  // Every row: the revision link, its date, its note and the counts are visible and inside the viewport width.
+  const boxes = await rows.evaluateAll((nodes) =>
+    nodes.map((row) => {
+      const right = (selector: string) => {
+        const el = row.querySelector(selector);
+        if (!el) return null;
+        const box = el.getBoundingClientRect();
+        return getComputedStyle(el).display === 'none' || box.width === 0 ? null : Math.round(box.right);
+      };
+      return {
+        n: row.querySelector('th a')?.textContent?.trim() ?? '',
+        link: right('th a'),
+        date: right('.history__date time'),
+        note: right('.history__note'),
+        plus: right('.history__plus'),
+        kb: right('.history__kb'),
+        view: right('.history__view'),
+      };
+    }),
+  );
+  for (const box of boxes) {
+    expect(box.link, `revision ${box.n} link`).not.toBeNull();
+    expect(box.date, `revision ${box.n} date`).not.toBeNull();
+    expect(box.note, `revision ${box.n} note`).not.toBeNull();
+    for (const [name, right] of Object.entries(box)) {
+      if (typeof right === 'number') expect(right, `revision ${box.n} ${name} right edge`).toBeLessThanOrEqual(390);
+    }
+  }
+  // Rows that GitHub gives no counts for hide their `—` cells instead of showing "+— −—".
+  const row2 = rows.nth(1);
+  await expect(row2.locator('.history__plus')).toBeHidden();
+  expect(boxes[0]?.plus, 'the first revision still shows its counts').not.toBeNull();
+
+  // The header row is for assistive tech only at this width; the caption stays readable.
+  await expect(table.locator('thead')).not.toBeInViewport();
+  await expect(table.locator('caption')).toBeVisible();
+
+  // The chart's two KB labels stay inside the chart at phone width.
+  const chart = await page.locator('svg.size-chart').boundingBox();
+  for (const label of await page.locator('svg.size-chart text.size-chart__value').all()) {
+    const box = await label.boundingBox();
+    expect(box!.x + box!.width, `${await label.textContent()} inside the chart`).toBeLessThanOrEqual(chart!.x + chart!.width);
+  }
+
+  // Desktop keeps today's table: eight visible columns.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(to('/history/'));
+  await expect(page.locator('table.history')).toHaveCSS('display', 'table');
+  const headers = page.locator('table.history thead th');
+  await expect(headers).toHaveCount(8);
+  for (const header of await headers.all()) await expect(header).toBeVisible();
+  await expect(page.locator('table.history tbody tr').nth(2).locator('td')).toHaveCount(7);
 });
