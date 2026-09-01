@@ -106,8 +106,10 @@ test('the biggest diff wraps without horizontal scroll at 320px', async ({ page 
 
 // The meta line as rects, for the hit-area tests: the paragraph, its line-height, the `time`'s glyphs,
 // the badge and every link — the link's box (its hit area) beside the Range rect of its text (the
-// glyphs the box grew around), plus whether five taps on those glyphs (centre, 1 px inside each edge)
-// all land on that link. Passed to page.evaluate, so it must not reach outside itself.
+// glyphs the box grew around), plus whether five taps on those glyphs all land on that link: the
+// centre, 1 px inside the top and bottom edges, 3 px inside the left and right ones (Chromium lets the
+// space after a link claim about a pixel of its last glyph). Passed to page.evaluate, so it must not
+// reach outside itself.
 function metaGeometry() {
   const plain = (r: DOMRect) => ({ x: r.x, y: r.y, width: r.width, height: r.height, top: r.top, bottom: r.bottom, left: r.left, right: r.right });
   const box = (el: Element) => plain(el.getBoundingClientRect());
@@ -124,8 +126,8 @@ function metaGeometry() {
       [text.left + text.width / 2, text.top + text.height / 2],
       [text.left + text.width / 2, text.top + 1],
       [text.left + text.width / 2, text.bottom - 1],
-      [text.left + 1, text.top + text.height / 2],
-      [text.right - 1, text.top + text.height / 2],
+      [text.left + 3, text.top + text.height / 2],
+      [text.right - 3, text.top + text.height / 2],
     ];
     return {
       label: a.textContent?.trim() ?? '',
@@ -270,7 +272,9 @@ test('in the meta line, "View on GitHub" and the badge link are ≥ 32 px hit ar
     expect(link.box.height, `"${link.label}" hit area at 390`).toBeGreaterThanOrEqual(32);
     expect(link.tapsHit, `taps on "${link.label}" at 390`).toBe(true);
   }
-  if (Math.abs(gh390.text.top - sample390.text.top) < 1) {
+  // On one line the glyph rects overlap vertically; stacked, a full 27.45 px pitch separates them.
+  const sameLine = gh390.text.top < sample390.text.bottom && sample390.text.top < gh390.text.bottom;
+  if (sameLine) {
     expect(intersects(gh390.box, sample390.box), 'hit rects on one line must not intersect').toBe(false);
   } else {
     expect(sample390.box.top, 'stacked: badge hit rect below the "View on GitHub" glyphs').toBeGreaterThan(gh390.text.bottom - 1);
