@@ -642,6 +642,30 @@ test('at 390px the history table stacks each revision — number, date, note, co
       if (typeof right === 'number') expect(right, `revision ${box.n} ${name} right edge`).toBeLessThanOrEqual(390);
     }
   }
+  // Thumb-sized controls: the whole "Revision n" label is the link, ≥ 32 px tall and ≥ 90 px wide;
+  // Diff and GitHub are each ≥ 32 px tall with clear space between their two hit areas.
+  const taps = await rows.evaluateAll((nodes) =>
+    nodes.map((row) => {
+      const size = (el: Element | null) => {
+        const box = el!.getBoundingClientRect();
+        return { w: box.width, h: box.height, x: box.x, right: box.right };
+      };
+      const [diff, github] = [...row.querySelectorAll('.history__view a')].map(size);
+      return { n: row.querySelector('th a')?.textContent?.trim() ?? '', link: size(row.querySelector('th a')), diff, github };
+    }),
+  );
+  for (const tap of taps) {
+    expect(tap.link.h, `revision ${tap.n} link height`).toBeGreaterThanOrEqual(32);
+    expect(tap.link.w, `revision ${tap.n} link width`).toBeGreaterThanOrEqual(90);
+    expect(tap.diff.h, `revision ${tap.n} Diff height`).toBeGreaterThanOrEqual(32);
+    expect(tap.github.h, `revision ${tap.n} GitHub height`).toBeGreaterThanOrEqual(32);
+    expect(tap.github.x - tap.diff.right, `revision ${tap.n} gap between Diff and GitHub`).toBeGreaterThanOrEqual(8);
+  }
+  // Nothing on the page is set under 14 px: timestamps and the chart's labels are 0.85rem.
+  for (const selector of ['.history__time', 'text.size-chart__label', 'text.size-chart__value']) {
+    const fontSize = await page.locator(selector).first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    expect(fontSize, `${selector} font-size`).toBeGreaterThanOrEqual(14);
+  }
   // A row GitHub gives no counts for hides its `—` cells instead of showing "+— −—" (none in today's data).
   for (const rev of noCounts) {
     await expect(rows.nth(rev.n - 1).locator('.history__plus'), `revision ${rev.n} + cell`).toBeHidden();
