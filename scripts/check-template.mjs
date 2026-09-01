@@ -50,17 +50,16 @@ function labelIndex(body, label) {
 
 const annotatedBody = annotated.replace(/^---\n[\s\S]*?\n---\n/, '');
 const allAnnotated = h2Sections(annotatedBody);
-const start = allAnnotated.findIndex((s) => s.title === 'Section by section');
+// The section h2s run from the page's first h2 (the intro has none) up to "## Before you hand it over".
 const end = allAnnotated.findIndex((s) => s.title === 'Before you hand it over');
-const annotatedSections = allAnnotated.slice(start + 1, end);
+const annotatedSections = allAnnotated.slice(0, end);
 const cleanSections = h2Sections(clean);
 
-test('annotated page has the two framing headings in order', () => {
-  assert.ok(start >= 0, 'missing "## Section by section"');
-  assert.ok(end > start, 'missing "## Before you hand it over" after "Section by section"');
+test('annotated page closes the section h2s with "## Before you hand it over"', () => {
+  assert.ok(end > 0, 'missing "## Before you hand it over" after the section h2s');
 });
 
-test(`annotated page has exactly ${SECTION_COUNT} section h2s between them`, () => {
+test(`annotated page has exactly ${SECTION_COUNT} section h2s before it`, () => {
   assert.equal(annotatedSections.length, SECTION_COUNT, annotatedSections.map((s) => s.title).join(' | '));
 });
 

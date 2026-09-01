@@ -6,7 +6,7 @@ const BASE = '/prd';
 const to = (path: string) => `${BASE}${path}`;
 
 // One skeleton code block per PRD section in content/template.md; the first sits under
-// "## Mission and stop condition" ("## Section by section" before it has no code block).
+// "## Mission and stop condition", the page's first h2.
 const BLOCKS = 14;
 const FIRST_SECTION = 'Mission and stop condition';
 

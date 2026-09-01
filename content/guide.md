@@ -4,9 +4,7 @@ description: "Seven habits that separate a PRD an agent can execute from one it 
 order: 2
 ---
 
-Burke Holland reports that a coding agent given the sample PRD, [*Build The Urlist*](/sample), built the app in one shot, or close to it. That is this site's claim, and the sample is its proof: the agent builds what you wrote and guesses at every gap, so a PRD specific enough gets built in one pass.
-
-This guide covers the habits that make a PRD that specific; the [walkthrough](/walkthrough) shows them at work in the sample, and the [template](/template) gives you the skeleton.
+Seven habits that made the sample PRD, [*Build The Urlist*](/sample), specific enough for an agent to build in one pass. [The walkthrough](/walkthrough) shows each habit in the sample; [the template](/template) gives you the skeleton.
 
 ## Who is reading your PRD now
 
@@ -14,7 +12,7 @@ A PRD written for a human PM starts a conversation. Someone asks what happens wh
 
 A PRD written for an agent *is* the conversation. There is no review meeting. The agent reads the document once, then starts making decisions, and every decision you did not make in writing it will make for you: which framework, which error message, whether deletion is soft or permanent, what *done* means. Some guesses will be reasonable; you will not find out which were not until you open the finished app.
 
-The gist knows this from its first line. Before any feature, before the stack, it tells the agent what the job is and when to stop: "Build the complete application in this repository. Work autonomously from start to finish and stop only when the app is complete." Two sentences, and the agent knows it is not writing a plan, not waiting for sign-off, and not stopping at a prototype.
+The sample knows this from its first line. Before any feature, before the stack, it tells the agent what the job is and when to stop: "Build the complete application in this repository. Work autonomously from start to finish and stop only when the app is complete." Two sentences, and the agent knows it is not writing a plan, not waiting for sign-off, and not stopping at a prototype.
 
 That changes what a good PRD looks like. The problem statement and market context a human reviewer expects are worth nothing to a reader that cannot ask a question. What replaces them is precision: exact strings, exact numbers, rules about what must never happen, and a definition of finished that the agent can check for itself.
 
@@ -22,10 +20,9 @@ That changes what a good PRD looks like. The problem statement and market contex
 
 ### 1. Start with the mission and the stop condition
 
-The first thing an agent reads should tell it what to produce and how it will know it is finished. Not the background or the audience: the job. The gist does this in its opening line without padding.
+The first thing an agent reads should tell it what to produce and how it will know it is finished. Not the background or the audience: the job. The sample does this in its opening line without padding.
 
-> Build the complete application in this repository.
-> Work autonomously from start to finish and stop only when the app is complete.
+> Build the complete application in this repository. Work autonomously from start to finish and stop only when the app is complete.
 
 Both halves matter. "Build the complete application" rules out a scaffold or a plan. The instruction to "stop only when the app is complete" rules out pausing to ask whether the approach is right. The rest of the document defines *complete*, ending with a Completion section that turns the stop condition into checks (habit 7).
 
@@ -35,12 +32,12 @@ Without it, an agent unsure of its mandate stops early, delivers a partial build
 
 ### 2. Show, don't describe
 
-Layout is the most expensive thing to specify in prose and the cheapest to show. The gist opens with a Mocks section of seven screenshots (Home Page, New List, New List: Validation States, Login Modal, My Lists (Logged In), Published List, Published List: QR Code), and the text refers back to "the reference" whenever a visual decision would otherwise take a paragraph.
+Layout is the most expensive thing to specify in prose and the cheapest to show. The sample opens with a Mocks section of seven screenshots (Home Page, New List, New List: Validation States, Login Modal, My Lists (Logged In), Published List, Published List: QR Code). They are of an existing app the PRD calls "the reference" — they show the target, not what the agent built — and the text refers back to the reference whenever a visual decision would otherwise take a paragraph.
 
 > Not a card. A full-width band directly under the navbar, on a background distinct from the page body below it (the reference separates it with a soft shadow).
 > Three columns on desktop, stacked on mobile:
 
-The mock anchors the shape; the sentence settles what a screenshot leaves ambiguous: a band, not a card, separated by a shadow, stacking on mobile. Words can also say how much is negotiable. For the Get Started band the gist writes "a full-width band with a subtle rounded or straight top edge is fine", so the agent does not have to guess how faithfully to copy the picture.
+The mock anchors the shape; the sentence settles what a screenshot leaves ambiguous: a band, not a card, separated by a shadow, stacking on mobile. Words can also say how much is negotiable. For the Get Started band the sample writes "a full-width band with a subtle rounded or straight top edge is fine", so the agent does not have to guess how faithfully to copy the picture.
 
 Without it, the agent produces a layout that complies with every sentence you wrote and looks nothing like what you meant.
 
@@ -48,7 +45,7 @@ Without it, the agent produces a layout that complies with every sentence you wr
 
 ### 3. Make the agent write its own checklist
 
-Before it writes any product code, the gist has the agent produce a second document, `TECHNICAL_SPEC.md`, that turns every requirement into a checkbox with a stated way to verify it. The PRD stays the source of truth; the checklist is the agent's working copy, with rules for keeping it honest.
+Before it writes any product code, the sample has the agent produce a second document, `TECHNICAL_SPEC.md`, that turns every requirement into a checkbox with a stated way to verify it. The PRD stays the source of truth; the checklist is the agent's working copy, with rules for keeping it honest.
 
 > Use the format `- [ ] Requirement — Verify: method`. Maintain it throughout implementation.
 > Check an item only after its implementation exists and its verification passes; reopen it if later work breaks it.
@@ -62,7 +59,7 @@ Without it, requirements buried in the middle of a long section get silently dro
 
 ### 4. Pin the stack and name the alternatives you are ruling out
 
-An agent will choose a stack if you do not, and a different one on a different day. The gist names every layer, then does what most PRDs skip: it names what it is *not* allowing, which is where an agent's defaults would otherwise take over.
+An agent will choose a stack if you do not, and a different one on a different day. The sample names every layer, then does what most PRDs skip: it names what it is *not* allowing, which is where an agent's defaults would otherwise take over.
 
 > - Next.js App Router, React, strict TypeScript, Node.js, and npm
 > - SQLite with direct parameterized SQL through `better-sqlite3`; no ORM
@@ -81,7 +78,7 @@ Without it, you get a dependency you never wanted, a design system layered on to
 
 ### 5. Be exact where exactness matters
 
-Some things a user or a test would notice if they were off by one word or one pixel. For those, the gist gives the exact value, bolded, in quotation marks. The Publish button reads "Login to Publish". A bad URL gets "That doesn't look like a valid URL". The 404 page shows one sentence and nothing else.
+Some things a user or a test would notice if they were off by one word or one pixel. For those, the sample gives the exact value, bolded, in quotation marks. The Publish button reads "Login to Publish". A bad URL gets "That doesn't look like a valid URL". The 404 page shows one sentence and nothing else.
 
 > 404 page (everything else, including multi-segment paths): show the text **"Sorry, there's nothing at this address."**
 
@@ -97,7 +94,7 @@ Without it, every string is a paraphrase, every limit is whatever the library de
 
 ### 6. State the invariants the code must never violate
 
-Features describe what the app does. Invariants describe what it must never do, whichever feature is running. An agent cannot infer them from a screenshot, and breaking one produces the bugs that matter: data owned by the wrong user, a deleted list that comes back, a server that trusts the browser. The gist states them as flat declarations.
+Features describe what the app does. Invariants describe what it must never do, whichever feature is running. An agent cannot infer them from a screenshot, and breaking one produces the bugs that matter: data owned by the wrong user, a deleted list that comes back, a server that trusts the browser. The sample states them as flat declarations.
 
 > The server is authoritative: revalidate input, ownership, and alias availability on every write; ignore client-supplied owner IDs.
 
@@ -113,7 +110,7 @@ Without it, you get a fetcher that can reach your internal network, a Deleted se
 
 ### 7. Define done as checks the agent can run
 
-The stop condition from habit 1 only works if the agent can tell when it has been met. The gist's last section is a numbered procedure: commands to run, a production build to start, journeys to complete in a real browser, a restart to survive, and the habit 3 checklist to reconcile against the original.
+The stop condition from habit 1 only works if the agent can tell when it has been met. The sample's last section is a numbered procedure: commands to run, a production build to start, journeys to complete in a real browser, a restart to survive, and the habit 3 checklist to reconcile against the original.
 
 > 1. Run `npm run lint`, `npm run typecheck`, `npm test`, `npm run test:e2e`, and `npm run build`.
 > 2. Start the production build and confirm the app responds.
@@ -134,13 +131,13 @@ Without it, the agent declares itself done at the point where the code compiles,
 
 ## What to leave out
 
-Everything you add is something the agent has to read, weigh, and possibly misapply. The gist specifies a full application in under four thousand words by leaving out four kinds of material.
+Everything you add is something the agent has to read, weigh, and possibly misapply. The sample specifies a full application in under four thousand words by leaving out four kinds of material.
 
-**Rationale the agent does not need.** The gist never explains why publishing requires login, why deletion is permanent, or why an alias is limited to 50 characters. It states the rule. If a reason changes how the rule is applied, include it; if it only justifies the rule to a human reviewer, leave it out.
+**Rationale the agent does not need.** The sample never explains why publishing requires login, why deletion is permanent, or why an alias is limited to 50 characters. It states the rule. If a reason changes how the rule is applied, include it; if it only justifies the rule to a human reviewer, leave it out.
 
-**The stack, repeated.** The stack is stated once. The Routes table does not mention Next.js, the Delete section does not mention SQLite, the My Lists section does not mention React; the agent knows. The gist applies the same rule to the document the agent writes for itself: "Keep it concise; do not restate this document."
+**The stack, repeated.** The stack is stated once. The Routes table does not mention Next.js, the Delete section does not mention SQLite, the My Lists section does not mention React; the agent knows. The sample applies the same rule to the document the agent writes for itself: "Keep it concise; do not restate this document."
 
-**Implementation detail where you only care about behaviour.** The gist gives the metadata precedence, because the precedence is observable and testable:
+**Implementation detail where you only care about behaviour.** The sample gives the metadata precedence, because the precedence is observable and testable:
 
 > - Description: `og:description` → `twitter:description` → `meta[name=description]`
 
@@ -150,7 +147,7 @@ It says nothing about which HTML parser to use or how to structure the module, b
 
 ## Vague vs. buildable
 
-Left: the line most product documents contain. Right: what the gist wrote instead, quoted verbatim.
+Left: the line most product documents contain. Right: what the sample wrote instead, quoted verbatim.
 
 | Vague | Buildable |
 |---|---|
