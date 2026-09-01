@@ -93,7 +93,10 @@ test('Copy the PRD works from the keyboard: focus, Enter', async ({ page, browse
   expect(await readClipboard(page)).toMatch(/^# Build The Urlist\n/);
 });
 
-test('when the gist cannot be fetched the button says so and leaves Download .md as the way out', async ({ page }) => {
+test('when the gist cannot be fetched the button says so and leaves Download .md as the way out', async ({
+  page,
+  browserName,
+}) => {
   await page.goto(to('/sample/'));
   await page.route('**/raw/build-the-urlist.md', (route) => route.fulfill({ status: 500 }));
   const button = copyButton(page);
@@ -102,7 +105,14 @@ test('when the gist cannot be fetched the button says so and leaves Download .md
   await expect(button).toHaveText(FAILED, { timeout: 3000 });
   await expect(button).not.toHaveAttribute('data-state');
   await expect(button).not.toHaveAttribute('aria-busy');
-  await expect(button).toBeFocused();
+  // The failure path leaves focus where the click put it. Chromium and Firefox focus the button; WebKit
+  // does not mouse-focus buttons (Safari's behaviour) and lands on the nearest focusable ancestor, the
+  // skip link's <main id="main" tabindex="-1">. Either way the script must not move focus anywhere else.
+  if (browserName === 'webkit') {
+    expect(await page.evaluate(() => document.activeElement?.id), 'focus on <main>, the nearest focusable ancestor').toBe('main');
+  } else {
+    await expect(button).toBeFocused();
+  }
   await expect(statusRegion(page)).toHaveText(FAILED);
   await expect(page.locator('.source-card__links a[download]')).toHaveText('Download .md');
 
