@@ -91,7 +91,11 @@ const differences = [
     color: var(--text-muted);
   }
 
+  /* Padding grows the tap target to >= 32 px; the equal negative margin keeps the line unchanged. */
   .ready a {
     font-weight: 600;
+    display: inline-block;
+    padding-block: 0.4em;
+    margin-block: -0.4em;
   }
 </style>

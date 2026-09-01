@@ -562,9 +562,12 @@ main:focus {
   padding: 0.75rem 1rem;
 }
 
+/* Padding grows the tap target to >= 32 px; the equal negative margin keeps the closed box the same height. */
 .toc--inline summary {
   cursor: pointer;
   font-weight: 600;
+  padding-block: 0.3rem;
+  margin-block: -0.3rem;
 }
 
 .toc--inline .toc__list {
@@ -575,8 +578,11 @@ main:focus {
   display: none;
 }
 
+/* 0.85rem is the smallest text on the site; the line box is held at the old 0.8rem × 1.6 height so the
+   bigger title does not push the list down (the guide's sidebar fits a 768 px-tall viewport by 1 px). */
 .toc__title {
-  font-size: 0.8rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -637,6 +643,19 @@ main:focus {
     align-self: start;
     max-height: calc(100vh - 3rem);
     overflow-y: auto;
+  }
+
+  /* End fade: the aside's last in-flow child, stuck to the bottom of its own scrollport while the
+     list continues below it, so a short viewport hints at the hidden links (no resting scrollbar on
+     touch devices). Scrolled to the end it sits under the last link over the page background. */
+  .toc--sidebar::after {
+    content: "";
+    display: block;
+    position: sticky;
+    bottom: 0;
+    height: 2rem;
+    background: linear-gradient(to bottom, transparent, var(--bg));
+    pointer-events: none;
   }
 }
 

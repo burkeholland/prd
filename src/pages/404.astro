@@ -14,7 +14,7 @@ import { withBase } from '../lib/base';
     </header>
     <div class="doc__body prose">
       <p>Try one of these pages instead:</p>
-      <ul>
+      <ul class="not-found__links">
         {
           NAV.map((item) => (
             <li>
@@ -26,3 +26,12 @@ import { withBase } from '../lib/base';
     </div>
   </article>
 </Base>
+
+<style>
+  /* These links are the page's only purpose: pad each one to a >= 32 px tap target. No negative
+     margin here — on the list's pitch adjacent hit areas would overlap. */
+  .not-found__links a {
+    display: inline-block;
+    padding-block: 0.35em;
+  }
+</style>
