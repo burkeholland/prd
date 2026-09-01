@@ -131,6 +131,20 @@ test('the footer links to the gist and to the site source', async ({ page }) => 
   );
 });
 
+// The deploy job polls this stamp on the live site until `sha` is the commit it just deployed
+// (deploy.yml). Here the build is local, so `sha` is "local"; in Actions it is the 40-hex sha.
+test('/build.json is JSON that stamps the build with a sha and a build time', async ({ page }) => {
+  const response = await page.request.get(to('/build.json'));
+  expect(response.status()).toBe(200);
+  expect(response.headers()['content-type']).toContain('json');
+
+  const stamp = JSON.parse(await response.text()) as { sha: unknown; builtAt: unknown };
+  expect(typeof stamp.sha, 'sha is a string').toBe('string');
+  expect(stamp.sha as string).toMatch(/^(local|[0-9a-f]{40})$/);
+  expect(typeof stamp.builtAt, 'builtAt is a string').toBe('string');
+  expect(Number.isNaN(new Date(stamp.builtAt as string).getTime()), 'builtAt parses as a date').toBe(false);
+});
+
 test('the sample PRD renders the gist with one h1 and seven local, captioned, lazy screenshots', async ({
   page,
 }) => {
