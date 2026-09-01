@@ -393,13 +393,17 @@ test('phone nav (390×844, and 640–767 e.g. 700×400 / 760×400): one swipeabl
     expect((await helper.textContent())!.length, `${path} nav helper size`).toBeLessThanOrEqual(700);
   }
 
-  // Chromium takes the native path above, so the script's landing is proven by forcing its path here: the
-  // bundled stylesheet gets the property neutralised before first layout (`addStyleTag` would be too late)
-  // and `CSS.supports` denies it, exactly what Safari and Firefox present. The landing must be the same.
+  // Chromium takes the native path above, so the script's landing is proven by forcing its path here: the HTML
+  // document gets a `<style>` neutralising the property right before `</head>` (the stylesheet is inlined —
+  // astro.config.mjs `inlineStylesheets: 'always'` — so there is no CSS request to rewrite, and `addStyleTag`
+  // would be too late: it lands after first layout, when `scroll-initial-target` has already positioned the
+  // row) and `CSS.supports` denies it, exactly what Safari and Firefox present. The landing must be the same.
+  const neutralise = (html: string) =>
+    html.replace('</head>', '<style>.site-nav li { scroll-initial-target: none !important; }</style></head>');
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.route('**/_astro/*.css', async (route) => {
+  await page.route(new RegExp(`${to('/(template|walkthrough)/')}$`), async (route) => {
     const response = await route.fetch();
-    await route.fulfill({ response, body: `${await response.text()}\n.site-nav li { scroll-initial-target: none !important; }` });
+    await route.fulfill({ response, body: neutralise(await response.text()) });
   });
   await page.addInitScript(() => {
     // `CSS.supports` has two overloads — `(conditionText)` and `(property, value)` — so call the one the
@@ -414,6 +418,9 @@ test('phone nav (390×844, and 640–767 e.g. 700×400 / 760×400): one swipeabl
   });
   for (const path of ['/template/', '/walkthrough/']) {
     await page.goto(to(path));
+    // Text matchers skip <head> and <style>, so the injected rule is read out, not located by text.
+    const styles = await page.locator('head style').evaluateAll((els) => els.map((el) => el.textContent ?? ''));
+    expect(styles.filter((css) => css.includes('scroll-initial-target: none')), `${path} forced: rule injected`).toHaveLength(1);
     const g = await geometry();
     expect(g.initialTarget, `${path} forced: scroll-initial-target reported unsupported`).toBe(false);
     expect(g.scrollLeft, `${path} forced: the script scrolled the row`).toBeGreaterThan(0);
@@ -425,10 +432,11 @@ test('phone nav (390×844, and 640–767 e.g. 700×400 / 760×400): one swipeabl
   }
 
   // Negative control: the same page with the helper stripped from its HTML lands at scrollLeft 0 with the
-  // current item off the right edge — the assertions above would have caught the Safari/Firefox bug.
+  // current item off the right edge — the assertions above would have caught the Safari/Firefox bug. Registered
+  // later, this handler runs instead of the one above, so it has to neutralise the property itself.
   await page.route(`**${to('/template/')}`, async (route) => {
     const response = await route.fetch();
-    const html = await response.text();
+    const html = neutralise(await response.text());
     await route.fulfill({ response, body: html.replace(/<script[^>]*\bdata-nav\b[^>]*>[\s\S]*?<\/script>/, '') });
   });
   await page.goto(to('/template/'));

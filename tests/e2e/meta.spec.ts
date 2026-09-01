@@ -80,3 +80,25 @@ test('the sitemap index points at one sitemap listing exactly the six pages by c
   expect(new Set(locs)).toEqual(new Set(ROUTES.map(canonicalOf)));
   expect(locs.filter((loc) => loc.includes('404')), 'status pages in the sitemap').toEqual([]);
 });
+
+// The shared stylesheet is inlined (astro.config.mjs `build.inlineStylesheets: 'always'`): it was every page's
+// only render-blocking request (#1522, #1529). One test per page so a change back to `'auto'` (which inlines
+// only sheets under 4 KB — ours is 16 KB) names the page it broke. `/history/16/` carries its own scoped
+// <style> as well and `/nope/` is the 404; both must still carry the shared rules. Engine-neutral: the check
+// reads the <head>, not the layout. Text matchers skip <head> and <style>, so the CSS is read out with evaluate.
+const INLINE_CSS_ROUTES = [...ROUTES, '/history/16/', '/nope/'] as const;
+for (const path of INLINE_CSS_ROUTES) {
+  test(`${path} inlines the shared stylesheet instead of linking it`, async ({ page }) => {
+    const response = await page.goto(to(path));
+    expect(response?.status(), `${path} status`).toBe(path === '/nope/' ? 404 : 200);
+    await expect(page.locator('link[rel="stylesheet"]'), `${path} external stylesheets`).toHaveCount(0);
+    await expect(page.locator('link[rel="preload"][as="style"]'), `${path} stylesheet preloads`).toHaveCount(0);
+    const styles = await page.locator('head style').evaluateAll((els) => els.map((el) => el.textContent ?? ''));
+    expect(styles.length, `${path} inline <style> count`).toBeGreaterThanOrEqual(1);
+    // Rules only global.css has: the nav row and the page grid. A scoped page <style> alone would not carry them.
+    const shared = styles.filter((css) => css.includes('.site-nav') && css.includes('.site-header'));
+    expect(shared, `${path} a <style> carries the shared rules`).toHaveLength(1);
+    // Nothing of the shared sheet is left external either: no `_astro/*.css` in the document at all.
+    expect(await page.content(), `${path} references a bundled CSS file`).not.toMatch(/_astro\/[^"']+\.css/);
+  });
+}

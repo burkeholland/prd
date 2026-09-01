@@ -20,6 +20,9 @@ export default defineConfig({
   site: 'https://burkeholland.github.io',
   base,
   output: 'static',
+  // Inline the one shared stylesheet (16 KB raw, 4.3 KB gzip): it was every page's only render-blocking
+  // request, and GitHub Pages' max-age=600 on _astro/* makes the cross-page cache nearly worthless (#1522, #1529).
+  build: { inlineStylesheets: 'always' },
   // Emits dist/sitemap-index.xml + sitemap-0.xml with the content pages in their canonical
   // (trailing-slash) form; the 404 page is a status page and never listed, and the per-revision
   // diff pages (/history/<n>/) are noindex and not listed either. <head> links to it.
