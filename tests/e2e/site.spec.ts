@@ -745,7 +745,7 @@ test('at 390px the history table stacks each revision — number, date, note, co
   await expect(page.locator('table.history tbody tr').nth(2).locator('td')).toHaveCount(7);
 });
 
-test('the history table stacks below 1024px and is a real table with thumb-sized links from 1024px', async ({ page }) => {
+test('the history table stacks below 1120px and is a real table with thumb-sized links from 1120px', async ({ page }) => {
   test.skip(!present(CONTENT.history), 'gist history not merged yet');
   const table = page.locator('table.history');
   const scrollWidth = () => page.evaluate(() => document.documentElement.scrollWidth);
@@ -753,40 +753,47 @@ test('the history table stacks below 1024px and is a real table with thumb-sized
     page.locator('.history-table .table-scroll').evaluate((el) => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }));
   const boxes = (selector: string) => table.locator(selector).evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().toJSON() as DOMRect));
 
-  // iPad portrait: the stacked layout, no sideways scroll inside the table's wrapper or on the page.
-  await page.setViewportSize({ width: 768, height: 1024 });
-  await page.goto(to('/history/'));
-  expect(await scrollWidth(), '768 scrollWidth').toBe(768);
-  const stacked = await scroller();
-  expect(stacked.scrollWidth, '768 .table-scroll overflow').toBe(stacked.clientWidth);
-  await expect(table.locator('thead')).not.toBeInViewport();
+  // The stacked layout: no sideways scroll inside the table's wrapper or on the page, the header row
+  // for assistive tech only, and every link thumb-sized. Its width does not depend on the font, so
+  // these hold on CI's wider Linux fonts too.
+  const expectStacked = async (width: number, height: number) => {
+    await page.setViewportSize({ width, height });
+    await page.goto(to('/history/'));
+    expect(await scrollWidth(), `${width} scrollWidth`).toBe(width);
+    const wrapper = await scroller();
+    expect(wrapper.scrollWidth, `${width} .table-scroll overflow`).toBe(wrapper.clientWidth);
+    await expect(table.locator('thead')).not.toBeInViewport();
 
-  const revisionLinks = await boxes('tbody th a');
-  expect(revisionLinks.length, 'revision links').toBeGreaterThan(0);
-  for (const [i, box] of revisionLinks.entries()) {
-    expect(box.height, `768 revision ${i + 1} link height`).toBeGreaterThanOrEqual(32);
-    expect(box.width, `768 revision ${i + 1} link width ("Revision n")`).toBeGreaterThanOrEqual(90);
-  }
-  const viewLinks = await boxes('.history__view a');
-  expect(viewLinks.length, 'Diff and GitHub links').toBe(revisionLinks.length * 2);
-  for (const [i, box] of viewLinks.entries()) {
-    expect(box.height, `768 view link ${i} height`).toBeGreaterThanOrEqual(32);
-    expect(box.width, `768 view link ${i} width`).toBeGreaterThanOrEqual(32);
-  }
+    const revisionLinks = await boxes('tbody th a');
+    expect(revisionLinks.length, 'revision links').toBeGreaterThan(0);
+    for (const [i, box] of revisionLinks.entries()) {
+      expect(box.height, `${width} revision ${i + 1} link height`).toBeGreaterThanOrEqual(32);
+      expect(box.width, `${width} revision ${i + 1} link width ("Revision n")`).toBeGreaterThanOrEqual(90);
+    }
+    const viewLinks = await boxes('.history__view a');
+    expect(viewLinks.length, 'Diff and GitHub links').toBe(revisionLinks.length * 2);
+    for (const [i, box] of viewLinks.entries()) {
+      expect(box.height, `${width} view link ${i} height`).toBeGreaterThanOrEqual(32);
+      expect(box.width, `${width} view link ${i} width`).toBeGreaterThanOrEqual(32);
+    }
+  };
+  await expectStacked(768, 1024); // iPad portrait
+  await expectStacked(1024, 768); // iPad landscape: the real table would need ≈ 1000 px on Linux fonts, the container is 956
 
-  // iPad landscape: the eight-column table fits its container, and the links stay thumb-sized without
-  // widening the number column or letting the Diff and GitHub hit areas touch.
-  await page.setViewportSize({ width: 1024, height: 768 });
+  // Desktop: the eight-column table fits its container (1088 px against ≈ 925 px on Windows fonts, ≈ 1000 on
+  // Linux), and the links stay thumb-sized without widening the number column or letting the Diff and
+  // GitHub hit areas touch.
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto(to('/history/'));
-  expect(await scrollWidth(), '1024 scrollWidth').toBe(1024);
+  expect(await scrollWidth(), '1280 scrollWidth').toBe(1280);
   const real = await scroller();
-  expect(real.scrollWidth, '1024 .table-scroll overflow').toBe(real.clientWidth);
+  expect(real.scrollWidth, '1280 .table-scroll overflow').toBe(real.clientWidth);
   await expect(table).toHaveCSS('display', 'table');
   const headers = table.locator('thead th');
   await expect(headers).toHaveCount(8);
   for (const header of await headers.all()) await expect(header).toBeVisible();
   const headerHeights = await headers.evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().height));
-  expect(new Set(headerHeights).size, `1024 header heights (a wrapped header): ${headerHeights.join(', ')}`).toBe(1);
+  expect(new Set(headerHeights).size, `1280 header heights (a wrapped header): ${headerHeights.join(', ')}`).toBe(1);
 
   const rows = await table.locator('tbody tr').evaluateAll((nodes) =>
     nodes.map((row) => {
@@ -797,11 +804,22 @@ test('the history table stacks below 1024px and is a real table with thumb-sized
   );
   const intersects = (a: DOMRect, b: DOMRect) => !(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top);
   expect(rows.length, 'rows').toBeGreaterThan(0);
-  expect(rows[0].th.width, '1024 number column width').toBeLessThanOrEqual(48);
+  expect(rows[0].th.width, '1280 number column width').toBeLessThanOrEqual(48);
   for (const [i, row] of rows.entries()) {
-    expect(row.link.height, `1024 revision ${i + 1} link height`).toBeGreaterThanOrEqual(32);
-    expect(row.diff.height, `1024 revision ${i + 1} Diff height`).toBeGreaterThanOrEqual(32);
-    expect(row.github.height, `1024 revision ${i + 1} GitHub height`).toBeGreaterThanOrEqual(32);
-    expect(intersects(row.diff, row.github), `1024 revision ${i + 1} Diff and GitHub hit areas overlap`).toBe(false);
+    expect(row.link.height, `1280 revision ${i + 1} link height`).toBeGreaterThanOrEqual(32);
+    expect(row.diff.height, `1280 revision ${i + 1} Diff height`).toBeGreaterThanOrEqual(32);
+    expect(row.github.height, `1280 revision ${i + 1} GitHub height`).toBeGreaterThanOrEqual(32);
+    expect(intersects(row.diff, row.github), `1280 revision ${i + 1} Diff and GitHub hit areas overlap`).toBe(false);
   }
+
+  // The edge: the stack up to 1119 px, the real table from 1120, where the container is 1052 px.
+  await page.setViewportSize({ width: 1119, height: 900 });
+  await page.goto(to('/history/'));
+  await expect(table, '1119 stacks').toHaveCSS('display', 'grid');
+  await page.setViewportSize({ width: 1120, height: 900 });
+  await page.goto(to('/history/'));
+  await expect(table, '1120 is a table').toHaveCSS('display', 'table');
+  const edge = await scroller();
+  expect(edge.scrollWidth, '1120 .table-scroll overflow').toBe(edge.clientWidth);
+  expect(await scrollWidth(), '1120 scrollWidth').toBe(1120);
 });

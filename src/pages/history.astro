@@ -149,7 +149,7 @@ const baseline = (row: (typeof list)[number]) => list.indexOf(row) * ROW_HEIGHT 
     <section class="history-table" aria-labelledby="revisions-heading">
       <h2 id="revisions-heading">Every revision</h2>
       <div class="table-scroll">
-        {/* The explicit roles repeat the implicit ones so the table keeps its semantics at ≤ 640 px,
+        {/* The explicit roles repeat the implicit ones so the table keeps its semantics below 1120 px,
             where global.css lays each row out as a stacked block (display: flex drops them otherwise). */}
         <table class="history" role="table">
           <caption>
