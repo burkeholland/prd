@@ -131,8 +131,9 @@ Public URL: **https://burkeholland.github.io/prd/**
   (`og:type/site_name/title/description/url/image/locale`) and Twitter (`summary_large_image`)
   tags built from its `title`/`description` props and `src/lib/seo.ts` (`canonicalUrl()`,
   `OG_IMAGE`). A `noindex` prop emits `robots: noindex` and drops the canonical and `og:url`.
-- Preview image `public/og.png` (1200×630, < 200 KB) is rendered from `scripts/og.html`;
-  regenerate with `npm ci && node scripts/make-og.mjs` and commit the PNG.
+- Preview images `public/og.png` (home) and `public/og/*.png` (one per page, from `SOCIAL_CARDS`
+  in `src/lib/seo.ts`; 1200×630, < 200 KB each) are rendered from `scripts/og.html`; regenerate
+  with `npm ci && node scripts/make-og.mjs` and commit the PNGs.
 - `@astrojs/sitemap` writes `dist/sitemap-index.xml` + `sitemap-0.xml` (five pages, canonical
   form, no 404), linked from every page via `<link rel="sitemap">`. No `robots.txt`: crawlers
   never read one under a project-site path.

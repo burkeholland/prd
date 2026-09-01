@@ -1,9 +1,10 @@
 <!doctype html>
 <!--
-  Source of public/og.png (1200×630), rendered by scripts/make-og.mjs — edit this, then regenerate.
-  Inline CSS only, system fonts, no external requests. Colours are the dark theme from
-  src/styles/global.css; the tagline mirrors SITE.tagline in src/lib/site.ts (make-og.mjs
-  re-applies it from there, so site.ts stays the single source of truth).
+  Source of public/og.png and public/og/*.png (1200×630), rendered by scripts/make-og.mjs — edit
+  this, then regenerate. Inline CSS only, system fonts, no external requests. Colours are the dark
+  theme from src/styles/global.css. The script fills #eyebrow, #title and #tagline from SOCIAL_CARDS
+  (src/lib/seo.ts) and SITE (src/lib/site.ts), so those stay the single source of truth; with the
+  eyebrow empty (the home card) it collapses and the layout is exactly the original one.
 -->
 <html lang="en">
   <head>
@@ -61,6 +62,19 @@
         align-items: center;
         justify-content: center;
       }
+      .eyebrow {
+        margin: 0 0 20px;
+        max-width: 860px;
+        font-size: 36px;
+        line-height: 1.2;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #a2a59d;
+      }
+      .eyebrow:empty {
+        display: none;
+      }
       h1 {
         margin: 0;
         max-width: 860px;
@@ -99,7 +113,8 @@
   <body>
     <div class="card">
       <div>
-        <h1>PRD Field Guide</h1>
+        <p class="eyebrow" id="eyebrow"></p>
+        <h1 id="title">PRD Field Guide</h1>
         <p class="tagline" id="tagline">
           How to write a product requirements doc an AI agent can build from — with a real one as the worked example.
         </p>
