@@ -1,7 +1,7 @@
 name: Deploy to GitHub Pages
 
 on:
-  push: # every branch: the build job (checks, unit tests, build, browser suite) runs as CI. Only the deploy job is main-only (see its `if:`).
+  push: # every branch: the build job (checks, unit tests, build) and the three e2e legs (chromium, webkit, firefox) run as CI. Only the deploy job is main-only (see its `if:`).
   workflow_dispatch:
 
 # Pages deploys with the workflow's OIDC token (id-token). No secrets are needed.
@@ -20,9 +20,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # One job builds, runs the Playwright suite (tests/e2e) against that same dist/, and only then
-  # uploads it as the Pages artifact, so the site cannot publish a build the browser suite did not
-  # run against (two jobs building separately let that happen on 2026-08-31).
+  # One build, one artifact, three engines, then publish untouched. `build` runs the checks and
+  # `astro build` once and uploads that dist/ as the `dist` workflow artifact; each `e2e` leg
+  # downloads it and runs the Playwright suite (tests/e2e) against it in one engine; `deploy`
+  # downloads the same artifact and hands it to Pages only after all three legs passed. Nothing
+  # after `build` runs `astro build` again, so the site cannot publish a build the browser suite
+  # did not run against (two jobs building separately let that happen on 2026-08-31).
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -41,38 +44,69 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run build
-      # Cache the browser binary by the locked Playwright version. The `--with-deps` system
-      # libraries are not cached (~20 s).
+      # The one dist/ everything downstream tests and deploys. dist/ holds no dot-files (checked
+      # 2026-09-01), so `include-hidden-files` is not needed; a day of retention outlives the run.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist
+          retention-days: 1
+          if-no-files-found: error
+
+  e2e:
+    name: e2e (${{ matrix.project }})
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false # one engine's red must not hide the others
+      matrix:
+        project: [chromium, webkit, firefox]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The build job's dist/, extracted in place: a single named artifact lands straight in `path`
+      # (no nested folder), so dist/index.html is where `astro preview` expects it.
+      - uses: actions/download-artifact@v7
+        with:
+          name: dist
+          path: dist
+      # Cache the browser binary per engine, keyed by the locked Playwright version (one cache per
+      # engine, not one shared blob each leg overwrites). The `--with-deps` system libraries are
+      # not cached.
       - id: pw
         run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
-      - run: npx playwright install --with-deps chromium
-      # PLAYWRIGHT_PREBUILT makes the suite's webServer serve the dist/ built above instead of
-      # building its own (playwright.config.ts): the tests run against the artifact that deploys.
-      - run: npx playwright test
+          key: playwright-${{ runner.os }}-${{ matrix.project }}-${{ steps.pw.outputs.version }}
+      - run: npx playwright install --with-deps ${{ matrix.project }}
+      # PLAYWRIGHT_PREBUILT makes the suite's webServer serve the downloaded dist/ instead of
+      # building its own (playwright.config.ts): every engine tests the artifact that deploys.
+      # PW_ENGINES=all defines the webkit and firefox projects; without it `--project=webkit` errors.
+      - run: npx playwright test --project=${{ matrix.project }}
         env:
           CI: true
           PLAYWRIGHT_PREBUILT: '1'
-      # The HTML report and the failure traces, kept for a week.
+          PW_ENGINES: all
+      # This leg's HTML report and failure traces, kept for a week; named per engine so the three
+      # uploads do not collide.
       - if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.project }}
           path: |
             playwright-report/
             test-results/
           retention-days: 7
           if-no-files-found: ignore
-      # After the suite passed, never before: a red suite must not leave a deployable artifact.
-      - uses: actions/upload-pages-artifact@v5
-        with:
-          path: dist
 
   deploy:
-    needs: build
+    needs: e2e # the matrix is one dependency: all three legs must pass
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -80,6 +114,15 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # Pages receives exactly the bytes the three engines tested: the build job's artifact,
+      # downloaded and re-wrapped as the Pages artifact. Nothing is rebuilt here.
+      - uses: actions/download-artifact@v7
+        with:
+          name: dist
+          path: dist
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
       - id: deployment
         uses: actions/deploy-pages@v5
       # deploy-pages returning green does not mean the CDN serves the new build yet (on 2026-08-31
