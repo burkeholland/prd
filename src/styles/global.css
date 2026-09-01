@@ -986,15 +986,6 @@ table.history tr.is-current > * {
 .history__badge a {
   color: inherit;
   text-decoration: none;
-  /* ≥ 32 px tap target whose margin box stays the text's line box, so the pill and the table row
-     are no taller (same trick as the diff pages' meta links, #1474). Positioned so the grown box
-     wins the strip it shares with the Revision link's padding above it in the stacked layout
-     (positioned boxes paint in DOM order; the Revision link is positioned too) and the note's text
-     below it. */
-  display: inline-block;
-  padding-block: 0.4em;
-  margin-block: -0.4em;
-  position: relative;
 }
 
 .history__badge a:hover {
