@@ -10,8 +10,10 @@ const to = (path: string) => `${BASE}${path}`;
 const BLOCKS = 14;
 const FIRST_SECTION = 'Mission and stop condition';
 
-// The clipboard API is permission-gated in Chromium; readText() in the page checks the result.
-test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
+// Clipboard permissions are granted per project (playwright.config.ts, chromium only): WebKit rejects
+// `clipboard-write` and Firefox `clipboard-read`, so the tests that read the clipboard skip there.
+const clipboardOnlyInChromium = (browserName: string) =>
+  test.skip(browserName !== 'chromium', 'clipboard permissions are Chromium-only in Playwright');
 
 /** The clipboard text with LF line endings: the Windows clipboard stores text as CRLF. */
 const readClipboard = async (page: Page) =>
@@ -42,7 +44,8 @@ test('/template/ gives each of the 14 skeleton blocks a Copy button named after 
   await expect(buttons.first()).toHaveAttribute('type', 'button');
 });
 
-test('clicking Copy puts the block text on the clipboard, says Copied, then resets', async ({ page }) => {
+test('clicking Copy puts the block text on the clipboard, says Copied, then resets', async ({ page, browserName }) => {
+  clipboardOnlyInChromium(browserName);
   await page.goto(to('/template/'));
 
   const button = page.locator('button.copy-button').first();
@@ -67,7 +70,8 @@ test('clicking Copy puts the block text on the clipboard, says Copied, then rese
   await expect(button).not.toHaveAttribute('data-state');
 });
 
-test('Copy works from the keyboard: focus, Enter', async ({ page }) => {
+test('Copy works from the keyboard: focus, Enter', async ({ page, browserName }) => {
+  clipboardOnlyInChromium(browserName);
   await page.goto(to('/template/'));
 
   const button = page.locator('button.copy-button').first();
@@ -78,7 +82,8 @@ test('Copy works from the keyboard: focus, Enter', async ({ page }) => {
   expect(await readClipboard(page)).toMatch(/^Build the complete \{Product Name\}/);
 });
 
-test('every block copies its own text (the last one is the multi-line Completion skeleton)', async ({ page }) => {
+test('every block copies its own text (the last one is the multi-line Completion skeleton)', async ({ page, browserName }) => {
+  clipboardOnlyInChromium(browserName);
   await page.goto(to('/template/'));
 
   const last = page.locator('button.copy-button').last();

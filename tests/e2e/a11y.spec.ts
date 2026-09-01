@@ -35,7 +35,11 @@ const IMPACTS = ['serious', 'critical', 'moderate', 'minor'] as const;
 
 for (const path of ROUTES) {
   for (const colorScheme of SCHEMES) {
-    test(`axe: ${path} ${colorScheme} has no serious or critical violations`, async ({ page }, testInfo) => {
+    test(`axe: ${path} ${colorScheme} has no serious or critical violations`, async ({ page, browserName }, testInfo) => {
+      test.skip(
+        browserName !== 'chromium',
+        'axe is DOM/ARIA analysis — one engine is enough; Firefox runs it 1.4× slower and times out',
+      );
       await page.emulateMedia({ colorScheme });
       const response = await page.goto(to(path));
       expect(response?.status(), `${path} status`).toBe(path === NOT_FOUND ? 404 : 200);
@@ -85,7 +89,9 @@ const focused = (page: Page) =>
 
 test('keyboard: Tab shows the skip link, Enter lands in main, every nav link is reachable with a focus ring', async ({
   page,
+  browserName,
 }) => {
+  test.skip(browserName === 'webkit', "WebKit skips links in sequential focus navigation (Safari's Tab-to-links is off by default)");
   await page.goto(to('/guide/'));
 
   await page.keyboard.press('Tab');

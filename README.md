@@ -69,6 +69,7 @@ npm run check          astro check (types, 0 errors expected)
 npm test               vitest unit tests (tests/unit) + node:test script tests (scripts/**/*.test.mjs, scripts/check-*.mjs)
 npm run test:unit      vitest alone
 npm run test:e2e       Playwright, Chromium only (tests/e2e) — builds, then runs against preview on 4411 (PREVIEW_PORT overrides)
+                       PW_ENGINES=all adds the opt-in webkit and firefox projects (e.g. `$env:PW_ENGINES = 'all'; npx playwright test --project=webkit`); a few Chromium-only tests (clipboard, axe, page.pdf, WebKit's Tab-to-links) skip there by design
 npx playwright test tests/e2e/a11y.spec.ts   axe-core (WCAG 2.1 AA) on every page, light + dark, plus keyboard path
 npx playwright test tests/e2e/links.spec.ts   every in-site link answers 200 and every #anchor exists on its page
 npx playwright test tests/e2e/template.spec.ts   copy buttons on /template (clipboard, keyboard, other pages have none)

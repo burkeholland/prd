@@ -15,8 +15,10 @@ const FAILED = 'Copy failed — use Download .md';
 // run pays nothing, while a CPU-loaded local run can delay the 3 s timer past a 4 s ceiling.
 const RESET_TIMEOUT = 15_000;
 
-// The clipboard API is permission-gated in Chromium; readText() in the page checks the result.
-test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
+// Clipboard permissions are granted per project (playwright.config.ts, chromium only): WebKit rejects
+// `clipboard-write` and Firefox `clipboard-read`, so the tests that read the clipboard skip there.
+const clipboardOnlyInChromium = (browserName: string) =>
+  test.skip(browserName !== 'chromium', 'clipboard permissions are Chromium-only in Playwright');
 
 /** LF line endings on both sides: the file is CRLF and the Windows clipboard rewrites newlines. */
 const normalise = (text: string) => text.replace(/\r\n/g, '\n');
@@ -50,7 +52,8 @@ test('/sample/ adds Copy the PRD as the third action, after Download .md, and ke
   await expect(status).toHaveText('');
 });
 
-test('clicking Copy the PRD puts the whole gist on the clipboard, says Copied, then resets', async ({ page }) => {
+test('clicking Copy the PRD puts the whole gist on the clipboard, says Copied, then resets', async ({ page, browserName }) => {
+  clipboardOnlyInChromium(browserName);
   await page.goto(to('/sample/'));
   const button = copyButton(page);
   const neighbour = evolvedLink(page);
@@ -78,7 +81,8 @@ test('clicking Copy the PRD puts the whole gist on the clipboard, says Copied, t
   expect(await leftOf(neighbour), 'How it evolved left after the reset').toBe(restingLeft);
 });
 
-test('Copy the PRD works from the keyboard: focus, Enter', async ({ page }) => {
+test('Copy the PRD works from the keyboard: focus, Enter', async ({ page, browserName }) => {
+  clipboardOnlyInChromium(browserName);
   await page.goto(to('/sample/'));
   const button = copyButton(page);
 
