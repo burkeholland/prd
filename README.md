@@ -94,11 +94,12 @@ Public URL: **https://burkeholland.github.io/prd/**
   because `check` runs `astro sync`, which renders the markdown into the
   content-layer cache that `astro build` reuses, so the WebP copies must exist
   before that first render. Measured on a warm browser cache the job takes about
-  TIMING_PLACEHOLDER (the Pages deploy itself 10 s to 3 min). Browser failures
-  appear as annotations on the run and the HTML report is attached to the run
-  as an artifact for a week. Pushes to other branches run the same `build` job
-  as CI and skip the deploy job. No secrets: Pages deploys with the workflow's
-  own OIDC token.
+  65 s — `npm ci` 5 s, `check` 6 s, unit tests 2 s, build 3 s, browser install
+  11 s, browser suite 27 s — and the Pages deploy itself 10 s to 3 min. Browser
+  failures appear as annotations on the run and the HTML report is attached to
+  the run as an artifact for a week. Pushes to other branches run the same
+  `build` job as CI and skip the deploy job. No secrets: Pages deploys with the
+  workflow's own OIDC token.
 - `deploy.yml` pins the actions to their Node 24 majors (`checkout@v7`, `setup-node@v7`,
   `cache@v6`, `upload-artifact@v7`, `upload-pages-artifact@v5`, `deploy-pages@v5`); bump
   them together.
