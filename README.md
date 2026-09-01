@@ -141,6 +141,15 @@ Public URL: **https://burkeholland.github.io/prd/**
 - `deploy.yml` pins the actions to their Node 24 majors (`checkout@v7`, `setup-node@v7`,
   `cache@v6`, `upload-artifact@v7`, `upload-pages-artifact@v5`, `deploy-pages@v5`); bump
   them together.
+- `/build.json` is the build stamp — `{ "sha", "builtAt" }`, prerendered by
+  `src/pages/build.json.ts` from `GITHUB_SHA` (`"local"` outside Actions) and the
+  build clock. After `deploy-pages` the `deploy` job polls the live
+  `/prd/build.json` (cache-busted, every 5 s, up to 3 minutes) until its `sha`
+  is the commit it just deployed, so a green run means the published site *is*
+  that build. A red `deploy` job whose `Verify the live site serves this commit`
+  step failed means Pages is still serving an older build — the log lists each
+  attempt's sha next to the expected one — so re-run the job before suspecting
+  the build.
 - Base path: this is a *project* site, so every URL lives under **`/prd`**. The
   value is set once in `astro.config.mjs` (`base`, next to `site`). Only three
   places read it from there: `withBase()` in `src/lib/base.ts` (reads

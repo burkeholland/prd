@@ -75,9 +75,38 @@ jobs:
     needs: build
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
         uses: actions/deploy-pages@v5
+      # deploy-pages returning green does not mean the CDN serves the new build yet (on 2026-08-31
+      # a green deploy left an older /sample/ live). Poll the build stamp (src/pages/build.json.ts)
+      # until the live site serves this commit, up to 3 minutes, and fail the job if it never does.
+      - name: Verify the live site serves this commit
+        shell: bash
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+          WANT: ${{ github.sha }}
+        run: |
+          : "${PAGE_URL:?deploy-pages returned no page_url}"
+          url="$(printf '%s' "$PAGE_URL" | sed 's:/*$::')/build.json"
+          body=''
+          for attempt in $(seq 1 36); do
+            body="$(curl -fsS "${url}?t=$(date +%s%N)" || true)"
+            got="$(printf '%s' "$body" | jq -r '.sha // empty' 2>/dev/null || true)"
+            if [ -n "$got" ]; then short="${got:0:7}…"; else short='(nothing)'; fi
+            echo "attempt ${attempt}/36: got ${short}, want ${WANT:0:7}…"
+            if [ "$got" = "$WANT" ]; then
+              echo "$url serves $WANT"
+              exit 0
+            fi
+            if [ "$attempt" -lt 36 ]; then sleep 5; fi
+          done
+          echo "::error::$url still does not serve $WANT after 36 attempts (3 minutes): Pages is serving an older build. Re-run this job before suspecting the build."
+          echo "expected sha: $WANT"
+          echo "last body received:"
+          printf '%s\n' "$body"
+          exit 1
