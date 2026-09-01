@@ -62,3 +62,115 @@ const current = history.revisions.find((rev) => rev.version === meta.revision);
     }
   </div>
 </Doc>
+
+<!--
+  Progressive enhancement, this page only: a "Copy the PRD" action beside "Download .md" that puts
+  the raw gist (public/raw/build-the-urlist.md, fetched from the Download link's own href) on the
+  clipboard. Astro bundles the script as a module; without JavaScript or the Clipboard API the
+  button never appears and the page is exactly the card as rendered, Download being the fallback.
+-->
+<script>
+  const RESET = 'Copy the PRD';
+  const links = document.querySelector('ul.source-card__links');
+  const download = links?.querySelector<HTMLAnchorElement>('a[download]');
+  const card = links?.closest('.source-card');
+
+  if (links && download && card && navigator.clipboard?.writeText && typeof fetch === 'function') {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'copy-prd';
+    button.textContent = RESET;
+    const item = document.createElement('li');
+    item.append(button);
+    // Anchored on the Download item, not its position, so the row can change around it.
+    download.closest('li')?.after(item);
+
+    // One polite live region so screen readers hear the result; created up front (a region
+    // added at announce time is not reliably read) and visually hidden, never display:none.
+    const status = document.createElement('p');
+    status.className = 'copy-prd-status';
+    status.setAttribute('role', 'status');
+    status.setAttribute('aria-live', 'polite');
+    card.append(status);
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const show = (text: string, copied: boolean, ms: number) => {
+      button.textContent = text;
+      if (copied) button.dataset.state = 'copied';
+      timer = setTimeout(() => {
+        button.textContent = RESET;
+        delete button.dataset.state;
+      }, ms);
+    };
+
+    button.addEventListener('click', async () => {
+      if (button.getAttribute('aria-busy') === 'true') return;
+      button.setAttribute('aria-busy', 'true');
+      button.textContent = 'Copying…';
+      delete button.dataset.state;
+      clearTimeout(timer);
+      // Cleared first so an identical result (a second copy) is announced again.
+      status.textContent = '';
+      let message: string;
+      try {
+        const response = await fetch(download.href, { cache: 'force-cache' });
+        if (!response.ok) throw new Error(String(response.status));
+        // The gist's bytes as text, line endings untouched (CRLF today).
+        const text = await response.text();
+        await navigator.clipboard.writeText(text);
+        message = `Copied the PRD (${(new TextEncoder().encode(text).length / 1000).toFixed(1)} KB)`;
+        show('Copied', true, 1500);
+      } catch {
+        message = 'Copy failed — use Download .md';
+        show(message, false, 3000);
+      } finally {
+        button.removeAttribute('aria-busy');
+      }
+      status.textContent = message;
+    });
+  }
+</script>
+
+<!--
+  Global: the button and live region are created at runtime, so scoped styles would not reach
+  them. At rest the button reads as one of the card's links (global.css `a` + `.source-card__links a`).
+-->
+<style is:global>
+  .copy-prd {
+    margin: 0;
+    padding: 0;
+    font: inherit;
+    font-weight: 600;
+    color: var(--accent);
+    background: none;
+    border: 0;
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.15em;
+  }
+
+  .copy-prd:hover {
+    text-decoration-thickness: 2px;
+  }
+
+  .copy-prd[data-state='copied'] {
+    color: var(--text-muted);
+  }
+
+  .copy-prd[aria-busy='true'] {
+    cursor: progress;
+  }
+
+  /* Visually hidden, not `hidden`: a display:none live region is never announced. */
+  .copy-prd-status {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+</style>

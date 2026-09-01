@@ -53,6 +53,7 @@ npm run test:e2e       Playwright, Chromium only (tests/e2e) — builds, then ru
 npx playwright test tests/e2e/a11y.spec.ts   axe-core (WCAG 2.1 AA) on every page, light + dark, plus keyboard path
 npx playwright test tests/e2e/links.spec.ts   every in-site link answers 200 and every #anchor exists on its page
 npx playwright test tests/e2e/template.spec.ts   copy buttons on /template (clipboard, keyboard, other pages have none)
+npx playwright test tests/e2e/sample.spec.ts   "Copy the PRD" on /sample (clipboard, keyboard, failure path)
 ```
 
 `build` and `dev` pass `--force` so a change to a remark/rehype plugin is never served from
