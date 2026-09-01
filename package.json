@@ -13,7 +13,8 @@
     "check": "astro check",
     "test": "vitest run && node --test \"scripts/**/*.test.mjs\" \"scripts/check-*.mjs\"",
     "test:unit": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "notes:missing": "node scripts/history-notes-missing.mjs"
   },
   "dependencies": {
     "@astrojs/sitemap": "^3.7.3",
