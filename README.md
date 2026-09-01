@@ -105,12 +105,16 @@ external links followed by their URL; covered by `tests/e2e/print.spec.ts`).
 Performance (Lighthouse; nothing to install, it reuses Playwright's Chromium; run against `npm run preview`):
 `$env:CHROME_PATH = (node -e "console.log(require('playwright').chromium.executablePath())"); npx --yes lighthouse@latest http://localhost:4411/prd/ --chrome-flags="--headless=new" --output=json --output-path=lh.json --only-categories=performance,accessibility,best-practices,seo`
 — add `--preset=desktop` for desktop and `--ignore-status-code` for the 404 page; the `EPERM` on Chrome's temp
-profile at exit is harmless. Measured 2026-08-31 with Lighthouse 13.4.1 (HeadlessChrome 151), mobile and desktop:
-perf 98–100, a11y 98–100, best-practices 100, SEO 100 on every page; the 404 page scores SEO 50 by design (it
-returns 404 and is `noindex`). Never optimise `public/mocks/**` or `public/raw/**` in place — they are byte-verbatim
-copies of the gist and the daily fetch workflow would revert the change; instead `npm run build` (via `prebuild`)
-derives 760/1320-px WebP copies into `public/mocks/derived/` with `scripts/make-mocks.mjs` and `rehype-figures`
-serves them through `<picture>` with the PNG as fallback; the first screenshot loads eagerly.
+profile at exit is harmless. Measured 2026-08-31 with Lighthouse 13.4.1 (HeadlessChrome 151), mobile and desktop, after
+the WebP screenshots, section permalinks and the `/sample` copy button landed: perf 99–100, a11y 98–100, best-practices
+100, SEO 100 on every content page; `/sample` on a phone is 207 KB instead of 1.1 MB (perf 96–98 → 100, the image
+opportunity gone bar a zero-weight "responsive size" note on the 760-px WebPs); the `/history/<n>/` diff pages score
+perf 96 on mobile (throttled layout of a ~4,800-element table, no JS) and SEO 60 because they are `noindex`; the 404
+page scores SEO 50 by design (it returns 404 and is `noindex`). Never optimise `public/mocks/**` or `public/raw/**` in
+place — they are byte-verbatim copies of the gist and the daily fetch workflow would revert the change; instead
+`npm run build` (via `prebuild`) derives 760/1320-px WebP copies into `public/mocks/derived/` with
+`scripts/make-mocks.mjs` and `rehype-figures` serves them through `<picture>` with the PNG as fallback; the first
+screenshot loads eagerly.
 
 ## Deploy
 
