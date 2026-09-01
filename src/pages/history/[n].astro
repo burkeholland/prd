@@ -417,7 +417,9 @@ const description =
   /* Phones: the line-number columns go, so the text column is ≥ 320 px at 390 (≥ 290 at 360) instead
      of 229. Hidden cells leave no slot in the table grid: each row's two remaining cells land in the
      first two grid columns, so the four <col>s are re-mapped — the first two now size the mark and the
-     text, the last two are spanned only by the hunk header (colspan=4) and take nothing. */
+     text, the last two are spanned only by the hunk header (colspan=4) and take nothing. Their width is
+     1px, not 0: WebKit's fixed layout reads a <col> width of 0 as auto and hands them a third of the
+     table each (text column 113 px at 390 instead of 336). */
   @media (max-width: 639.98px) {
     .revision table.diff thead th:nth-child(-n + 2),
     .revision table.diff tr:not(.diff__hunk) > td:nth-child(-n + 2) {
@@ -434,7 +436,7 @@ const description =
 
     .revision .diff__col-mark,
     .revision .diff__col-mark + col {
-      width: 0;
+      width: 1px;
     }
 
     .revision table.diff th,
