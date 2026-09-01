@@ -147,7 +147,10 @@ function badgeGeometry() {
     return plain(range.getBoundingClientRect());
   };
   const row = document.querySelector('tr.is-current')!;
-  row.scrollIntoView({ block: 'center' });
+  // `instant`, not the site's `html { scroll-behavior: smooth }`: the rects and elementFromPoint are read
+  // synchronously below, and CI's Linux Chromium animates a smooth scroll (this box's headless Chromium
+  // applies it at once, so a local pass would not prove the row was in view).
+  row.scrollIntoView({ block: 'center', behavior: 'instant' });
   const marks = document.querySelectorAll('mark.history__badge');
   const mark = marks[0]!;
   const link = mark.querySelector('a')!;
@@ -184,6 +187,10 @@ test('/history/: the "on the sample page" badge link is a ≥ 32 px hit area tha
     await page.setViewportSize(viewport);
     await page.goto(to('/history/'));
     const shipped = await page.evaluate(badgeGeometry);
+    // elementFromPoint returns null for a point outside the viewport, so a row that has not been
+    // scrolled into view would read as "the taps miss": say so first.
+    expect(shipped.row.top, `${label}: the current row is in view before probing`).toBeGreaterThanOrEqual(0);
+    expect(shipped.row.bottom, `${label}: the current row is in view before probing`).toBeLessThanOrEqual(viewport.height);
     expect(shipped.layout, `${label} layout`).toBe(viewport.width >= 1120 ? 'table' : 'grid');
     expect(shipped.marks, `${label}: one badge`).toBe(1);
     expect(shipped.href, `${label}: the badge links to the sample page`).toBe(to('/sample/'));
