@@ -4,11 +4,7 @@ description: "What each part of Build The Urlist does, why it works, and what to
 order: 3
 ---
 
-Burke Holland wrote the sample PRD, [*Build The Urlist*](/sample), as a single instruction to a coding agent: about 3,700 words, seven screenshots, and one order at the top: "Build the complete application in this repository. Work autonomously from start to finish and stop only when the app is complete." It was written to be handed over once, with no follow-up questions, and by Burke's account that is how it went: the agent built the app in one shot, or close to it.
-
-That report is the thesis of this site, and the sample is its proof: every decision the document makes is one the agent does not have to guess at, and guesses are where one-shot builds fail, so a PRD this specific gets built in one pass.
-
-This page walks the sample in order: each of its seventeen sections gets a verbatim excerpt, what it pins down for the agent, why it works, and one line to reuse. The [guide](/guide) names the habits behind those decisions; the [template](/template) gives you the same sections to fill in.
+[The sample](/sample), one section at a time: a verbatim excerpt, what it pins down, why that matters, and one line to steal. [The guide](/guide) names the seven habits these sections show; the [template](/template) turns them into a skeleton to fill in.
 
 ## Mocks
 
@@ -21,7 +17,7 @@ This page walks the sample in order: each of its seventeen sections gets a verba
 > Published List  
 > Published List: QR Code
 
-**What it does** — The [Mocks section](/sample#mocks) opens the document: seven small headings, each followed by a screenshot of the reference app.
+**What it does** — The [Mocks section](/sample#mocks) opens the document: seven small headings, each followed by a screenshot of the reference app. The Urlist the PRD describes already has a reference — an app it calls "the reference" and whose screens these seven screenshots show — so the mocks are the target the agent is given, not what it built.
 
 **Why it works** — A screenshot settles hundreds of layout questions at once: where menu items sit, how tall the vanity field is. Written out, they would take pages and still leave guesses, and every guess is a place the build drifts from what Burke wanted. The headings also name states, not just screens, so error rendering is specified rather than improvised.
 
@@ -70,7 +66,7 @@ This page walks the sample in order: each of its seventeen sections gets a verba
 
 **What it does** — [One sentence](/sample#product) on what the product is, then the rules that give it shape: who can publish, who owns a list, what deletion means, and that the server has the last word.
 
-**Why it works** — Most of the section is about what the product is *not*. "There is no soft delete, restore, tombstone, or anonymous list" names four features an agent would plausibly add; named here, they are decisions it never has to make. Server authority, stated once up front, covers every later write. The first UI string, **"Login to Publish"**, is bold, a convention the gist keeps.
+**Why it works** — Most of the section is about what the product is *not*. "There is no soft delete, restore, tombstone, or anonymous list" names four features an agent would plausibly add; named here, they are decisions it never has to make. Server authority, stated once up front, covers every later write. The first UI string, **"Login to Publish"**, is bold, a convention the sample keeps.
 
 **Steal this** — Write the sentence that says what your product does not have, and list those features by name.
 
@@ -95,14 +91,9 @@ This page walks the sample in order: each of its seventeen sections gets a verba
 
 ## Home page
 
-> - Submit with Enter key. Validation: non-empty after trim; must parse as an absolute `http` or `https` URL … Invalid: apply the invalid input state and show **"That doesn't look like a valid URL"**
-> - On valid submit: add the link to the local draft, clear the input, refocus it, … navigate to `/s/new`.
+> - … Validation: non-empty after trim; must parse as an absolute `http` or `https` URL … Invalid: apply the invalid input state and show **"That doesn't look like a valid URL"**
 
-**What it does** — [Two stacked sections](/sample#home-page-1): headline, two paragraphs, and a hero illustration on top; the "Get Started" band with the first-link input below, down to weights, alignment, and colors.
-
-**Why it works** — Every piece of copy is bold and exact, so the agent copies rather than writes. Validation is an algorithm, not an adjective: trim, parse as absolute http or https, allow a bare domain, require a dot in the host. Where a designer would say large, the gist gives a comparison the agent can check, "visibly the biggest input on the page after the editor's vanity field".
-
-**Steal this** — Put every user-visible string in bold, exactly as it should appear, and write validation as steps rather than adjectives.
+**Same move** — [The home page](/sample#home-page-1) puts every user-visible string in bold and writes validation as steps, trim then parse as an absolute URL, not as an adjective.
 
 *In the guide:* [Habit 2 — Show, don't describe](/guide#2-show-dont-describe).
 
@@ -114,7 +105,7 @@ This page walks the sample in order: each of its seventeen sections gets a verba
 
 **What it does** — [Defines the draft](/sample#draft-and-editor) and the editor page, then two subsections: the [Publish bar](/sample#publish-bar), with its exact messages and enabled rules, and the [Link list editor](/sample#link-list-editor), with row anatomy and in-place editing.
 
-**Why it works** — The gist flags the one interaction that matters most and describes it by what is absent: no input boxes, no borders, no labels, no save buttons. Listing what must not appear stops the agent from building the standard form it would otherwise reach for. The publish bar gives the alias rule as observable behavior, with exact error strings and a 300ms availability check.
+**Why it works** — The sample flags the one interaction that matters most and describes it by what is absent: no input boxes, no borders, no labels, no save buttons. Listing what must not appear stops the agent from building the standard form it would otherwise reach for. The publish bar gives the alias rule as observable behavior, with exact error strings and a 300ms availability check.
 
 **Steal this** — Mark the one interaction that matters most and describe it by what the user must not see as well as what they must.
 
@@ -138,13 +129,9 @@ This page walks the sample in order: each of its seventeen sections gets a verba
 
 > An alias is **one segment** of letters, numbers, and hyphens (normalized to lowercase; 1–50 characters). It is globally unique among **active** lists …
 >
-> If the alias is blank at publication, generate an available 7-character random alias from lowercase letters and digits.
+> … generate an available 7-character random alias from lowercase letters and digits.
 
-**What it does** — [Defines an alias](/sample#aliases-and-publication) precisely: character set, case, length, uniqueness scope, what happens when it is blank, and when publishing is blocked.
-
-**Why it works** — Numbers instead of adjectives, again: 1–50 characters, 7 characters when generated, lowercase letters and digits. An agent told to generate something short and random would pick a length and an alphabet by itself; here there is nothing left to pick. Uniqueness is scoped to *active* lists, matching the Product rule that deletion frees the alias. It also puts validation on the server and removes a confirmation modal the agent might add out of caution.
-
-**Steal this** — Define every identifier with a character set, a length range, and a uniqueness scope.
+**Same move** — [The alias definition](/sample#aliases-and-publication) uses numbers instead of adjectives, 1–50 characters, 7 when generated, lowercase letters and digits, and leaves the agent nothing to pick.
 
 *In the guide:* [Habit 5 — Be exact where exactness matters](/guide#5-be-exact-where-exactness-matters).
 
@@ -158,7 +145,7 @@ This page walks the sample in order: each of its seventeen sections gets a verba
 
 **What it does** — [A login modal](/sample#login-and-ownership) with three provider buttons that never call a real provider, backed by mock identities in SQLite and a server-verifiable session cookie.
 
-**Why it works** — Real OAuth would have stalled the build on credentials the agent does not have. The gist replaces it with a mock specified tightly enough (at least two distinct users with stable IDs) that every login-dependent flow can still be built and tested. Ownership as the (user ID, provider) pair is a data-model decision made for the agent in one sentence, and "401 on update/delete" gives the failure mode a testable status code.
+**Why it works** — Real OAuth would have stalled the build on credentials the agent does not have. The sample replaces it with a mock specified tightly enough (at least two distinct users with stable IDs) that every login-dependent flow can still be built and tested. Ownership as the (user ID, provider) pair is a schema decision made for the agent in one sentence, and "401 on update/delete" gives the failure mode a testable status code.
 
 **Steal this** — Replace a blocking dependency with a mock specified precisely enough that everything downstream can still be finished and tested.
 
@@ -166,53 +153,33 @@ This page walks the sample in order: each of its seventeen sections gets a verba
 
 ## My Lists
 
-> - While loading: 3 skeleton tiles. If the request fails, show an empty grid without error text.
+> - While loading: 3 skeleton tiles. …
 >
 > There is **no Deleted section and no Restore action**.
 
-**What it does** — [A login-only grid](/sample#my-lists) of list tiles with a column count per breakpoint, a "Create new list" tile first, a link-count tag on each list, and defined loading and failure states.
-
-**Why it works** — The grid is written in numbers: 1 column on mobile, 2 on tablet, 3 on desktop, 4 on widescreen, so responsiveness is not a matter of taste. Loading and failure are both spelled out: states are part of the feature, and an agent left alone will skip them. The last line is an exclusion in bold; most list pages have a trash, and this sentence stands between that habit and Burke's product.
-
-**Steal this** — Give every grid its loading state, its empty or failure state, and its column count per breakpoint.
+**Same move** — [My Lists](/sample#my-lists) is written in numbers, 1 to 4 columns by breakpoint and 3 skeleton tiles, then states an invariant as a rule: no Deleted section, no Restore action.
 
 ## Delete
 
 > Clicking it opens a danger confirm modal with title **"Delete this list?"** and body **"The url {vanity} will be released for others to use."** …
 >
-> On confirm: permanently delete the list (content, links, and alias), reset the editor state, and navigate to `/s/new`. There is no restore.
+> … There is no restore.
 
-**What it does** — [One paragraph](/sample#delete): where the button is, its label, what the confirm modal says, what gets destroyed, and where the user lands afterwards.
-
-**Why it works** — Nothing is left open: the copy is exact down to the `{vanity}` placeholder, the scope of deletion is enumerated, and the post-action navigation is stated. It repeats an exclusion already made in Product, "There is no restore.", so an agent reading this section alone gets it right. The delete icon on a link row removes it "with **no confirmation**": the gist decides where confirmation belongs rather than leaving the agent one policy for everywhere.
-
-**Steal this** — For every destructive action, write the exact confirmation copy, what exactly is destroyed, and where the user lands afterwards.
+**Same move** — [Delete](/sample#delete) puts the exact user-visible strings in bold, down to the `{vanity}` placeholder, and restates the invariant where the agent reads it: there is no restore.
 
 ## Public list
 
-> While loading show a large primary-colored H2 reading **"Loading {vanity}"** followed by 5 skeleton link rows.
->
-> …
->
 > When the alias does not resolve to an active list, show the not-found state instead: … H2 **"We couldn't find that Urlist"**, and H3 **"But don't be sad! That means {vanity} is still available."** …
 
-**What it does** — [The public page](/sample#public-list): a loading state, the success layout (heading, share row, List/QR toggle, read-only cards, a "Report this list" mailto), and a not-found state with its own copy.
-
-**Why it works** — Share links are URL templates, so parameter names, encoding, and the canonical `https://theurlist.com/{vanity}` are not the agent's to invent. The QR code is specified by numbers: 4x module scale, `#121212` on `#F9FAFC`, medium error correction. Read-only cards are defined as a diff against the editor rows, "no grip, no delete, no editing". Not-found gets copy, a call to action, and one more exclusion: no tombstone.
-
-**Steal this** — Give URLs, colors, and sizes as literal values, and describe a variant of an existing component as a diff against it.
+**Same move** — [The public list](/sample#public-list) spells out every state in exact bold strings, not-found included, and gives the rest as numbers: 5 skeleton rows, a 4x QR module scale, `#121212` on `#F9FAFC`.
 
 ## Theme, responsive UI, and accessibility
 
-> Meet WCAG 2.2 AA, including full keyboard operation, reduced-motion support, sensible focus management, and announced status/error changes. In-place editable text in link rows must be reachable with Tab, have an accessible name, and show a visible focus indicator.
+> Meet WCAG 2.2 AA, including full keyboard operation, reduced-motion support, sensible focus management, and announced status/error changes. …
 >
 > Show truthful loading, empty, success, blocked, and error states. …
 
-**What it does** — [Three themes](/sample#theme-responsive-ui-and-accessibility) with a named storage key, a 320 CSS pixel floor, an accessibility standard, and a states rule for the whole app.
-
-**Why it works** — The accessibility bar is a standard the agent already knows how to meet, WCAG 2.2 AA, followed by the behaviors that matter in this app, above all the in-place editable text a naive implementation would leave unreachable by keyboard. Either alone would leave a guess; together they leave none. The responsive requirement is a number and a testable symptom, "no page-level horizontal scrolling", and the theme instruction pre-empts the wrong-theme flash before first paint.
-
-**Steal this** — Cite the accessibility standard, then list the concrete behaviors in your app that would fail it.
+**Same move** — [The theme and accessibility rules](/sample#theme-responsive-ui-and-accessibility) state invariants for the whole app, WCAG 2.2 AA and truthful states everywhere, and give a number, a 320 CSS pixel floor, not an adjective.
 
 ## Storage and security
 
@@ -220,13 +187,9 @@ This page walks the sample in order: each of its seventeen sections gets a verba
 >
 > …
 >
-> Treat user text and fetched metadata as untrusted when rendering, prevent stored/reflected script execution, encode share parameters, apply CSRF protection, and keep internals out of errors.
+> Treat user text and fetched metadata as untrusted when rendering, …
 
-**What it does** — [How data is kept](/sample#storage-and-security): migrations, foreign keys, transactions on four named operations, hardening rules, and a test-only reset endpoint at `POST /__test/reset`.
-
-**Why it works** — Naming the four operations that need transactions gives the agent nothing to weigh. The security paragraph is a checklist of checks, and it calls out fetched metadata as untrusted, the input an agent is most likely to trust. The reset endpoint is test infrastructure specified as a product requirement, with a path and a status code, so browser tests can start clean.
-
-**Steal this** — Name the operations that need transactions, the inputs that are untrusted, and the test hooks the suite will need.
+**Same move** — [Storage and security](/sample#storage-and-security) states invariants as rules, not advice: foreign keys on, transactions on four named operations, fetched metadata treated as untrusted alongside user text.
 
 *In the guide:* [Habit 6 — State the invariants the code must never violate](/guide#6-state-the-invariants-the-code-must-never-violate).
 
@@ -266,13 +229,11 @@ This page walks the sample in order: each of its seventeen sections gets a verba
 
 Each of these techniques removes a class of decisions the agent would otherwise make alone, and the fewer of those there are, the closer the build gets to one shot.
 
-- **Exact strings in bold.** Every user-visible string in bold, exactly as it should render: Product, Routes, Home page, Draft and editor, My Lists, Delete, Public list.
-- **Numbers instead of adjectives.** 300ms, 1–50 characters, 320 CSS pixels, 2 MiB: Home page, Draft and editor, Live metadata, Aliases and publication, My Lists, Public list, Theme, responsive UI, and accessibility.
+- **Exact strings in bold.** See *Same move* under Home page, Delete, and Public list.
+- **Numbers instead of adjectives.** See *Same move* under Aliases and publication, My Lists, Public list, and Theme, responsive UI, and accessibility.
 - **Tables and chains for precedence.** The route table with its priority rule; the metadata fallback chains: Routes, Live metadata.
 - **Naming what is not in the product.** No ORM, no anonymous publishing, no soft delete, no restore, no tombstone: Stack and design, Product, Draft and editor, My Lists, Delete, Public list.
 - **Server authority.** Revalidate on every write, ignore client-supplied owner IDs, trust only the server session: Product, Aliases and publication, Login and ownership, Storage and security.
 - **States required everywhere.** Loading, empty, error, and not-found states specified per feature, then required globally: Draft and editor, My Lists, Public list, Theme, responsive UI, and accessibility.
 - **Tests as the definition of done.** Unit-test subjects, an end-to-end list naming flows and strings, and an exit step that runs them: Scripts, tests, and documentation, Completion.
 - **A self-maintained checklist.** The agent writes its own spec first, checks items only with evidence, and reconciles it before finishing: Technical specification and checklist, Completion.
-
-*In the guide:* [Habit 6 — State the invariants the code must never violate](/guide#6-state-the-invariants-the-code-must-never-violate).
