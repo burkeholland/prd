@@ -326,3 +326,14 @@ Read it once the way the agent will — front to back, no questions.
 - [ ] The unit tests and the browser tests each have a named list of what they cover.
 - [ ] The completion checks are commands and journeys the agent can run.
 - [ ] Nothing says TBD, and every `{…}` placeholder is gone.
+
+## Hand it to an agent
+
+The hand-over itself is four steps.
+
+1. **Put the PRD in an empty repository.** The sample's first line assumes one: "Build the complete application in this repository." Empty, so the document is the agent's only source of truth.
+2. **Start an agent there that can edit files and run commands, and give it the PRD as its instruction** — the whole file, not a summary; point it at the file or paste it.
+3. **Let it run to the end.** The PRD says to stop only when the app is complete. If it stops with a question, the answer belongs in the PRD, not in the chat: fix the document and start again ([habit 1](/guide#1-start-with-the-mission-and-the-stop-condition)).
+4. **Run the Completion checks yourself.** The PRD's last section is the agent's exit list, and yours. Run the same commands, walk the same journeys, and read the report against the checklist above.
+
+The worked example of all four is [the sample](/sample), ending in [its Completion section](/sample#completion).
