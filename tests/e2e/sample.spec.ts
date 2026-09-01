@@ -10,6 +10,10 @@ const to = (path: string) => `${BASE}${path}`;
 const RAW = 'public/raw/build-the-urlist.md';
 const RESET = 'Copy the PRD';
 const FAILED = 'Copy failed — use Download .md';
+// sample.astro resets the label on fixed timers (1500 ms after Copied, 3000 ms after a failure). The
+// ceiling is generous on purpose: `expect` polls and returns as soon as the label changes, so a passing
+// run pays nothing, while a CPU-loaded local run can delay the 3 s timer past a 4 s ceiling.
+const RESET_TIMEOUT = 15_000;
 
 // The clipboard API is permission-gated in Chromium; readText() in the page checks the result.
 test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
@@ -59,7 +63,7 @@ test('clicking Copy the PRD puts the whole gist on the clipboard, says Copied, t
   await expect(status).toHaveText(/^Copied the PRD \(\d+\.\d KB\)$/);
   test.info().annotations.push({ type: 'status text', description: (await status.textContent()) ?? '' });
 
-  await expect(button).toHaveText(RESET, { timeout: 2500 });
+  await expect(button).toHaveText(RESET, { timeout: RESET_TIMEOUT });
   await expect(button).not.toHaveAttribute('data-state');
 });
 
@@ -87,7 +91,7 @@ test('when the gist cannot be fetched the button says so and leaves Download .md
   await expect(statusRegion(page)).toHaveText(FAILED);
   await expect(page.locator('.source-card__links a[download]')).toHaveText('Download .md');
 
-  await expect(button).toHaveText(RESET, { timeout: 4000 });
+  await expect(button).toHaveText(RESET, { timeout: RESET_TIMEOUT });
 });
 
 test('/sample/ ships exactly one script and no template Copy buttons; /guide/ and /walkthrough/ ship none', async ({ page }) => {
