@@ -104,6 +104,76 @@ test('the biggest diff wraps without horizontal scroll at 320px', async ({ page 
   expect(scrollWidth).toBeLessThanOrEqual(320);
 });
 
+// The meta line as rects, for the hit-area tests: the paragraph, its line-height, the `time`'s glyphs,
+// the badge and every link — the link's box (its hit area) beside the Range rect of its text (the
+// glyphs the box grew around), plus whether five taps on those glyphs all land on that link: the
+// centre, 1 px inside the top and bottom edges, 3 px inside the left and right ones (Chromium lets the
+// space after a link claim about a pixel of its last glyph). Passed to page.evaluate, so it must not
+// reach outside itself.
+function metaGeometry() {
+  const plain = (r: DOMRect) => ({ x: r.x, y: r.y, width: r.width, height: r.height, top: r.top, bottom: r.bottom, left: r.left, right: r.right });
+  const box = (el: Element) => plain(el.getBoundingClientRect());
+  const glyphs = (el: Element) => {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    return plain(range.getBoundingClientRect());
+  };
+  const meta = document.querySelector('p.meta')!;
+  const badge = document.querySelector('p.meta .badge');
+  const links = Array.from(meta.querySelectorAll('a'), (a) => {
+    const text = glyphs(a);
+    const probes: [number, number][] = [
+      [text.left + text.width / 2, text.top + text.height / 2],
+      [text.left + text.width / 2, text.top + 1],
+      [text.left + text.width / 2, text.bottom - 1],
+      [text.left + 3, text.top + text.height / 2],
+      [text.right - 3, text.top + text.height / 2],
+    ];
+    return {
+      label: a.textContent?.trim() ?? '',
+      box: box(a),
+      text,
+      tapsHit: probes.every(([x, y]) => document.elementFromPoint(x, y)?.closest('a') === a),
+    };
+  });
+  return {
+    scrollWidth: document.documentElement.scrollWidth,
+    meta: box(meta),
+    lineHeight: parseFloat(getComputedStyle(meta).lineHeight),
+    time: glyphs(meta.querySelector('time')!),
+    badge: badge ? box(badge) : null,
+    links,
+    navTop: document.querySelector('nav.revision__nav')!.getBoundingClientRect().top,
+  };
+}
+type Rect = ReturnType<typeof metaGeometry>['meta'];
+type MetaLink = ReturnType<typeof metaGeometry>['links'][number];
+const middle = (r: Rect) => r.top + r.height / 2;
+const intersects = (a: Rect, b: Rect) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+// The hit-area padding is cancelled by its negative margin, so the paragraph is still an exact
+// number of line boxes tall — however many lines the reader's font needs (CI's DejaVu Sans is ≈ 8 %
+// wider than Segoe UI and wraps the badged meta line at 768 px; Windows does not).
+const expectWholeLines = (meta: ReturnType<typeof metaGeometry>, label: string) => {
+  const lines = meta.meta.height / meta.lineHeight;
+  expect(lines, `${label}: p.meta is a whole number of line boxes`).toBeCloseTo(Math.round(lines), 1);
+  expect(Math.round(lines), `${label}: at least one line`).toBeGreaterThanOrEqual(1);
+};
+
+// "View on GitHub" and the badge link sharing the meta line: side by side (their glyph rects overlap
+// vertically) the two grown hit rects must not intersect. Stacked — a wider font pushes the badge onto
+// the next line — they sit on the line pitch, where two ≥ 32 px rects cannot help meeting in the gap
+// between the lines: then the badge's rect must at least start below the "View on GitHub" glyphs (the
+// taps-hit checks prove a tap on either link's text still lands on that link).
+const expectCoexist = (gh: MetaLink, sample: MetaLink, label: string) => {
+  const sameLine = gh.text.top < sample.text.bottom && sample.text.top < gh.text.bottom;
+  if (sameLine) {
+    expect(intersects(gh.box, sample.box), `${label}: hit rects on one line must not intersect`).toBe(false);
+  } else {
+    expect(sample.box.top, `${label}: stacked, badge hit rect below the "View on GitHub" glyphs`).toBeGreaterThan(gh.text.bottom - 1);
+  }
+};
+
 test('at 390px the diff drops the line numbers for a ≥ 320 px text column, and a tappable nav follows the table', async ({
   page,
 }) => {
@@ -146,12 +216,90 @@ test('at 390px the diff drops the line numbers for a ≥ 320 px text column, and
   expect(geometry.linkHeights.length).toBe(6);
   for (const height of geometry.linkHeights) expect(height, 'nav link tap target').toBeGreaterThanOrEqual(32);
 
+  // The meta line wraps here (2 lines / 54.91 px on Windows at 390: 2 × 1.7 × 16.15) and keeps its
+  // whole-line height; "View on GitHub" on the last is a ≥ 32 px hit area grown equally above and
+  // below its glyphs (21 px on Windows), and stops short of the nav row under it.
+  const meta390 = await page.evaluate(metaGeometry);
+  expectWholeLines(meta390, 'at 390');
+  const github390 = meta390.links.find((link) => link.label === 'View on GitHub')!;
+  expect(github390.box.height, '"View on GitHub" hit area at 390').toBeGreaterThanOrEqual(32);
+  expect(Math.abs(middle(github390.box) - middle(github390.text)), 'hit area centred on the glyphs').toBeLessThan(1);
+  expect(github390.box.bottom, 'hit area clear of the nav row').toBeLessThan(meta390.navTop);
+  expect(github390.tapsHit).toBe(true);
+
   // Back at desktop width the four columns are back, the number columns at their 3.6em.
   await page.setViewportSize({ width: 1280, height: 900 });
   await expect(table.locator('thead th').nth(0)).toBeVisible();
   await expect(table.locator('thead th').nth(1)).toBeVisible();
   const colWidth = await page.evaluate(() => document.querySelector('col.diff__col-num')!.getBoundingClientRect().width);
   expect(colWidth, 'col.diff__col-num at 1280').toBeGreaterThan(40);
+  // ... and the meta line is whole lines again (1 line / 27.45 px on Windows at 1280), the hit area
+  // still ≥ 32 with nothing scrolling sideways.
+  const meta1280 = await page.evaluate(metaGeometry);
+  expect(meta1280.scrollWidth, 'page scrollWidth at 1280').toBe(1280);
+  expectWholeLines(meta1280, 'at 1280');
+  expect(meta1280.links.find((link) => link.label === 'View on GitHub')!.box.height).toBeGreaterThanOrEqual(32);
+});
+
+test('in the meta line, "View on GitHub" and the badge link are ≥ 32 px hit areas that leave the text, the line and the badge in place', async ({
+  page,
+}) => {
+  test.skip(count < 3, 'fewer than 3 revisions');
+  // Tablet portrait, where the QA pass measured them (#1458): on Windows the meta line is 1 line /
+  // 27.45 px (1.7 × 16.15) with "View on GitHub" a 112 × 21 px link, the badge 230 × 24.56 around a
+  // 213 × 20 link; a wider font may wrap it, so the height is asserted as whole lines.
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await page.goto(to('/history/3/'));
+  const tablet = await page.evaluate(metaGeometry);
+  expect(tablet.scrollWidth).toBe(768);
+  expectWholeLines(tablet, 'at 768 on /history/3/');
+  expect(tablet.links.map((link) => link.label)).toEqual(['View on GitHub']);
+  const github = tablet.links[0]!;
+  expect(github.box.height, '"View on GitHub" hit area').toBeGreaterThanOrEqual(32);
+  // The text stayed put: its glyphs sit a whole number of lines below the date's (0 on Windows), the
+  // box is centred on them and no wider than them, and it ends above the nav row.
+  expect(github.text.height, 'the glyphs, not the box, are text-height').toBeLessThan(32);
+  const offset = (github.text.top - tablet.time.top) / tablet.lineHeight;
+  expect(offset, 'glyphs on a line of the meta paragraph').toBeCloseTo(Math.round(offset), 1);
+  expect(Math.round(offset)).toBeGreaterThanOrEqual(0);
+  expect(Math.abs(middle(github.box) - middle(github.text)), 'hit area centred on the glyphs').toBeLessThan(1);
+  expect(Math.abs(github.box.width - github.text.width), 'no horizontal padding').toBeLessThan(0.5);
+  expect(github.box.bottom).toBeLessThan(tablet.navTop);
+  expect(github.tapsHit).toBe(true);
+
+  // The published revision: the badge's link too, with the pill itself (line-height tall, 0.6em of
+  // padding each side of the text) exactly as it was and the hit area centred on it. The line is still
+  // whole line boxes (1 / 27.45 px on Windows; CI's wider font wraps the badge onto a second).
+  await page.goto(to(`/history/${count}/`));
+  const badged = await page.evaluate(metaGeometry);
+  expectWholeLines(badged, 'at 768 with the badge');
+  expect(badged.badge).not.toBeNull();
+  const badge = badged.badge!;
+  expect(badge.height, '.badge height (24.56 on main)').toBeCloseTo(24.56, 1);
+  expect(badged.links.map((link) => link.label)).toEqual(['View on GitHub', 'the version on the sample page']);
+  const [gh, sample] = badged.links as [MetaLink, MetaLink];
+  expect(sample.box.height, 'badge link hit area').toBeGreaterThanOrEqual(32);
+  expect(gh.box.height).toBeGreaterThanOrEqual(32);
+  expect(Math.abs(badge.width - (sample.text.width + 2 * 0.6 * 14.45)), '.badge width is its text + padding').toBeLessThan(0.5);
+  expect(sample.text.top).toBeGreaterThan(badge.top);
+  expect(sample.text.bottom).toBeLessThan(badge.bottom);
+  expect(Math.abs(middle(sample.box) - middle(badge)), 'hit area centred on the pill').toBeLessThan(1);
+  expect(sample.box.bottom).toBeLessThan(badged.navTop);
+  expectCoexist(gh, sample, 'at 768');
+  for (const link of badged.links) expect(link.tapsHit, `taps on "${link.label}"`).toBe(true);
+
+  // Phone: on Windows the meta wraps to two lines and "View on GitHub" shares the second with the
+  // badge (side by side); a wider font stacks them. Either way both hit areas stay ≥ 32 px and tappable.
+  await page.setViewportSize({ width: 390, height: 844 });
+  const phone = await page.evaluate(metaGeometry);
+  expect(phone.scrollWidth).toBe(390);
+  const [gh390, sample390] = phone.links as [MetaLink, MetaLink];
+  for (const link of phone.links) {
+    expect(link.box.height, `"${link.label}" hit area at 390`).toBeGreaterThanOrEqual(32);
+    expect(link.tapsHit, `taps on "${link.label}" at 390`).toBe(true);
+  }
+  expectCoexist(gh390, sample390, 'at 390');
+  expect(Math.max(gh390.box.bottom, sample390.box.bottom)).toBeLessThan(phone.navTop);
 });
 
 test('the sitemap lists no revision page', async ({ request }) => {
