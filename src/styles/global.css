@@ -176,6 +176,11 @@ samp {
 }
 
 .brand {
+  /* Block padding with a matching negative margin: a ≥ 32 px tap target (task #1475) whose margin
+     box stays the text's height, so the header is no taller at any width (baseline alignment and
+     the stacked phone layout both size the row by the margin box). */
+  padding-block: 0.25rem;
+  margin-block: -0.25rem;
   font-weight: 700;
   font-size: 1.05rem;
   color: var(--text);
@@ -213,20 +218,24 @@ samp {
   border-bottom-color: var(--accent);
 }
 
-@media (max-width: 639.98px) {
+@media (max-width: 767.98px) {
   .site-header__inner {
     flex-direction: column;
     align-items: flex-start;
     padding-block: 0.75rem;
   }
 
-  /* Phones: one swipeable row of nav items instead of three wrapped ones. Both edges fade: the
-     right-edge fade says "more" and the list's end padding keeps the last item clear of it once
-     scrolled to the end; the left-edge fade keeps a pre-scrolled or swiped row from cutting its
-     first visible item mid-word (task #1436). The row bleeds through the page gutter to the
-     viewport edge (start padding = the gutter, matching negative margin) so Home still lines up
-     with the brand at scrollLeft 0 while the left fade sits on pixels that are actually on screen;
-     scroll-padding lands a snapped or `scroll-initial-target` item clear of that fade.
+  /* Phones and landscape phones (up to 767 px, task #1475: at 640–740 the wrapped list took two
+     rows and the header 145 px — 40 % of a 360 px-tall screen): one swipeable row of nav items
+     instead of two or three wrapped ones. Where the six labels already fit the row, the `ul` simply
+     does not overflow and this is a plain nav row: the right fade sits over the list's end padding
+     with nothing under it and the left fade stays at opacity 0. Both edges fade: the right-edge
+     fade says "more" and the list's end padding keeps the last item clear of it once scrolled to
+     the end; the left-edge fade keeps a pre-scrolled or swiped row from cutting its first visible
+     item mid-word (task #1436). The row bleeds through the page gutter to the viewport edge (start
+     padding = the gutter, matching negative margin) so Home still lines up with the brand at
+     scrollLeft 0 while the left fade sits on pixels that are actually on screen; scroll-padding
+     lands a snapped or `scroll-initial-target` item clear of that fade.
      The scrollbar is hidden: on a phone it is an overlay anyway, and a classic one would add its own
      height to the header. Block padding with a matching negative margin gives the focus ring room
      inside the scroll container without adding to the header's height. */

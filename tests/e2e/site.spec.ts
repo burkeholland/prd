@@ -168,7 +168,7 @@ test('home on a phone (390×844): one-row header under 110px, no sideways scroll
   await expect(page.locator('nav.site-nav a')).toHaveCount(6);
 });
 
-test('phone nav (390×844): the row starts with the current page\'s item in view, and Home stays at 0', async ({
+test('phone nav (390×844, and 640–767 e.g. 700×400 / 760×400): one swipeable row that starts with the current page\'s item in view, Home at 0; 768 keeps the wrapped list', async ({
   page,
 }) => {
   // Chromium-only progressive enhancement (`scroll-initial-target: nearest`, Chromium 133+); Safari and
@@ -186,6 +186,20 @@ test('phone nav (390×844): the row starts with the current page\'s item in view
     /** The left-edge fade, `.site-nav::before`; `left` is where it starts on the page. */
     fade: { left: number; width: number; opacity: number };
     scrollWidth: number;
+    /** `.site-header` height and the number of distinct nav-item rows. */
+    header: number;
+    navRows: number;
+    /** Distinct `li` tops, ascending (two entries when the wrapped list takes two rows). */
+    rowTops: number[];
+    /** One `li`'s height and the list's row gap: their sum is the pitch of a second row. */
+    liHeight: number;
+    rowGap: number;
+    /** The list's scrollable vs visible width: equal when the six labels fit one row. */
+    ul: { scrollWidth: number; clientWidth: number };
+    /** `content` of the two fades, `none` where the phone block does not apply. */
+    before: string;
+    after: string;
+    brandHeight: number;
   };
   const geometry = () =>
     page.evaluate(
@@ -199,23 +213,35 @@ test('phone nav (390×844): the row starts with the current page\'s item in view
               const ul = nav.querySelector('ul')!;
               const list = ul.getBoundingClientRect();
               const current = nav.querySelector('a[aria-current="page"]')!.getBoundingClientRect();
-              const cut = Array.from(ul.querySelectorAll('li'), (li) => li.getBoundingClientRect()).find(
-                (li) => li.left < list.left && li.right > list.left,
-              );
+              const items = Array.from(ul.querySelectorAll('li'), (li) => li.getBoundingClientRect());
+              const cut = items.find((li) => li.left < list.left && li.right > list.left);
+              const rowTops = [...new Set(items.map((li) => Math.round(li.top)))]
+                .sort((a, b) => a - b)
+                .map((rounded) => items.find((li) => Math.round(li.top) === rounded)!.top);
               const fade = getComputedStyle(nav, '::before');
+              const brand = document.querySelector('.brand')!.getBoundingClientRect();
               resolve({
                 scrollLeft: ul.scrollLeft,
                 list: { left: list.left, right: list.right },
                 current: { left: current.left, right: current.right },
                 cut: cut ? { left: cut.left, right: cut.right } : null,
                 homeLeft: nav.querySelector('a')!.getBoundingClientRect().left,
-                brandLeft: document.querySelector('.brand')!.getBoundingClientRect().left,
+                brandLeft: brand.left,
                 fade: {
                   left: nav.getBoundingClientRect().left + parseFloat(fade.left),
                   width: parseFloat(fade.width),
                   opacity: parseFloat(fade.opacity),
                 },
                 scrollWidth: document.documentElement.scrollWidth,
+                header: document.querySelector('.site-header')!.getBoundingClientRect().height,
+                navRows: rowTops.length,
+                rowTops,
+                liHeight: items[0].height,
+                rowGap: parseFloat(getComputedStyle(ul).rowGap),
+                ul: { scrollWidth: ul.scrollWidth, clientWidth: ul.clientWidth },
+                before: fade.content,
+                after: getComputedStyle(nav, '::after').content,
+                brandHeight: brand.height,
               });
             }),
           ),
@@ -252,6 +278,79 @@ test('phone nav (390×844): the row starts with the current page\'s item in view
   expect(home.homeLeft, '/ Home link left edge').toBeCloseTo(17, 1);
   expect(home.homeLeft, '/ Home lines up with the brand').toBeCloseTo(home.brandLeft, 1);
   expect(home.fade.opacity, '/ left fade hidden at scrollLeft 0').toBe(0);
+  // The brand link is a thumb-sized target (task #1475) without making the header taller: 97.83 at 390
+  // is the height from before it had any block padding.
+  expect(home.brandHeight, '/ 390: a.brand height').toBeGreaterThanOrEqual(32);
+  expect(home.header, '/ 390: .site-header height (unchanged)').toBeCloseTo(97.83, 0);
+
+  // 640–767 (landscape phones, task #1475): the same one swipeable row. Before, the wrapped list took two
+  // rows here and the header was 144.9 px — 40 % of a 360 px-tall screen. The lit item still lands clear
+  // of the left fade and the document never scrolls sideways (the list scrolls inside itself).
+  await page.setViewportSize({ width: 700, height: 400 });
+  for (const path of ['/template/', '/walkthrough/']) {
+    await page.goto(to(path));
+    const g = await geometry();
+    expect(g.header, `${path} 700: .site-header height (one nav row, was 144.9)`).toBeLessThan(110);
+    expect(g.header, `${path} 700: .site-header height (the 390 px value)`).toBeCloseTo(97.83, 0);
+    expect(g.navRows, `${path} 700: nav rows`).toBe(1);
+    expect(g.ul.scrollWidth, `${path} 700: the six labels do not fit, the row scrolls`).toBeGreaterThan(g.ul.clientWidth);
+    expect(g.current.left, `${path} 700: current item clear of the left fade`).toBeGreaterThanOrEqual(g.list.left + 40);
+    expect(g.before, `${path} 700: left fade present`).not.toBe('none');
+    expect(g.after, `${path} 700: right fade present`).not.toBe('none');
+    expect(g.scrollWidth, `${path} 700: no horizontal scroll`).toBe(700);
+    expect(g.brandHeight, `${path} 700: a.brand height`).toBeGreaterThanOrEqual(32);
+  }
+  await page.goto(to('/'));
+  const home700 = await geometry();
+  expect(home700.scrollLeft, '/ 700: row scrollLeft').toBe(0);
+  expect(home700.homeLeft, '/ 700: Home lines up with the brand').toBeCloseTo(home700.brandLeft, 1);
+  expect(home700.fade.opacity, '/ 700: left fade hidden at scrollLeft 0').toBe(0);
+
+  // 760, the last width before the list wraps: the row needs its start gutter, 1rem gaps and 2.5rem end
+  // padding, so on Windows fonts the six labels are still 7 px short of fitting (737 vs 730) and the row
+  // scrolls; wider Linux fonts overflow more. Either way it is one row under 110 px with Home at the brand.
+  await page.setViewportSize({ width: 760, height: 400 });
+  await page.goto(to('/'));
+  const home760 = await geometry();
+  expect(home760.header, '/ 760: .site-header height').toBeLessThan(110);
+  expect(home760.navRows, '/ 760: nav rows').toBe(1);
+  expect(home760.after, '/ 760: right fade present').not.toBe('none');
+  expect(
+    home760.ul.scrollWidth,
+    '/ 760: the row still scrolls — the six labels are 7 px short of fitting on Windows fonts (737 vs 730)',
+  ).toBeGreaterThan(home760.ul.clientWidth);
+  expect(home760.scrollLeft, '/ 760: row scrollLeft').toBe(0);
+  expect(home760.homeLeft, '/ 760: Home lines up with the brand').toBeCloseTo(home760.brandLeft, 1);
+  expect(home760.fade.opacity, '/ 760: left fade hidden at scrollLeft 0').toBe(0);
+  expect(home760.scrollWidth, '/ 760: no horizontal scroll').toBe(760);
+
+  // 768 (portrait tablet): untouched — brand row plus the wrapped list, no fades, nothing scrolls. How many
+  // rows the list takes depends on the font: with Segoe UI (Windows) the six labels fit one row and the
+  // header is 106.33; with CI's DejaVu Sans, ≈ 8 % wider, they wrap to two rows and the header grows by
+  // exactly one row pitch (`li` height + row gap, 38.53). Assert that relation, not the Windows outcome —
+  // either way the brand's padding must not have added to the height.
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await page.goto(to('/guide/'));
+  const tablet = await geometry();
+  expect([1, 2], "/guide/ 768: nav rows (1 on Windows fonts, 2 on CI's wider DejaVu)").toContain(tablet.navRows);
+  const rowPitch =
+    tablet.navRows === 2 ? tablet.rowTops[1] - tablet.rowTops[0] : tablet.liHeight + tablet.rowGap;
+  expect(
+    tablet.header,
+    '/guide/ 768: header = brand row + nav rows (106.33 with one row, one row pitch more with two)',
+  ).toBeCloseTo(106.33 + (tablet.navRows - 1) * rowPitch, 0);
+  expect(tablet.before, '/guide/ 768: no left fade').toBe('none');
+  expect(tablet.after, '/guide/ 768: no right fade').toBe('none');
+  expect(tablet.ul.scrollWidth, '/guide/ 768: the wrapped list does not overflow').toBe(tablet.ul.clientWidth);
+  expect(tablet.brandHeight, '/guide/ 768: a.brand height').toBeGreaterThanOrEqual(32);
+
+  // Desktop: brand and nav share one row; the brand's padding does not change that height either.
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(to('/guide/'));
+  const desktop = await geometry();
+  expect(desktop.header, '/guide/ 1280: .site-header height (unchanged)').toBeCloseTo(69.28, 0);
+  expect(desktop.after, '/guide/ 1280: no right fade').toBe('none');
+  expect(desktop.brandHeight, '/guide/ 1280: a.brand height').toBeGreaterThanOrEqual(32);
 });
 
 test('every nav route responds 200 with a title that starts with its label', async ({ page }) => {
