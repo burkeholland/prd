@@ -91,14 +91,24 @@ serves them through `<picture>` with the PNG as fallback; the first screenshot l
 Public URL: **https://burkeholland.github.io/prd/**
 
 - Pages source = **GitHub Actions**, workflow `.github/workflows/deploy.yml`.
-  Every push to `main` runs `npm ci`, `npm run check`, `npm test`,
-  `npm run build` and publishes `dist/`; a parallel `e2e` job runs the
-  Playwright suite on every push and the deploy waits for both (the two checks
-  take about 75 s, the Pages deploy itself 10 s to 3 min). Browser failures
-  appear as annotations on the run and the HTML report is attached to the run
-  as an artifact for a week. Pushes to other branches run the same `build` and
-  `e2e` jobs as CI and skip the deploy job. No secrets: Pages deploys with the
+  One `build` job runs on every push: `npm ci`, `node scripts/make-mocks.mjs`,
+  `npm run check`, `npm test`, `npm run build`, then the Playwright suite
+  against that same `dist/` (`PLAYWRIGHT_PREBUILT=1` makes the suite's web
+  server serve the existing build instead of building its own), and only then
+  uploads `dist/` as the Pages artifact — the site cannot publish a build the
+  browser suite did not run against. `make-mocks` runs before `astro check`
+  because `check` runs `astro sync`, which renders the markdown into the
+  content-layer cache that `astro build` reuses, so the WebP copies must exist
+  before that first render. Measured on a warm browser cache the job takes about
+  65 s — `npm ci` 5 s, `check` 6 s, unit tests 2 s, build 3 s, browser install
+  11 s, browser suite 27 s — and the Pages deploy itself 10 s to 3 min. Browser
+  failures appear as annotations on the run and the HTML report is attached to
+  the run as an artifact for a week. Pushes to other branches run the same
+  `build` job as CI and skip the deploy job. No secrets: Pages deploys with the
   workflow's own OIDC token.
+- `deploy.yml` pins the actions to their Node 24 majors (`checkout@v7`, `setup-node@v7`,
+  `cache@v6`, `upload-artifact@v7`, `upload-pages-artifact@v5`, `deploy-pages@v5`); bump
+  them together.
 - Base path: this is a *project* site, so every URL lives under **`/prd`**. The
   value is set once in `astro.config.mjs` (`base`, next to `site`). Only two
   places know it from there: `withBase()` in `src/lib/base.ts` (reads
@@ -124,5 +134,3 @@ Public URL: **https://burkeholland.github.io/prd/**
 - `@astrojs/sitemap` writes `dist/sitemap-index.xml` + `sitemap-0.xml` (five pages, canonical
   form, no 404), linked from every page via `<link rel="sitemap">`. No `robots.txt`: crawlers
   never read one under a project-site path.
-- `deploy.yml` pins the actions to their Node 24 majors (`checkout@v7`, `setup-node@v7`,
-  `upload-pages-artifact@v5`, `deploy-pages@v5`); bump them together.

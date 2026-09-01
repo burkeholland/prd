@@ -1,7 +1,7 @@
 name: Deploy to GitHub Pages
 
 on:
-  push: # every branch: the build and e2e jobs run as CI. Only the deploy job is main-only (see its `if:`).
+  push: # every branch: the build job (checks, unit tests, build, browser suite) runs as CI. Only the deploy job is main-only (see its `if:`).
   workflow_dispatch:
 
 # Pages deploys with the workflow's OIDC token (id-token). No secrets are needed.
@@ -15,25 +15,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # One job builds, runs the Playwright suite (tests/e2e) against that same dist/, and only then
+  # uploads it as the Pages artifact, so the site cannot publish a build the browser suite did not
+  # run against (two jobs building separately let that happen on 2026-08-31).
   build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run check
-      - run: npm test
-      - run: npm run build
-      - uses: actions/upload-pages-artifact@v5
-        with:
-          path: dist
-
-  # The Playwright suite (tests/e2e). Its webServer builds and serves the site inside this job, so
-  # there is no build or server step here; `build` above is what produces the Pages artifact.
-  e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -43,6 +28,14 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Derive the WebP screenshot copies before anything renders the markdown: `astro check` runs
+      # `astro sync`, which renders the content into the content-layer cache (keyed by the content
+      # digest only), and `astro build` reuses that render. `prebuild` alone was too late: /sample
+      # was cached with plain <img> instead of <picture>.
+      - run: node scripts/make-mocks.mjs
+      - run: npm run check
+      - run: npm test
+      - run: npm run build
       # Cache the browser binary by the locked Playwright version. The `--with-deps` system
       # libraries are not cached (~20 s).
       - id: pw
@@ -52,9 +45,12 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
       - run: npx playwright install --with-deps chromium
+      # PLAYWRIGHT_PREBUILT makes the suite's webServer serve the dist/ built above instead of
+      # building its own (playwright.config.ts): the tests run against the artifact that deploys.
       - run: npx playwright test
         env:
           CI: true
+          PLAYWRIGHT_PREBUILT: '1'
       # The HTML report and the failure traces, kept for a week.
       - if: failure()
         uses: actions/upload-artifact@v7
@@ -65,9 +61,13 @@ jobs:
             test-results/
           retention-days: 7
           if-no-files-found: ignore
+      # After the suite passed, never before: a red suite must not leave a deployable artifact.
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
 
   deploy:
-    needs: [build, e2e]
+    needs: build
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
