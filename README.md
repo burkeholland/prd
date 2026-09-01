@@ -105,7 +105,9 @@ Public URL: **https://burkeholland.github.io/prd/**
   failures appear as annotations on the run and the HTML report is attached to
   the run as an artifact for a week. Pushes to other branches run the same
   `build` job as CI and skip the deploy job. No secrets: Pages deploys with the
-  workflow's own OIDC token.
+  workflow's own OIDC token. Runs are serialised per branch
+  (`concurrency: pages-<ref>`), so a branch push can never cancel a pending
+  `main` deploy.
 - `deploy.yml` pins the actions to their Node 24 majors (`checkout@v7`, `setup-node@v7`,
   `cache@v6`, `upload-artifact@v7`, `upload-pages-artifact@v5`, `deploy-pages@v5`); bump
   them together.

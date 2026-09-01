@@ -10,8 +10,13 @@ permissions:
   pages: write
   id-token: write
 
+# One group per ref, not one for the whole workflow. `main` runs serialise among themselves so Pages
+# deploys never overlap (a newer main run supersedes an older *pending* one, which is right: the newer
+# commit contains the older). Each branch has its own group, so branch CI never queues behind a main
+# run and can never cancel a pending main deploy — GitHub keeps one in-progress and one pending run
+# per group and cancels the older pending run when a third arrives.
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
