@@ -227,12 +227,13 @@ test('at 390px the diff drops the line numbers for a ≥ 320 px text column, and
   expect(github390.box.bottom, 'hit area clear of the nav row').toBeLessThan(meta390.navTop);
   expect(github390.tapsHit).toBe(true);
 
-  // Back at desktop width the four columns are back, the number columns at their 3.6em.
+  // Back at desktop width the four columns are back, the number columns at their 3.6em (measured on
+  // the header cell: WebKit gives a <col> no getBoundingClientRect box).
   await page.setViewportSize({ width: 1280, height: 900 });
   await expect(table.locator('thead th').nth(0)).toBeVisible();
   await expect(table.locator('thead th').nth(1)).toBeVisible();
-  const colWidth = await page.evaluate(() => document.querySelector('col.diff__col-num')!.getBoundingClientRect().width);
-  expect(colWidth, 'col.diff__col-num at 1280').toBeGreaterThan(40);
+  const colWidth = await page.evaluate(() => document.querySelector('table.diff thead th:nth-child(1)')!.getBoundingClientRect().width);
+  expect(colWidth, 'first line-number column at 1280').toBeGreaterThan(40);
   // ... and the meta line is whole lines again (1 line / 27.45 px on Windows at 1280), the hit area
   // still ≥ 32 with nothing scrolling sideways.
   const meta1280 = await page.evaluate(metaGeometry);
