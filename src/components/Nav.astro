@@ -17,6 +17,20 @@ const isCurrent = (href: string) => {
   const target = normalize(href);
   return current === target || (target !== root && current.startsWith(`${target}/`));
 };
+// The inline script below is the phone nav's only JavaScript (task #1508). At phone widths the row scrolls
+// sideways and global.css starts it on the current page's item with `scroll-initial-target: nearest`, which
+// only Chromium implements: Safari and Firefox load at scrollLeft 0 with the lit item off the right edge, so
+// the script scrolls its `li` into view. `inline: 'start'` (not `nearest`, which `scroll-snap-type: x
+// proximity` re-snaps 26–40 px short) lands on a snap position and matches Chromium to the pixel;
+// `scroll-padding-inline-start` keeps it clear of the left fade; `behavior: 'instant'` ignores any
+// smooth-scroll setting; the `scrollWidth` guard makes it a no-op from 768 px, where the list wraps.
+// Firefox has no scroll-driven animations and WebKit 26 never attaches the hoisted `--nav` timeline to the
+// left fade's animation (it runs as a finished zero-length one whose `to` keyframe paints the wide fade over
+// Home at rest), so in both the fade cannot follow the scroll from CSS: where the nav has no fade animation
+// with a live timeline, the script owns the fade instead — `data-scrolled` on the nav cancels the animation
+// and its value, `true` while `scrollLeft > 0`, paints it (`.site-nav[data-scrolled]::before` in global.css).
+// Chromium takes neither branch. Classic and inline right after the list so it runs before first paint, no
+// `src`; the phone nav test caps it at 700 characters.
 ---
 
 <nav class="site-nav" aria-label="Main">
@@ -31,4 +45,20 @@ const isCurrent = (href: string) => {
       ))
     }
   </ul>
+  <script is:inline data-nav>
+    // Phone nav fallbacks, see Nav.astro.
+    {
+      const nav = document.querySelector('.site-nav');
+      const ul = nav.querySelector('ul');
+      if (!CSS.supports('scroll-initial-target: nearest')) {
+        const li = ul.querySelector('a[aria-current="page"]')?.closest('li');
+        if (li && ul.scrollWidth > ul.clientWidth) li.scrollIntoView({ inline: 'start', block: 'nearest', behavior: 'instant' });
+      }
+      if (!nav.getAnimations({ subtree: true }).some((a) => a.timeline)) {
+        const mark = () => (nav.dataset.scrolled = ul.scrollLeft > 0);
+        ul.addEventListener('scroll', mark, { passive: true });
+        mark();
+      }
+    }
+  </script>
 </nav>

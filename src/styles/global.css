@@ -265,8 +265,8 @@ samp {
     scroll-snap-align: start;
   }
 
-  /* Chromium 133+ starts the row scrolled so the current page's item is in view; other browsers
-     ignore this and start at Home (task #1404). */
+  /* Chromium 133+ starts the row scrolled so the current page's item is in view (task #1404); Safari
+     and Firefox ignore this, so the inline script in Nav.astro lands them on the same item (task #1508). */
   .site-nav li:has(a[aria-current="page"]) {
     scroll-initial-target: nearest;
   }
@@ -299,11 +299,29 @@ samp {
     pointer-events: none;
   }
 
+  /* Firefox has no scroll-driven animations, and WebKit 26 never attaches the hoisted `--nav` timeline
+     below: its animation runs as a finished zero-length one whose `to` keyframe paints the wide fade over
+     Home at rest, and a fill beats any base declaration. So where the nav has no fade animation with a live
+     timeline, the inline script in Nav.astro owns the fade: `data-scrolled` on the nav cancels the animation
+     and hides the fade at rest (Home stays clear of it), and its value is `true` while `scrollLeft > 0`,
+     painting the full 2.5rem the `@supports` block uses over the item the row's left edge cuts (task #1508).
+     Without the script (or JavaScript) Firefox keeps the narrow always-on fade above. */
+  .site-nav[data-scrolled]::before {
+    width: 2.5rem;
+    opacity: 0;
+    animation: none;
+  }
+
+  .site-nav[data-scrolled="true"]::before {
+    opacity: 1;
+  }
+
   /* Where scroll-driven animations exist (Chromium 116+), the left fade widens to match the right
      one and is painted only once the row has scrolled: opacity 0 at scrollLeft 0, 1 from 2.5rem on.
      The `ul` cannot animate its own sibling pseudo-element, so the timeline is named and hoisted.
      Reduced motion disables every animation (see the reset above), which would leave the wide fade
-     on top of Home, so those users keep the narrow always-on one. */
+     on top of Home, so those users keep the narrow always-on one — the script's `data-scrolled` above
+     then paints and widens it once scrolled, as in Firefox. */
   @supports (animation-timeline: scroll()) and (timeline-scope: --nav) {
     @media (prefers-reduced-motion: no-preference) {
       .site-nav {
