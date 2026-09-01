@@ -220,8 +220,13 @@ samp {
     padding-block: 0.75rem;
   }
 
-  /* Phones: one swipeable row of nav items instead of three wrapped ones. The right-edge fade says
-     "more"; the list's end padding keeps the last item clear of the fade once scrolled to the end.
+  /* Phones: one swipeable row of nav items instead of three wrapped ones. Both edges fade: the
+     right-edge fade says "more" and the list's end padding keeps the last item clear of it once
+     scrolled to the end; the left-edge fade keeps a pre-scrolled or swiped row from cutting its
+     first visible item mid-word (task #1436). The row bleeds through the page gutter to the
+     viewport edge (start padding = the gutter, matching negative margin) so Home still lines up
+     with the brand at scrollLeft 0 while the left fade sits on pixels that are actually on screen;
+     scroll-padding lands a snapped or `scroll-initial-target` item clear of that fade.
      The scrollbar is hidden: on a phone it is an overlay anyway, and a classic one would add its own
      height to the header. Block padding with a matching negative margin gives the focus ring room
      inside the scroll container without adding to the header's height. */
@@ -237,9 +242,9 @@ samp {
     scrollbar-width: none;
     overscroll-behavior-x: contain;
     scroll-snap-type: x proximity;
-    scroll-padding-inline-start: 0.4rem;
-    padding: 0.4rem 2.5rem 0.4rem 0.4rem;
-    margin: -0.4rem 0 -0.4rem -0.4rem;
+    scroll-padding-inline-start: 2.5rem;
+    padding: 0.4rem 2.5rem 0.4rem var(--gutter);
+    margin: -0.4rem 0 -0.4rem calc(-1 * var(--gutter));
   }
 
   .site-nav ul::-webkit-scrollbar {
@@ -270,6 +275,53 @@ samp {
     width: 2.5rem;
     background: linear-gradient(to right, transparent, var(--bg));
     pointer-events: none;
+  }
+
+  /* Left fade, always on. It covers only the gutter the row bleeds through: at scrollLeft 0 that
+     strip is the list's start padding, so Home is never under it, in any browser. */
+  .site-nav::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(-1 * var(--gutter));
+    width: var(--gutter);
+    background: linear-gradient(to right, var(--bg), transparent);
+    pointer-events: none;
+  }
+
+  /* Where scroll-driven animations exist (Chromium 116+), the left fade widens to match the right
+     one and is painted only once the row has scrolled: opacity 0 at scrollLeft 0, 1 from 2.5rem on.
+     The `ul` cannot animate its own sibling pseudo-element, so the timeline is named and hoisted.
+     Reduced motion disables every animation (see the reset above), which would leave the wide fade
+     on top of Home, so those users keep the narrow always-on one. */
+  @supports (animation-timeline: scroll()) and (timeline-scope: --nav) {
+    @media (prefers-reduced-motion: no-preference) {
+      .site-nav {
+        timeline-scope: --nav;
+      }
+
+      .site-nav ul {
+        scroll-timeline: --nav inline;
+      }
+
+      .site-nav::before {
+        width: 2.5rem;
+        animation: nav-fade-in linear both;
+        animation-timeline: --nav;
+        animation-range: 0 2.5rem;
+      }
+
+      @keyframes nav-fade-in {
+        from {
+          opacity: 0;
+        }
+
+        to {
+          opacity: 1;
+        }
+      }
+    }
   }
 }
 
