@@ -744,3 +744,64 @@ test('at 390px the history table stacks each revision — number, date, note, co
   for (const header of await headers.all()) await expect(header).toBeVisible();
   await expect(page.locator('table.history tbody tr').nth(2).locator('td')).toHaveCount(7);
 });
+
+test('the history table stacks below 1024px and is a real table with thumb-sized links from 1024px', async ({ page }) => {
+  test.skip(!present(CONTENT.history), 'gist history not merged yet');
+  const table = page.locator('table.history');
+  const scrollWidth = () => page.evaluate(() => document.documentElement.scrollWidth);
+  const scroller = () =>
+    page.locator('.history-table .table-scroll').evaluate((el) => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }));
+  const boxes = (selector: string) => table.locator(selector).evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().toJSON() as DOMRect));
+
+  // iPad portrait: the stacked layout, no sideways scroll inside the table's wrapper or on the page.
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await page.goto(to('/history/'));
+  expect(await scrollWidth(), '768 scrollWidth').toBe(768);
+  const stacked = await scroller();
+  expect(stacked.scrollWidth, '768 .table-scroll overflow').toBe(stacked.clientWidth);
+  await expect(table.locator('thead')).not.toBeInViewport();
+
+  const revisionLinks = await boxes('tbody th a');
+  expect(revisionLinks.length, 'revision links').toBeGreaterThan(0);
+  for (const [i, box] of revisionLinks.entries()) {
+    expect(box.height, `768 revision ${i + 1} link height`).toBeGreaterThanOrEqual(32);
+    expect(box.width, `768 revision ${i + 1} link width ("Revision n")`).toBeGreaterThanOrEqual(90);
+  }
+  const viewLinks = await boxes('.history__view a');
+  expect(viewLinks.length, 'Diff and GitHub links').toBe(revisionLinks.length * 2);
+  for (const [i, box] of viewLinks.entries()) {
+    expect(box.height, `768 view link ${i} height`).toBeGreaterThanOrEqual(32);
+    expect(box.width, `768 view link ${i} width`).toBeGreaterThanOrEqual(32);
+  }
+
+  // iPad landscape: the eight-column table fits its container, and the links stay thumb-sized without
+  // widening the number column or letting the Diff and GitHub hit areas touch.
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto(to('/history/'));
+  expect(await scrollWidth(), '1024 scrollWidth').toBe(1024);
+  const real = await scroller();
+  expect(real.scrollWidth, '1024 .table-scroll overflow').toBe(real.clientWidth);
+  await expect(table).toHaveCSS('display', 'table');
+  const headers = table.locator('thead th');
+  await expect(headers).toHaveCount(8);
+  for (const header of await headers.all()) await expect(header).toBeVisible();
+  const headerHeights = await headers.evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().height));
+  expect(new Set(headerHeights).size, `1024 header heights (a wrapped header): ${headerHeights.join(', ')}`).toBe(1);
+
+  const rows = await table.locator('tbody tr').evaluateAll((nodes) =>
+    nodes.map((row) => {
+      const rect = (el: Element | null) => el!.getBoundingClientRect().toJSON() as DOMRect;
+      const [diff, github] = Array.from(row.querySelectorAll('.history__view a'), rect);
+      return { th: rect(row.querySelector('th')), link: rect(row.querySelector('th a')), diff, github };
+    }),
+  );
+  const intersects = (a: DOMRect, b: DOMRect) => !(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top);
+  expect(rows.length, 'rows').toBeGreaterThan(0);
+  expect(rows[0].th.width, '1024 number column width').toBeLessThanOrEqual(48);
+  for (const [i, row] of rows.entries()) {
+    expect(row.link.height, `1024 revision ${i + 1} link height`).toBeGreaterThanOrEqual(32);
+    expect(row.diff.height, `1024 revision ${i + 1} Diff height`).toBeGreaterThanOrEqual(32);
+    expect(row.github.height, `1024 revision ${i + 1} GitHub height`).toBeGreaterThanOrEqual(32);
+    expect(intersects(row.diff, row.github), `1024 revision ${i + 1} Diff and GitHub hit areas overlap`).toBe(false);
+  }
+});

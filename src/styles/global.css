@@ -908,10 +908,11 @@ table.history td {
   vertical-align: top;
 }
 
+/* No nowrap: with room (≥ 1024 px) auto layout gives every header its full width anyway, and
+   under a wider system font "(GitHub)" drops to a second line instead of the table scrolling. */
 table.history thead th {
   background: var(--surface);
   font-weight: 650;
-  white-space: nowrap;
 }
 
 table.history tbody th {
@@ -967,12 +968,42 @@ table.history tr.is-current > * {
   max-width: var(--measure);
 }
 
-/* ≤ 640 px: no sideways scroll. Each row becomes a stacked block — "Revision n · date" on one
+/* Thumb-sized links at every width (the real table's too, since tablets in landscape are touch
+   surfaces): the whole "Revision n" label is the link's hit area, ≥ 32 px tall, padding grown
+   outwards with matching negative margins so the text stays put and the column keeps its width.
+   position: relative keeps the padded area on top of the note that follows in the stacked layout. */
+table.history tbody th a {
+  position: relative;
+  display: inline-block;
+  padding: 0.4em 0.75em;
+  margin: -0.4em -0.75em;
+}
+
+/* Diff · GitHub as thumb-sized controls: ≥ 32 px tall via padding pulled back vertically with
+   negative margins, and real horizontal padding, so the two hit areas keep the separator's
+   width between them. The end links drop their outer padding to stay flush with the row. */
+.history__view a {
+  display: inline-block;
+  padding: 0.5em 0.75em;
+  margin: -0.5em 0;
+}
+
+.history__view a:first-child {
+  margin-left: -0.75em;
+}
+
+.history__view a:last-child {
+  margin-right: -0.75em;
+}
+
+/* < 1024 px: no sideways scroll. Each row becomes a stacked block — "Revision n · date" on one
    line, the hand-written note beneath (the section list stays for a row without one), then the
    counts on one small line, prefixed/suffixed by CSS so the hidden header is not missed. The
    header row is hidden visually but kept for assistive tech; the explicit roles in history.astro
-   keep the table semantics that display: flex would otherwise drop. */
-@media (max-width: 640px) {
+   keep the table semantics that display: flex would otherwise drop. The eight-column table needs
+   about 900 px; only from 1024 does the container (956 px) have room for it, so phones, both
+   tablet portraits and half-screen windows all get the stack. */
+@media (max-width: 1023.98px) {
   .history-table .table-scroll {
     overflow: visible;
   }
@@ -1021,17 +1052,8 @@ table.history tr.is-current > * {
     border: 0;
   }
 
-  /* The whole "Revision n" label is the link's hit area, ≥ 32 px tall: padding grown outwards
-     with matching negative margins so the text stays put, and the muted "Revision " prefix
-     moves from the th into the link (an inline-block, so the underline stays on the number).
-     position: relative keeps the padded area on top of the note that follows. */
-  table.history tbody th a {
-    position: relative;
-    display: inline-block;
-    padding: 0.4em 0.75em;
-    margin: -0.4em -0.75em;
-  }
-
+  /* The muted "Revision " prefix moves from the th into the link (an inline-block, so the
+     underline stays on the number); the real table's row header stays a bare number. */
   table.history tbody th a::before {
     content: 'Revision\00a0';
     display: inline-block;
@@ -1075,23 +1097,6 @@ table.history tr.is-current > * {
 
   table.history .num.is-empty {
     display: none;
-  }
-
-  /* Diff · GitHub as thumb-sized controls: ≥ 32 px tall via padding pulled back vertically with
-     negative margins, and real horizontal padding, so the two hit areas keep the separator's
-     width between them. The end links drop their outer padding to stay flush with the row. */
-  .history__view a {
-    display: inline-block;
-    padding: 0.5em 0.75em;
-    margin: -0.5em 0;
-  }
-
-  .history__view a:first-child {
-    margin-left: -0.75em;
-  }
-
-  .history__view a:last-child {
-    margin-right: -0.75em;
   }
 
   .history__plus::before {
