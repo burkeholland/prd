@@ -1,7 +1,8 @@
-#!/usr/bin/env node
 // Tell the note-writer exactly what changed in each gist revision that has no
 // hand-written history note yet. Zero dependencies beyond Node and the `git`
-// binary; `npm run notes:missing` runs it.
+// binary; `npm run notes:missing` runs it. (No shebang: the file is also
+// imported by tests/unit/history-notes-missing.test.ts through Vite, which
+// does not strip one.)
 //
 //   node scripts/history-notes-missing.mjs [--root <repo root>] [--history <path>] [--notes <path>]
 //

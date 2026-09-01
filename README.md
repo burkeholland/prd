@@ -166,6 +166,21 @@ Public URL: **https://burkeholland.github.io/prd/**
   `astro.config.mjs`, add `public/CNAME` with the domain, and create one DNS
   record (CNAME to `burkeholland.github.io`). Nothing else changes.
 
+### When the gist changes
+
+- The daily `refresh-gist.yml` run (13:00 UTC) re-snapshots the gist and, when a
+  new revision exists, opens a pull request from `gist-refresh/<sha>`. Its CI is
+  red on `tests/unit/history-notes.test.ts` until that revision has a note in
+  `content/gist/history-notes.json` — that is the intended gate, not a flake.
+- `npm run notes:missing` prints each un-annotated revision — number, date,
+  `+/−` counts, full sha, previous sha — followed by the unified diff of the PRD
+  markdown between it and the previous revision (exit 1 while anything is
+  missing, `All N revisions have a note.` and exit 0 otherwise).
+- Add one sentence per sha to `content/gist/history-notes.json`, in the house
+  style the test enforces: one sentence, 60–160 characters, ends with a period,
+  no "the model", no line counts. Run `npm test`, then push to the same
+  `gist-refresh/<sha>` branch; the PR goes green and can be merged.
+
 ## Social preview and sitemap
 
 - Every page's `<head>` (`src/layouts/Base.astro`) has one `<link rel="canonical">`, Open Graph
