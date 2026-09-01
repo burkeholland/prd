@@ -8,8 +8,9 @@ import { PLACEHOLDER, SITE } from '../lib/site';
 type DocEntry = CollectionEntry<'docs'> | CollectionEntry<'gist'>;
 
 interface Props {
-  /** Nav label for this route; the <title> starts with it and it is the fallback heading. */
+  /** Nav label for this route; the fallback for `title` when the content has none. */
   label: string;
+  /** The page's h1; the <title> (and so og:title) starts with it, not with the nav label. */
   title?: string;
   description?: string;
   /** Missing on branches where `content/` has not merged yet — the page shows a placeholder. */
@@ -23,7 +24,7 @@ const toc = buildToc(rendered?.headings ?? []);
 const hasToc = toc.length > 0;
 ---
 
-<Base title={`${label} · ${SITE.name}`} description={description}>
+<Base title={`${title} · ${SITE.name}`} description={description}>
   <article class="doc">
     <header class="doc__header">
       <slot name="header">

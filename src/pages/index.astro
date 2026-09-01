@@ -3,6 +3,8 @@ import Base from '../layouts/Base.astro';
 import { SITE } from '../lib/site';
 import { withBase } from '../lib/base';
 
+// Card titles are the pages' one site-wide name (NAV in ../lib/site), so a card reads the same
+// as the nav item it leads to.
 const cards = [
   {
     href: withBase('/sample/'),
@@ -11,21 +13,27 @@ const cards = [
   },
   {
     href: withBase('/guide/'),
-    title: 'How to write one',
+    title: 'The guide',
     text: 'Seven habits that separate a PRD an agent can execute from one it has to guess at.',
   },
   {
     href: withBase('/walkthrough/'),
-    title: 'Worked example',
-    text: 'The sample, section by section: what each part does, why it works, and what to steal.',
+    title: 'The walkthrough',
+    text: 'The sample PRD, section by section: what each part does, why it works, and what to steal.',
+  },
+  {
+    href: withBase('/history/'),
+    title: 'How it evolved',
+    text: 'Every revision of the sample PRD, and what each one changed.',
   },
 ];
 
+// The thesis itself is stated once, in the lede; these say what follows from it.
 const differences = [
   'No follow-up questions — every decision must already be in the document.',
   'Exactness where it matters: routes, copy strings, limits, error messages.',
   'Done is defined by checks the agent can run itself.',
-  'The more the document decides, the less the agent guesses — and guessing is where one-shot builds fail.',
+  'A guess is never free: it costs a follow-up prompt, a wrong screen, or a rebuild.',
 ];
 ---
 
@@ -33,10 +41,22 @@ const differences = [
   <section class="hero">
     <h1>Write a PRD an agent can build.</h1>
     <p class="lede">
-      A PRD this specific gets a model to one-shot the app — or close to it. That is
-      Burke Holland's claim, and Build The Urlist is his proof: one document, handed to a coding
-      agent, came back as a working app. This site shows that document, explains what makes it
-      work, traces how it evolved, and gives you a template.
+      A product requirements document (PRD) this specific lets a coding agent build the whole app
+      in one pass — or close to it. That is the claim of
+      <a href="https://github.com/burkeholland">Burke Holland</a>, who works at Microsoft, and
+      <em>Build The Urlist</em> — his PRD for The Urlist, a link-sharing app — is his proof: he
+      handed that one document to a coding agent and a working app came back. This site shows that
+      document, explains what makes it work, traces how it evolved, and gives you a template.
+    </p>
+  </section>
+
+  <!-- Reading order, above the cards. No heading of its own, so the outline stays h1 → the cards' h2s. -->
+  <section class="strip" aria-label="Reading order">
+    <p class="strip__label">New here?</p>
+    <p class="strip__text">
+      Read <a href={withBase('/sample/')}>the sample PRD</a> (about ten minutes), then the seven
+      habits in <a href={withBase('/guide/')}>the guide</a>, then copy
+      <a href={withBase('/template/')}>the template</a>.
     </p>
   </section>
 
@@ -53,13 +73,9 @@ const differences = [
     }
   </ul>
 
-  <section class="strip" aria-label="Start here">
-    <p class="strip__label">Start here</p>
-    <p>
-      <a href={withBase('/template/')}>Template</a>
-      <span class="strip__text">— Copy the skeleton and fill it in.</span>
-    </p>
-  </section>
+  <p class="ready">
+    Ready to write? <a href={withBase('/template/')}>The template <span aria-hidden="true">→</span></a>
+  </p>
 
   <section class="different">
     <h2>Why specificity wins</h2>
@@ -68,3 +84,15 @@ const differences = [
     </ul>
   </section>
 </Base>
+
+<style>
+  .ready {
+    margin-top: 1.25rem;
+    font-size: 0.95rem;
+    color: var(--text-muted);
+  }
+
+  .ready a {
+    font-weight: 600;
+  }
+</style>
