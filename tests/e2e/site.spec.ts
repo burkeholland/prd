@@ -168,6 +168,42 @@ test('home on a phone (390×844): one-row header under 110px, no sideways scroll
   await expect(page.locator('nav.site-nav a')).toHaveCount(6);
 });
 
+test('phone nav (390×844): the row starts with the current page\'s item in view, and Home stays at 0', async ({
+  page,
+}) => {
+  // Chromium-only progressive enhancement (`scroll-initial-target: nearest`, Chromium 133+); Safari and
+  // Firefox ignore it and start the row at Home. Playwright here runs Chromium only (playwright.config.ts).
+  await page.setViewportSize({ width: 390, height: 844 });
+  const geometry = () =>
+    page.evaluate(() => {
+      const ul = document.querySelector<HTMLElement>('nav.site-nav ul')!;
+      const list = ul.getBoundingClientRect();
+      const current = document.querySelector('nav.site-nav a[aria-current="page"]')!.getBoundingClientRect();
+      return {
+        scrollLeft: ul.scrollLeft,
+        list: { left: list.left, right: list.right },
+        current: { left: current.left, right: current.right },
+        scrollWidth: document.documentElement.scrollWidth,
+      };
+    });
+
+  // The template is the last item and the walkthrough the fourth: both start off the right edge otherwise.
+  for (const path of ['/template/', '/walkthrough/']) {
+    await page.goto(to(path));
+    const g = await geometry();
+    expect(g.current.left, `${path} current item left edge`).toBeGreaterThanOrEqual(g.list.left);
+    // 40px = the 2.5rem right-edge fade: the lit item must sit clear of it, not under it.
+    expect(g.current.right, `${path} current item right edge`).toBeLessThanOrEqual(g.list.right - 40);
+    expect(g.scrollWidth, `${path} no horizontal scroll`).toBe(390);
+  }
+
+  // Home is the first item: nothing moves.
+  await page.goto(to('/'));
+  const home = await geometry();
+  expect(home.scrollLeft, '/ row scrollLeft').toBe(0);
+  expect(home.scrollWidth, '/ no horizontal scroll').toBe(390);
+});
+
 test('every nav route responds 200 with a title that starts with its label', async ({ page }) => {
   for (const item of NAV) {
     const response = await page.goto(to(item.href));

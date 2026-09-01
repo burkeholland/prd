@@ -251,6 +251,12 @@ samp {
     scroll-snap-align: start;
   }
 
+  /* Chromium 133+ starts the row scrolled so the current page's item is in view; other browsers
+     ignore this and start at Home (task #1404). */
+  .site-nav li:has(a[aria-current="page"]) {
+    scroll-initial-target: nearest;
+  }
+
   .site-nav a {
     white-space: nowrap;
   }
