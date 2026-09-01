@@ -402,9 +402,15 @@ test('phone nav (390×844, and 640–767 e.g. 700×400 / 760×400): one swipeabl
     await route.fulfill({ response, body: `${await response.text()}\n.site-nav li { scroll-initial-target: none !important; }` });
   });
   await page.addInitScript(() => {
+    // `CSS.supports` has two overloads — `(conditionText)` and `(property, value)` — so call the one the
+    // caller used instead of spreading a `[string, string?]` tuple, which matches neither (ts2345).
     const native = CSS.supports.bind(CSS);
-    CSS.supports = ((...args: [string, string?]) =>
-      args.join(':').includes('scroll-initial-target') ? false : native(...args)) as typeof CSS.supports;
+    CSS.supports = ((property: string, value?: string) =>
+      `${property}:${value ?? ''}`.includes('scroll-initial-target')
+        ? false
+        : value === undefined
+          ? native(property)
+          : native(property, value)) as typeof CSS.supports;
   });
   for (const path of ['/template/', '/walkthrough/']) {
     await page.goto(to(path));
