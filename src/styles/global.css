@@ -787,7 +787,7 @@ main:focus {
   display: block;
   width: 100%;
   max-width: var(--measure);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   font-family: var(--font-mono);
 }
 
@@ -871,7 +871,7 @@ table.history time {
 
 .history__time {
   display: block;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   color: var(--text-muted);
 }
 
@@ -886,7 +886,7 @@ table.history tr.is-current > * {
 .history__badge {
   display: inline-block;
   padding: 0 0.45em;
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   font-weight: 650;
   color: var(--accent-contrast);
   background: var(--accent);
@@ -961,8 +961,20 @@ table.history tr.is-current > * {
     border: 0;
   }
 
-  table.history tbody th::before {
-    content: 'Revision ';
+  /* The whole "Revision n" label is the link's hit area, ≥ 32 px tall: padding grown outwards
+     with matching negative margins so the text stays put, and the muted "Revision " prefix
+     moves from the th into the link (an inline-block, so the underline stays on the number).
+     position: relative keeps the padded area on top of the note that follows. */
+  table.history tbody th a {
+    position: relative;
+    display: inline-block;
+    padding: 0.4em 0.75em;
+    margin: -0.4em -0.75em;
+  }
+
+  table.history tbody th a::before {
+    content: 'Revision\00a0';
+    display: inline-block;
     font-weight: 400;
     color: var(--text-muted);
   }
@@ -1003,6 +1015,23 @@ table.history tr.is-current > * {
 
   table.history .num.is-empty {
     display: none;
+  }
+
+  /* Diff · GitHub as thumb-sized controls: ≥ 32 px tall via padding pulled back vertically with
+     negative margins, and real horizontal padding, so the two hit areas keep the separator's
+     width between them. The end links drop their outer padding to stay flush with the row. */
+  .history__view a {
+    display: inline-block;
+    padding: 0.5em 0.75em;
+    margin: -0.5em 0;
+  }
+
+  .history__view a:first-child {
+    margin-left: -0.75em;
+  }
+
+  .history__view a:last-child {
+    margin-right: -0.75em;
   }
 
   .history__plus::before {
