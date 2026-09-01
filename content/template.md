@@ -30,7 +30,10 @@ Build the complete {Product Name} application in this repository. Work autonomou
 
 **Example from the sample:**
 
-> #### New List: Validation States
+<!-- Shown as markdown source in a code span, not as a live h4, so the page's outline does not skip h2 → h4 (axe heading-order); the verbatim check cannot see through a code span. -->
+<!-- quote: not-gist -->
+
+> `#### New List: Validation States`
 
 **Skeleton:**
 

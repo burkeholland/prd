@@ -31,11 +31,19 @@ const ROUTES = discoverRoutes();
 const SCHEMES = ['light', 'dark'] as const;
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'];
 const BLOCKING = new Set(['serious', 'critical']);
+// Rules that block whatever their impact. `heading-order` (best-practice, moderate) is the one
+// audit that holds Lighthouse's accessibility score at 98 instead of 100, so on our own pages a
+// heading may only step down one level at a time (h2 → h3, never h2 → h4).
+const BLOCKING_RULES = new Set(['heading-order']);
+// `/sample/` is exempt from BLOCKING_RULES: the gist is published word for word and its seven
+// `#### <mock title>` headings sit directly under `## Mocks`, skipping h3. That is the author's
+// text, not ours, and it stays as written (no rehype demotion).
+const VERBATIM_ROUTES = new Set(['/sample/']);
 const IMPACTS = ['serious', 'critical', 'moderate', 'minor'] as const;
 
 for (const path of ROUTES) {
   for (const colorScheme of SCHEMES) {
-    test(`axe: ${path} ${colorScheme} has no serious or critical violations`, async ({ page, browserName }, testInfo) => {
+    test(`axe: ${path} ${colorScheme} has no serious, critical or blocked-rule violations`, async ({ page, browserName }, testInfo) => {
       test.skip(
         browserName !== 'chromium',
         'axe is DOM/ARIA analysis — one engine is enough; Firefox runs it 1.4× slower and times out',
@@ -64,8 +72,12 @@ for (const path of ROUTES) {
       });
       console.log(`${path} ${colorScheme}: ${counts.join(', ')}`);
 
-      const blocking = violations.filter((violation) => BLOCKING.has(violation.impact));
-      expect(blocking, `${path} ${colorScheme} serious/critical axe violations`).toEqual([]);
+      const rulesBlock = !VERBATIM_ROUTES.has(path);
+      const blocking = violations.filter(
+        (violation) => BLOCKING.has(violation.impact) || (rulesBlock && BLOCKING_RULES.has(violation.id)),
+      );
+      const blockedRules = rulesBlock ? ` or ${[...BLOCKING_RULES].join(', ')}` : '';
+      expect(blocking, `${path} ${colorScheme} serious/critical${blockedRules} axe violations`).toEqual([]);
     });
   }
 }
