@@ -30,7 +30,7 @@ Build the complete {Product Name} application in this repository. Work autonomou
 
 **Example from the sample:**
 
-> #### New List: Validation States
+> `#### New List: Validation States`
 
 **Skeleton:**
 
