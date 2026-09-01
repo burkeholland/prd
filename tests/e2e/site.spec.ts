@@ -189,6 +189,11 @@ test('phone nav (390×844, and 640–767 e.g. 700×400 / 760×400): one swipeabl
     /** `.site-header` height and the number of distinct nav-item rows. */
     header: number;
     navRows: number;
+    /** Distinct `li` tops, ascending (two entries when the wrapped list takes two rows). */
+    rowTops: number[];
+    /** One `li`'s height and the list's row gap: their sum is the pitch of a second row. */
+    liHeight: number;
+    rowGap: number;
     /** The list's scrollable vs visible width: equal when the six labels fit one row. */
     ul: { scrollWidth: number; clientWidth: number };
     /** `content` of the two fades, `none` where the phone block does not apply. */
@@ -210,6 +215,9 @@ test('phone nav (390×844, and 640–767 e.g. 700×400 / 760×400): one swipeabl
               const current = nav.querySelector('a[aria-current="page"]')!.getBoundingClientRect();
               const items = Array.from(ul.querySelectorAll('li'), (li) => li.getBoundingClientRect());
               const cut = items.find((li) => li.left < list.left && li.right > list.left);
+              const rowTops = [...new Set(items.map((li) => Math.round(li.top)))]
+                .sort((a, b) => a - b)
+                .map((rounded) => items.find((li) => Math.round(li.top) === rounded)!.top);
               const fade = getComputedStyle(nav, '::before');
               const brand = document.querySelector('.brand')!.getBoundingClientRect();
               resolve({
@@ -226,7 +234,10 @@ test('phone nav (390×844, and 640–767 e.g. 700×400 / 760×400): one swipeabl
                 },
                 scrollWidth: document.documentElement.scrollWidth,
                 header: document.querySelector('.site-header')!.getBoundingClientRect().height,
-                navRows: new Set(items.map((li) => Math.round(li.top))).size,
+                navRows: rowTops.length,
+                rowTops,
+                liHeight: items[0].height,
+                rowGap: parseFloat(getComputedStyle(ul).rowGap),
                 ul: { scrollWidth: ul.scrollWidth, clientWidth: ul.clientWidth },
                 before: fade.content,
                 after: getComputedStyle(nav, '::after').content,
@@ -313,15 +324,24 @@ test('phone nav (390×844, and 640–767 e.g. 700×400 / 760×400): one swipeabl
   expect(home760.fade.opacity, '/ 760: left fade hidden at scrollLeft 0').toBe(0);
   expect(home760.scrollWidth, '/ 760: no horizontal scroll').toBe(760);
 
-  // 768 (portrait tablet): untouched — brand row plus one wrapped nav row, no fades, nothing scrolls.
+  // 768 (portrait tablet): untouched — brand row plus the wrapped list, no fades, nothing scrolls. How many
+  // rows the list takes depends on the font: with Segoe UI (Windows) the six labels fit one row and the
+  // header is 106.33; with CI's DejaVu Sans, ≈ 8 % wider, they wrap to two rows and the header grows by
+  // exactly one row pitch (`li` height + row gap, 38.53). Assert that relation, not the Windows outcome —
+  // either way the brand's padding must not have added to the height.
   await page.setViewportSize({ width: 768, height: 1024 });
   await page.goto(to('/guide/'));
   const tablet = await geometry();
-  expect(tablet.header, '/guide/ 768: .site-header height (unchanged)').toBeCloseTo(106.33, 0);
-  expect(tablet.navRows, '/guide/ 768: nav rows').toBe(1);
+  expect([1, 2], "/guide/ 768: nav rows (1 on Windows fonts, 2 on CI's wider DejaVu)").toContain(tablet.navRows);
+  const rowPitch =
+    tablet.navRows === 2 ? tablet.rowTops[1] - tablet.rowTops[0] : tablet.liHeight + tablet.rowGap;
+  expect(
+    tablet.header,
+    '/guide/ 768: header = brand row + nav rows (106.33 with one row, one row pitch more with two)',
+  ).toBeCloseTo(106.33 + (tablet.navRows - 1) * rowPitch, 0);
   expect(tablet.before, '/guide/ 768: no left fade').toBe('none');
   expect(tablet.after, '/guide/ 768: no right fade').toBe('none');
-  expect(tablet.ul.scrollWidth, '/guide/ 768: the six labels fit one row').toBe(tablet.ul.clientWidth);
+  expect(tablet.ul.scrollWidth, '/guide/ 768: the wrapped list does not overflow').toBe(tablet.ul.clientWidth);
   expect(tablet.brandHeight, '/guide/ 768: a.brand height').toBeGreaterThanOrEqual(32);
 
   // Desktop: brand and nav share one row; the brand's padding does not change that height either.
