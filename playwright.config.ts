@@ -23,8 +23,11 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    // Tests run against the production build served by `astro preview`.
-    command: `npm run build && npx astro preview --port ${PORT}`,
+    // Tests run against the production build served by `astro preview`. With PLAYWRIGHT_PREBUILT set
+    // (deploy.yml) the existing dist/ is served without rebuilding: CI tests the artifact it deploys.
+    command: process.env.PLAYWRIGHT_PREBUILT
+      ? `npx astro preview --port ${PORT}`
+      : `npm run build && npx astro preview --port ${PORT}`,
     url: `${ORIGIN}${BASE}/`,
     reuseExistingServer: false,
     timeout: 180_000,
