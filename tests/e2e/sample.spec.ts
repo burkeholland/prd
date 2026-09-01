@@ -46,9 +46,11 @@ const activeElement = (page: Page) =>
     const kind = el === document.body ? 'body' : el.matches('button.copy-prd') ? 'button.copy-prd' : el.matches('main#main') ? 'main#main' : 'other';
     return { kind, label, tagName, id, className, inCard: document.querySelector('.source-card')?.contains(el) ?? false };
   });
-// After a failed copy, focus may only be where the click left it: the button (Chromium, Firefox), the nearest
-// focusable ancestor `<main id="main" tabindex="-1">` (Windows WebKit, which does not mouse-focus buttons), or
+// After a failed copy, focus may only be where the click left it: the button, the nearest focusable ancestor
+// `<main id="main" tabindex="-1">` (Windows WebKit does not mouse-focus buttons — Safari's behaviour), or
 // `<body>` (an engine that focused nothing). Never the status region, the Download link or anything else.
+// Measured (task #1537): Chromium and Firefox on Windows and Linux → the button; Windows WebKit → main#main;
+// Linux WebKit → the button (`<button class="copy-prd">`, whose empty id the old `id === 'main'` check read as '').
 const FOCUS_AFTER_CLICK = ['button.copy-prd', 'main#main', 'body'];
 
 test('/sample/ adds Copy the PRD as the third action, after Download .md, and keeps its three links', async ({ page }) => {
@@ -111,10 +113,7 @@ test('Copy the PRD works from the keyboard: focus, Enter', async ({ page, browse
   expect(await readClipboard(page)).toMatch(/^# Build The Urlist\n/);
 });
 
-test('when the gist cannot be fetched the button says so and leaves Download .md as the way out', async ({
-  page,
-  browserName,
-}) => {
+test('when the gist cannot be fetched the button says so and leaves Download .md as the way out', async ({ page }) => {
   await page.goto(to('/sample/'));
   await page.route('**/raw/build-the-urlist.md', (route) => route.fulfill({ status: 500 }));
   const button = copyButton(page);
@@ -124,13 +123,9 @@ test('when the gist cannot be fetched the button says so and leaves Download .md
   await expect(button).not.toHaveAttribute('data-state');
   await expect(button).not.toHaveAttribute('aria-busy');
   // The failure path leaves focus where the click put it; the script has no `.focus()` call, so it must not
-  // move focus anywhere else. Measured: Chromium and Firefox focus the button; Windows WebKit does not
-  // mouse-focus buttons (Safari's behaviour) and lands on the skip link's <main id="main" tabindex="-1">;
-  // Linux WebKit: see the diagnostic below (task #1537). One assertion for every engine: the allowed set.
+  // move focus anywhere else. Which element the click focused is the engine's business (see FOCUS_AFTER_CLICK
+  // for the three measured answers), so one assertion for every engine: focus is in the allowed set.
   const focus = await activeElement(page);
-  console.log(
-    `[${browserName}] activeElement after a failed copy: tagName=${JSON.stringify(focus.tagName)} id=${JSON.stringify(focus.id)} className=${JSON.stringify(focus.className)} inSourceCard=${focus.inCard} label=${focus.label}`,
-  );
   expect(
     FOCUS_AFTER_CLICK,
     `focus after the failure is on ${focus.label} (tagName=${JSON.stringify(focus.tagName)} id=${JSON.stringify(focus.id)} className=${JSON.stringify(focus.className)} inside .source-card=${focus.inCard}); allowed: the button, main#main or body`,

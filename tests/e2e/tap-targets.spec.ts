@@ -96,8 +96,9 @@ test('768×1024: the "On this page" summary is thumb-sized without growing the c
   // side. That height depends on the engine's line-box rounding and on the system sans (the site ships no
   // web fonts): measured 54.69 Chromium/WebKit, 55.20 Windows Firefox, 55.70 Linux Firefox — so it is not
   // asserted as a constant. Instead the padding and margin are neutralised in place and the box re-measured
-  // in the same engine with the same font: the two must agree to a hair. A loose absolute bound still
-  // catches a gross regression (the trick cancels 0.6rem; had it grown the box, that would be +9.6 px).
+  // in the same engine with the same font: the two must agree to a hair (task #1537: identical to the
+  // digit in all six engine × OS pairs). A loose absolute bound still catches a gross regression (the trick
+  // cancels 0.6rem; had it grown the box, that would be +9.6 px).
   expect(closed, `closed details height ${closed} px is a sane one-line box`).toBeGreaterThanOrEqual(45);
   expect(closed, `closed details height ${closed} px is a sane one-line box`).toBeLessThanOrEqual(65);
   await page.addStyleTag({
@@ -112,7 +113,6 @@ test('768×1024: the "On this page" summary is thumb-sized without growing the c
   expect(plainSummary, 'the injected style neutralised the summary padding and margin').toMatchObject({ paddingTop: '0px', marginTop: '0px' });
   expect(plainSummary.height, 'without its padding the summary is shorter than the tap target').toBeLessThan(MIN_TAP);
   const closedWithoutThumbSizing = await closedHeight();
-  console.log(`[${test.info().project.name}] closed details height ${closed} px; without the summary's padding/margin ${closedWithoutThumbSizing} px`);
   expect(
     Math.abs(closed - closedWithoutThumbSizing),
     `closed details height ${closed} px vs ${closedWithoutThumbSizing} px with the summary's padding and margin removed — same engine, same font, so the thumb-sizing must not change the closed box`,
