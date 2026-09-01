@@ -35,6 +35,14 @@ const eolFlips = list.filter((row) => row.delta.eol.changed);
 // The first revision is "everything added". The API gives it no counts; a later data source may.
 const added = (row: (typeof list)[number]) => (row.n === 1 ? row.additions || row.lines : row.additions);
 
+// The story under the heading. Revision 3 is the condensing pass (history-notes.json: "Condenses
+// the whole document"), the one cut in the history; a past revision never changes, so naming it is
+// safe, but its size and section count are still read from the data, as are the first draft's and
+// the size the sample page shows today (the current revision, or the latest if meta.json lags).
+const CUT_REVISION = 3;
+const cut = list.find((row) => row.n === CUT_REVISION) ?? smallest;
+const shown = current ?? list[list.length - 1]!;
+
 const title = 'How this PRD evolved';
 const description = `${SITE.gistTitle} went through ${totals.count} revisions over ${totals.days} days — what grew, what was rewritten, and when.`;
 
@@ -42,6 +50,15 @@ const ROW_HEIGHT = 22;
 const BAR_HEIGHT = 14;
 const chartHeight = list.length * ROW_HEIGHT;
 const BAR_SPACE = 160; // barScale's default maxPx: the inner chart's viewBox width
+// The bars use this share of the chart's width; the rest is room for the KB labels after the
+// largest bar (a 7-character label still fits beside a 3.2em row-label column at 320 px).
+const BAR_WIDTH = 60;
+// Only the extremes carry a visible size; the <desc> already names them for assistive tech.
+const labelled = largest.n === smallest.n ? [largest] : [largest, smallest];
+// A bar's right end as a percentage of the bar area, for the label's x.
+const barEnd = (row: (typeof list)[number]) =>
+  `${(((bars[list.indexOf(row)]?.px ?? 0) / BAR_SPACE) * 100).toFixed(2)}%`;
+const baseline = (row: (typeof list)[number]) => list.indexOf(row) * ROW_HEIGHT + BAR_HEIGHT + 3;
 ---
 
 <Base title={`${title} · ${SITE.name}`} description={description}>
@@ -49,11 +66,17 @@ const BAR_SPACE = 160; // barScale's default maxPx: the inner chart's viewBox wi
     <header class="history-page__header">
       <h1>{title}</h1>
       <p class="lede">
-        <a href={SITE.gistUrl} rel="noopener">{SITE.gistTitle}</a> went through {totals.count} revisions
-        over {totals.days} days, from <time datetime={history.first_committed_at}>{totals.firstDate}</time> to{' '}
-        <time datetime={history.last_committed_at}>{totals.lastDate}</time>. The first draft ran to{' '}
-        {totals.firstSections} sections in {kb(totals.firstBytes, 0)} KB; the version on the{' '}
-        <a href={withBase('/sample/')}>sample page</a> has {totals.lastSections} sections in {kb(totals.lastBytes, 0)} KB.
+        <a href={withBase('/sample/')}>{SITE.gistTitle}</a> went through {totals.count} revisions over{' '}
+        {totals.days} days, from <time datetime={history.first_committed_at}>{totals.firstDate}</time> to{' '}
+        <time datetime={history.last_committed_at}>{totals.lastDate}</time>.
+      </p>
+      <p class="history-page__story">
+        The first draft was {kb(totals.firstBytes, 0)} KB and {totals.firstSections} sections. Revision {cut.n} cut
+        it to {kb(cut.bytes, 0)} KB and {cut.sectionCount} sections. The revisions since added the exactness back —
+        exact copy per screen, the mocks, the specification checklist — and the document grew again to the{' '}
+        {kb(shown.bytes, 0)} KB on <a href={withBase('/sample/')}>the sample page</a>.
+      </p>
+      <p class="history-note">
         The specificity Burke credits for the one-shot build was earned in revisions, not written in one sitting.
         Click a revision number to read the exact text that changed.
       </p>
@@ -88,7 +111,7 @@ const BAR_SPACE = 160; // barScale's default maxPx: the inner chart's viewBox wi
         <svg
           x="3.2em"
           y="0"
-          width="85%"
+          width={`${BAR_WIDTH}%`}
           height={chartHeight}
           viewBox={`0 0 ${BAR_SPACE} ${chartHeight}`}
           preserveAspectRatio="none"
@@ -103,48 +126,74 @@ const BAR_SPACE = 160; // barScale's default maxPx: the inner chart's viewBox wi
             ))
           }
         </svg>
+        {/* Same origin and width as the bar area but no viewBox, so the text is not stretched with the bars;
+            each label starts where its bar ends and may run past the area's edge (overflow visible). */}
+        <svg
+          class="size-chart__values"
+          x="3.2em"
+          y="0"
+          width={`${BAR_WIDTH}%`}
+          height={chartHeight}
+          overflow="visible"
+          style={`height:${chartHeight}px`}
+        >
+          {
+            labelled.map((row) => (
+              <text class="size-chart__value" x={barEnd(row)} dx="0.4em" y={baseline(row)}>
+                {kb(row.bytes)} KB
+              </text>
+            ))
+          }
+        </svg>
       </svg>
     </section>
 
     <section class="history-table" aria-labelledby="revisions-heading">
       <h2 id="revisions-heading">Every revision</h2>
       <div class="table-scroll">
-        <table class="history">
+        {/* The explicit roles repeat the implicit ones so the table keeps its semantics at ≤ 640 px,
+            where global.css lays each row out as a stacked block (display: flex drops them otherwise). */}
+        <table class="history" role="table">
           <caption>
-            The {totals.count} revisions of the gist, oldest first: GitHub's line counts, the file's size and
+            The {totals.count} revisions of the gist, oldest first. + and − are GitHub's per-revision line counts
+            (each revision's page diffs the text itself, so the two can differ by a line); then the file's size and
             section count, and which sections were added, changed or removed.
           </caption>
-          <thead>
-            <tr>
-              <th scope="col">#</th>
-              <th scope="col">Date</th>
-              <th scope="col" class="num" abbr="Lines added">+</th>
-              <th scope="col" class="num" abbr="Lines removed">−</th>
-              <th scope="col" class="num">KB</th>
-              <th scope="col" class="num">Sections</th>
-              <th scope="col">What changed</th>
-              <th scope="col">View</th>
+          <thead role="rowgroup">
+            <tr role="row">
+              <th scope="col" role="columnheader">#</th>
+              <th scope="col" role="columnheader">Date</th>
+              <th scope="col" role="columnheader" class="num" abbr="Lines added, GitHub's count">+ (GitHub)</th>
+              <th scope="col" role="columnheader" class="num" abbr="Lines removed, GitHub's count">− (GitHub)</th>
+              <th scope="col" role="columnheader" class="num">KB</th>
+              <th scope="col" role="columnheader" class="num">Sections</th>
+              <th scope="col" role="columnheader">What changed</th>
+              <th scope="col" role="columnheader">View</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody role="rowgroup">
             {
               list.map((row) => (
-                <tr class:list={{ 'is-current': row.isCurrent }} aria-current={row.isCurrent ? 'true' : undefined}>
-                  <th scope="row">
+                <tr role="row" class:list={{ 'is-current': row.isCurrent }} aria-current={row.isCurrent ? 'true' : undefined}>
+                  <th scope="row" role="rowheader">
                     <a href={withBase(`/history/${row.n}/`)} aria-label={`Revision ${row.n}: what changed`}>{row.n}</a>
                   </th>
-                  <td>
+                  <td role="cell" class="history__date">
                     <time datetime={row.committedAt}>
                       {row.date}
                       <span class="history__time">{row.time}</span>
                     </time>
                   </td>
-                  <td class="num">{row.hasCounts ? added(row) : '—'}</td>
-                  <td class="num">{row.hasCounts ? row.deletions : '—'}</td>
-                  <td class="num">{kb(row.bytes)}</td>
-                  <td class="num">{row.sectionCount}</td>
-                  <td class="history__delta">
-                    {describeDelta(row)}
+                  <td role="cell" class:list={['num', 'history__plus', { 'is-empty': !row.hasCounts }]}>
+                    {row.hasCounts ? added(row) : '—'}
+                  </td>
+                  <td role="cell" class:list={['num', 'history__minus', { 'is-empty': !row.hasCounts }]}>
+                    {row.hasCounts ? row.deletions : '—'}
+                  </td>
+                  <td role="cell" class="num history__kb">{kb(row.bytes)}</td>
+                  <td role="cell" class="num history__sections">{row.sectionCount}</td>
+                  <td role="cell" class:list={['history__delta', { 'has-note': noteOf(row.n) !== undefined }]}>
+                    <span class="history__summary">{describeDelta(row)}</span>
                     {row.isCurrent && (
                       <>
                         {' '}
@@ -155,7 +204,7 @@ const BAR_SPACE = 160; // barScale's default maxPx: the inner chart's viewBox wi
                     )}
                     {noteOf(row.n) && <p class="history__note">{noteOf(row.n)}</p>}
                   </td>
-                  <td class="history__view">
+                  <td role="cell" class="history__view">
                     <a href={withBase(`/history/${row.n}/`)} aria-label={`Diff of revision ${row.n}`}>Diff</a>
                     {' · '}
                     <a href={row.url} rel="noopener" title={`Revision ${row.n} on GitHub`}>GitHub</a>
@@ -186,7 +235,7 @@ const BAR_SPACE = 160; // barScale's default maxPx: the inner chart's viewBox wi
     </section>
 
     <p class="history-page__outro">
-      The habits behind these revisions are in <a href={withBase('/guide/')}>How to write one</a>; the result is{' '}
+      The habits behind these revisions are in <a href={withBase('/guide/')}>the guide</a>; the result is{' '}
       <a href={withBase('/sample/')}>the sample PRD</a>.
     </p>
   </article>
