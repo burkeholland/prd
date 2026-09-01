@@ -235,9 +235,17 @@ const description =
     margin: 0 0.35em;
   }
 
-  /* "View on GitHub" stays on one line instead of breaking after "View on". */
+  /* "View on GitHub" stays on one line instead of breaking after "View on", and is a thumb-sized
+     control (≥ 32 px tall): the block padding is cancelled by an equal negative margin, so the text
+     and the line's height stay where they are (global.css .source-card__links a does the same).
+     0.3em, not 0.5em: at 390 the meta wraps to two lines on a 27.5 px pitch, and an inline-block's
+     box is already the full line-height, so 0.3em is enough for ≥ 32 with the least spill over
+     the neighbouring lines. */
   .revision .meta > a {
     white-space: nowrap;
+    display: inline-block;
+    padding-block: 0.3em;
+    margin-block: -0.3em;
   }
 
   .revision .badge {
@@ -252,9 +260,13 @@ const description =
     white-space: nowrap;
   }
 
+  /* The badge's link gets the same hit area: the pill itself (line-height tall) is unchanged. */
   .revision .badge a {
     color: inherit;
     text-decoration: none;
+    display: inline-block;
+    padding-block: 0.3em;
+    margin-block: -0.3em;
   }
 
   .revision .badge a:hover,
