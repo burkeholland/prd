@@ -125,6 +125,10 @@ test('the footer links to the gist and to the site source', async ({ page }) => 
   await page.goto(to('/'));
   const source = page.locator('footer a', { hasText: 'Source' });
   await expect(source).toHaveAttribute('href', 'https://github.com/burkeholland/prd');
+  await expect(page.locator('footer a', { hasText: 'Report a problem' })).toHaveAttribute(
+    'href',
+    'https://github.com/burkeholland/prd/issues/new',
+  );
 });
 
 test('the sample PRD renders the gist with one h1 and seven local, captioned, lazy screenshots', async ({
