@@ -4,7 +4,7 @@ description: "What each part of Build The Urlist does, why it works, and what to
 order: 3
 ---
 
-[The sample](/sample), one section at a time: a verbatim excerpt, what it pins down, why that matters, and one line to steal. [The guide](/guide) names the seven habits these sections show; the [template](/template) has the same sections to fill in.
+[The sample](/sample), one section at a time: a verbatim excerpt, what it pins down, why that matters, and one line to steal. [The guide](/guide) names the seven habits these sections show; the [template](/template) turns them into a skeleton to fill in.
 
 ## Mocks
 
@@ -66,7 +66,7 @@ order: 3
 
 **What it does** — [One sentence](/sample#product) on what the product is, then the rules that give it shape: who can publish, who owns a list, what deletion means, and that the server has the last word.
 
-**Why it works** — Most of the section is about what the product is *not*. "There is no soft delete, restore, tombstone, or anonymous list" names four features an agent would plausibly add; named here, they are decisions it never has to make. Server authority, stated once up front, covers every later write. The first UI string, **"Login to Publish"**, is bold, a convention the gist keeps.
+**Why it works** — Most of the section is about what the product is *not*. "There is no soft delete, restore, tombstone, or anonymous list" names four features an agent would plausibly add; named here, they are decisions it never has to make. Server authority, stated once up front, covers every later write. The first UI string, **"Login to Publish"**, is bold, a convention the sample keeps.
 
 **Steal this** — Write the sentence that says what your product does not have, and list those features by name.
 
@@ -105,7 +105,7 @@ order: 3
 
 **What it does** — [Defines the draft](/sample#draft-and-editor) and the editor page, then two subsections: the [Publish bar](/sample#publish-bar), with its exact messages and enabled rules, and the [Link list editor](/sample#link-list-editor), with row anatomy and in-place editing.
 
-**Why it works** — The gist flags the one interaction that matters most and describes it by what is absent: no input boxes, no borders, no labels, no save buttons. Listing what must not appear stops the agent from building the standard form it would otherwise reach for. The publish bar gives the alias rule as observable behavior, with exact error strings and a 300ms availability check.
+**Why it works** — The sample flags the one interaction that matters most and describes it by what is absent: no input boxes, no borders, no labels, no save buttons. Listing what must not appear stops the agent from building the standard form it would otherwise reach for. The publish bar gives the alias rule as observable behavior, with exact error strings and a 300ms availability check.
 
 **Steal this** — Mark the one interaction that matters most and describe it by what the user must not see as well as what they must.
 
@@ -145,7 +145,7 @@ order: 3
 
 **What it does** — [A login modal](/sample#login-and-ownership) with three provider buttons that never call a real provider, backed by mock identities in SQLite and a server-verifiable session cookie.
 
-**Why it works** — Real OAuth would have stalled the build on credentials the agent does not have. The gist replaces it with a mock specified tightly enough (at least two distinct users with stable IDs) that every login-dependent flow can still be built and tested. Ownership as the (user ID, provider) pair is a schema decision made for the agent in one sentence, and "401 on update/delete" gives the failure mode a testable status code.
+**Why it works** — Real OAuth would have stalled the build on credentials the agent does not have. The sample replaces it with a mock specified tightly enough (at least two distinct users with stable IDs) that every login-dependent flow can still be built and tested. Ownership as the (user ID, provider) pair is a schema decision made for the agent in one sentence, and "401 on update/delete" gives the failure mode a testable status code.
 
 **Steal this** — Replace a blocking dependency with a mock specified precisely enough that everything downstream can still be finished and tested.
 
