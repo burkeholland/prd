@@ -558,6 +558,18 @@ main:focus {
   font-size: 1rem;
 }
 
+/* Section permalinks: the heading text is the link; a # appears on hover/focus. */
+.prose :is(h2, h3, h4) > a.heading-link { color: inherit; text-decoration: none; }
+.prose :is(h2, h3, h4) > a.heading-link::after {
+  content: ' #' / '';            /* alt '' keeps it out of the accessible name */
+  color: var(--accent);
+  opacity: 0;
+  font-weight: 400;
+}
+.prose :is(h2, h3, h4):hover > a.heading-link::after,
+.prose :is(h2, h3, h4) > a.heading-link:focus-visible::after { opacity: 1; }
+@media (prefers-reduced-motion: no-preference) { .prose :is(h2, h3, h4) > a.heading-link::after { transition: opacity .15s; } }
+
 .prose ul,
 .prose ol {
   padding-left: 1.4rem;
