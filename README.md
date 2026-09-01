@@ -52,6 +52,7 @@ npm run test:unit      vitest alone
 npm run test:e2e       Playwright, Chromium only (tests/e2e) — builds, then runs against preview on 4411
 npx playwright test tests/e2e/a11y.spec.ts   axe-core (WCAG 2.1 AA) on every page, light + dark, plus keyboard path
 npx playwright test tests/e2e/template.spec.ts   copy buttons on /template (clipboard, keyboard, other pages have none)
+npx playwright test tests/e2e/sample.spec.ts   "Copy the PRD" on /sample (clipboard, keyboard, failure path)
 ```
 
 Ports: **4410** dev, **4411** preview / Playwright by default; `PREVIEW_PORT`
