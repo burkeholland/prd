@@ -147,8 +147,32 @@ function metaGeometry() {
   };
 }
 type Rect = ReturnType<typeof metaGeometry>['meta'];
+type MetaLink = ReturnType<typeof metaGeometry>['links'][number];
 const middle = (r: Rect) => r.top + r.height / 2;
 const intersects = (a: Rect, b: Rect) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+// The hit-area padding is cancelled by its negative margin, so the paragraph is still an exact
+// number of line boxes tall — however many lines the reader's font needs (CI's DejaVu Sans is ≈ 8 %
+// wider than Segoe UI and wraps the badged meta line at 768 px; Windows does not).
+const expectWholeLines = (meta: ReturnType<typeof metaGeometry>, label: string) => {
+  const lines = meta.meta.height / meta.lineHeight;
+  expect(lines, `${label}: p.meta is a whole number of line boxes`).toBeCloseTo(Math.round(lines), 1);
+  expect(Math.round(lines), `${label}: at least one line`).toBeGreaterThanOrEqual(1);
+};
+
+// "View on GitHub" and the badge link sharing the meta line: side by side (their glyph rects overlap
+// vertically) the two grown hit rects must not intersect. Stacked — a wider font pushes the badge onto
+// the next line — they sit on the line pitch, where two ≥ 32 px rects cannot help meeting in the gap
+// between the lines: then the badge's rect must at least start below the "View on GitHub" glyphs (the
+// taps-hit checks prove a tap on either link's text still lands on that link).
+const expectCoexist = (gh: MetaLink, sample: MetaLink, label: string) => {
+  const sameLine = gh.text.top < sample.text.bottom && sample.text.top < gh.text.bottom;
+  if (sameLine) {
+    expect(intersects(gh.box, sample.box), `${label}: hit rects on one line must not intersect`).toBe(false);
+  } else {
+    expect(sample.box.top, `${label}: stacked, badge hit rect below the "View on GitHub" glyphs`).toBeGreaterThan(gh.text.bottom - 1);
+  }
+};
 
 test('at 390px the diff drops the line numbers for a ≥ 320 px text column, and a tappable nav follows the table', async ({
   page,
@@ -192,11 +216,11 @@ test('at 390px the diff drops the line numbers for a ≥ 320 px text column, and
   expect(geometry.linkHeights.length).toBe(6);
   for (const height of geometry.linkHeights) expect(height, 'nav link tap target').toBeGreaterThanOrEqual(32);
 
-  // The meta line wraps to two lines here (54.91 px on main: 2 × 1.7 × 16.15) and keeps that height;
-  // "View on GitHub" on the second is a ≥ 32 px hit area grown equally above and below its glyphs
-  // (21 px on main), and stops short of the nav row under it.
+  // The meta line wraps here (2 lines / 54.91 px on Windows at 390: 2 × 1.7 × 16.15) and keeps its
+  // whole-line height; "View on GitHub" on the last is a ≥ 32 px hit area grown equally above and
+  // below its glyphs (21 px on Windows), and stops short of the nav row under it.
   const meta390 = await page.evaluate(metaGeometry);
-  expect(meta390.meta.height, 'p.meta height at 390 (54.91 on main)').toBeCloseTo(54.91, 1);
+  expectWholeLines(meta390, 'at 390');
   const github390 = meta390.links.find((link) => link.label === 'View on GitHub')!;
   expect(github390.box.height, '"View on GitHub" hit area at 390').toBeGreaterThanOrEqual(32);
   expect(Math.abs(middle(github390.box) - middle(github390.text)), 'hit area centred on the glyphs').toBeLessThan(1);
@@ -209,10 +233,11 @@ test('at 390px the diff drops the line numbers for a ≥ 320 px text column, and
   await expect(table.locator('thead th').nth(1)).toBeVisible();
   const colWidth = await page.evaluate(() => document.querySelector('col.diff__col-num')!.getBoundingClientRect().width);
   expect(colWidth, 'col.diff__col-num at 1280').toBeGreaterThan(40);
-  // ... and the meta line is one line (27.45 px on main), the hit area still ≥ 32 with nothing scrolling sideways.
+  // ... and the meta line is whole lines again (1 line / 27.45 px on Windows at 1280), the hit area
+  // still ≥ 32 with nothing scrolling sideways.
   const meta1280 = await page.evaluate(metaGeometry);
   expect(meta1280.scrollWidth, 'page scrollWidth at 1280').toBe(1280);
-  expect(meta1280.meta.height, 'p.meta height at 1280 (27.45 on main)').toBeCloseTo(27.45, 1);
+  expectWholeLines(meta1280, 'at 1280');
   expect(meta1280.links.find((link) => link.label === 'View on GitHub')!.box.height).toBeGreaterThanOrEqual(32);
 });
 
@@ -220,35 +245,39 @@ test('in the meta line, "View on GitHub" and the badge link are ≥ 32 px hit ar
   page,
 }) => {
   test.skip(count < 3, 'fewer than 3 revisions');
-  // Tablet portrait, where the QA pass measured them (#1458): on main the meta line was 27.45 px tall
-  // (1.7 × 16.15) with "View on GitHub" a 112 × 21 px link, the badge 230 × 24.56 around a 213 × 20 link.
+  // Tablet portrait, where the QA pass measured them (#1458): on Windows the meta line is 1 line /
+  // 27.45 px (1.7 × 16.15) with "View on GitHub" a 112 × 21 px link, the badge 230 × 24.56 around a
+  // 213 × 20 link; a wider font may wrap it, so the height is asserted as whole lines.
   await page.setViewportSize({ width: 768, height: 1024 });
   await page.goto(to('/history/3/'));
   const tablet = await page.evaluate(metaGeometry);
   expect(tablet.scrollWidth).toBe(768);
-  expect(tablet.meta.height, 'p.meta height (27.45 on main)').toBeCloseTo(27.45, 1);
+  expectWholeLines(tablet, 'at 768 on /history/3/');
   expect(tablet.links.map((link) => link.label)).toEqual(['View on GitHub']);
   const github = tablet.links[0]!;
   expect(github.box.height, '"View on GitHub" hit area').toBeGreaterThanOrEqual(32);
-  // The text stayed put: its glyphs share the date's top on the one line, the box is centred on them
-  // and no wider than them, and it ends above the nav row.
+  // The text stayed put: its glyphs sit a whole number of lines below the date's (0 on Windows), the
+  // box is centred on them and no wider than them, and it ends above the nav row.
   expect(github.text.height, 'the glyphs, not the box, are text-height').toBeLessThan(32);
-  expect(Math.abs(github.text.top - tablet.time.top), 'glyphs level with the date').toBeLessThan(0.5);
+  const offset = (github.text.top - tablet.time.top) / tablet.lineHeight;
+  expect(offset, 'glyphs on a line of the meta paragraph').toBeCloseTo(Math.round(offset), 1);
+  expect(Math.round(offset)).toBeGreaterThanOrEqual(0);
   expect(Math.abs(middle(github.box) - middle(github.text)), 'hit area centred on the glyphs').toBeLessThan(1);
   expect(Math.abs(github.box.width - github.text.width), 'no horizontal padding').toBeLessThan(0.5);
   expect(github.box.bottom).toBeLessThan(tablet.navTop);
   expect(github.tapsHit).toBe(true);
 
   // The published revision: the badge's link too, with the pill itself (line-height tall, 0.6em of
-  // padding each side of the text) exactly as it was and the hit area centred on it.
+  // padding each side of the text) exactly as it was and the hit area centred on it. The line is still
+  // whole line boxes (1 / 27.45 px on Windows; CI's wider font wraps the badge onto a second).
   await page.goto(to(`/history/${count}/`));
   const badged = await page.evaluate(metaGeometry);
-  expect(badged.meta.height, 'p.meta height with the badge (27.45 on main)').toBeCloseTo(27.45, 1);
+  expectWholeLines(badged, 'at 768 with the badge');
   expect(badged.badge).not.toBeNull();
   const badge = badged.badge!;
   expect(badge.height, '.badge height (24.56 on main)').toBeCloseTo(24.56, 1);
   expect(badged.links.map((link) => link.label)).toEqual(['View on GitHub', 'the version on the sample page']);
-  const [gh, sample] = badged.links as [(typeof badged.links)[number], (typeof badged.links)[number]];
+  const [gh, sample] = badged.links as [MetaLink, MetaLink];
   expect(sample.box.height, 'badge link hit area').toBeGreaterThanOrEqual(32);
   expect(gh.box.height).toBeGreaterThanOrEqual(32);
   expect(Math.abs(badge.width - (sample.text.width + 2 * 0.6 * 14.45)), '.badge width is its text + padding').toBeLessThan(0.5);
@@ -256,29 +285,20 @@ test('in the meta line, "View on GitHub" and the badge link are ≥ 32 px hit ar
   expect(sample.text.bottom).toBeLessThan(badge.bottom);
   expect(Math.abs(middle(sample.box) - middle(badge)), 'hit area centred on the pill').toBeLessThan(1);
   expect(sample.box.bottom).toBeLessThan(badged.navTop);
-  expect(intersects(gh.box, sample.box), 'hit rects side by side').toBe(false);
+  expectCoexist(gh, sample, 'at 768');
   for (const link of badged.links) expect(link.tapsHit, `taps on "${link.label}"`).toBe(true);
 
-  // Phone: the meta wraps to two lines and "View on GitHub" shares the second with the badge, so the
-  // two grown hit rects sit side by side and must not intersect. Should a wider system font push the
-  // badge onto a third line they stack on the 27.45 px pitch, where two ≥ 32 px rects cannot help
-  // meeting in the gap between the lines: then the badge's rect must at least start below the
-  // "View on GitHub" glyphs, and a tap on either link's text must still land on that link.
+  // Phone: on Windows the meta wraps to two lines and "View on GitHub" shares the second with the
+  // badge (side by side); a wider font stacks them. Either way both hit areas stay ≥ 32 px and tappable.
   await page.setViewportSize({ width: 390, height: 844 });
   const phone = await page.evaluate(metaGeometry);
   expect(phone.scrollWidth).toBe(390);
-  const [gh390, sample390] = phone.links as [(typeof phone.links)[number], (typeof phone.links)[number]];
+  const [gh390, sample390] = phone.links as [MetaLink, MetaLink];
   for (const link of phone.links) {
     expect(link.box.height, `"${link.label}" hit area at 390`).toBeGreaterThanOrEqual(32);
     expect(link.tapsHit, `taps on "${link.label}" at 390`).toBe(true);
   }
-  // On one line the glyph rects overlap vertically; stacked, a full 27.45 px pitch separates them.
-  const sameLine = gh390.text.top < sample390.text.bottom && sample390.text.top < gh390.text.bottom;
-  if (sameLine) {
-    expect(intersects(gh390.box, sample390.box), 'hit rects on one line must not intersect').toBe(false);
-  } else {
-    expect(sample390.box.top, 'stacked: badge hit rect below the "View on GitHub" glyphs').toBeGreaterThan(gh390.text.bottom - 1);
-  }
+  expectCoexist(gh390, sample390, 'at 390');
   expect(Math.max(gh390.box.bottom, sample390.box.bottom)).toBeLessThan(phone.navTop);
 });
 
