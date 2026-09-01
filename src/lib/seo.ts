@@ -65,7 +65,7 @@ export const SOCIAL_CARDS = {
   '/history/': pageCard(
     '/og/history.png',
     'How it evolved',
-    'Sixteen revisions over three weeks: what grew, what was rewritten, and when.',
+    'Every revision of the sample PRD: what grew, what was rewritten, and when.',
   ),
   '/template/': pageCard(
     '/og/template.png',
