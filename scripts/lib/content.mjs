@@ -20,6 +20,9 @@ const SLUG_STRIP_RE = /[^\p{L}\p{M}\p{N}\p{Pc} -]/gu;
 // A code span (kept whole so links inside it are ignored) or a link/image
 // destination: `](dest)` / `](dest "title")` / `](<dest>)`.
 const CODE_OR_LINK_RE = /(`+)[\s\S]*?\1|\]\(\s*<?([^\s<>()]*)>?(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?\s*\)/g;
+// The code-span alternative of CODE_OR_LINK_RE with its content captured: a
+// backtick run, then everything up to the next run of the same length.
+const CODE_SPAN_RE = /(`+)([\s\S]*?)\1/g;
 
 export const MIN_FRAGMENT_LENGTH = 12;
 
@@ -115,11 +118,28 @@ export function extractBlockquotes(body) {
 }
 
 /**
- * Split a quote on ellipses (`…`, `...`, `[…]`, `[...]`), collapse whitespace
- * in each piece and drop pieces shorter than MIN_FRAGMENT_LENGTH characters.
+ * Replace every code span with its content — the text the reader sees — so
+ * `` `#### Heading` `` reads `#### Heading`. As in CommonMark the closing
+ * backtick run must be as long as the opening one, one space is stripped from
+ * each end when the content starts and ends with a space (and is not all
+ * spaces), and an unclosed backtick is literal text. Fences are not special
+ * here: the check unwraps a quote and the gist alike, so a fence quoted whole
+ * loses its markers on both sides.
+ */
+export function unwrapCodeSpans(s) {
+  return String(s ?? '').replace(CODE_SPAN_RE, (_span, _ticks, inner) =>
+    inner.startsWith(' ') && inner.endsWith(' ') && inner.trim() !== '' ? inner.slice(1, -1) : inner,
+  );
+}
+
+/**
+ * Unwrap code spans (see unwrapCodeSpans), split the quote on ellipses (`…`,
+ * `...`, `[…]`, `[...]`), collapse whitespace in each piece and drop pieces
+ * shorter than MIN_FRAGMENT_LENGTH characters. A quote that is one code span
+ * of gist text therefore compares as that text.
  */
 export function quoteFragments(text) {
-  return String(text ?? '')
+  return unwrapCodeSpans(text)
     .split(ELLIPSIS_RE)
     .map(collapseWs)
     .filter((f) => f.length >= MIN_FRAGMENT_LENGTH);
@@ -297,7 +317,10 @@ export function checkFile({ name, text, gistText, gistHeadings, siteRoutes, page
     if (h.depth === 1) push(h.line + offset, 'h1-in-body', `h1 "${h.text}" in the body — the page supplies the h1, use ## or lower`);
   }
 
-  const gist = collapseWs(gistText);
+  // Quotes are compared as rendered text (quoteFragments unwraps their code
+  // spans), so the gist is unwrapped the same way: its own spans
+  // (`better-sqlite3`) and a quote's added ones compare alike.
+  const gist = collapseWs(unwrapCodeSpans(gistText));
   for (const quote of extractBlockquotes(body)) {
     let above = quote.line - 2;
     while (above >= 0 && lines[above].trim() === '') above--;

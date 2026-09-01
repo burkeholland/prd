@@ -12,6 +12,7 @@ import {
   normalizeRoute,
   parseFrontmatter,
   quoteFragments,
+  unwrapCodeSpans,
 } from './content.mjs';
 
 // A miniature gist, CRLF like the real snapshot.
@@ -96,6 +97,31 @@ test('quoteFragments: splits on … / ... / […] / [...], collapses whitespace,
   assert.deepEqual(quoteFragments('> …'), [], 'nothing long enough');
   assert.deepEqual(quoteFragments('exactly 11c'), [], '11 characters are dropped');
   assert.deepEqual(quoteFragments('exactly 12ch'), ['exactly 12ch'], '12 characters are kept');
+});
+
+test('unwrapCodeSpans: a span becomes its content, one space stripped from each end like CommonMark; unclosed backtick stays literal', () => {
+  assert.equal(unwrapCodeSpans('`#### New List: Validation States`'), '#### New List: Validation States');
+  assert.equal(unwrapCodeSpans('The `#### New List` heading'), 'The #### New List heading');
+  assert.equal(unwrapCodeSpans('`a` and `b`'), 'a and b', 'each span is unwrapped on its own');
+  assert.equal(unwrapCodeSpans('`` a ` b ``'), 'a ` b', 'a two-backtick run may hold a single backtick; the one space each side is stripped');
+  assert.equal(unwrapCodeSpans('`` `code` ``'), '`code`');
+  assert.equal(unwrapCodeSpans('` a`'), ' a', 'a space on one side only is kept');
+  assert.equal(unwrapCodeSpans('` `'), ' ', 'all-space content is kept');
+  assert.equal(unwrapCodeSpans('an `unclosed backtick'), 'an `unclosed backtick');
+  assert.equal(unwrapCodeSpans('```\nfenced\n```'), '\nfenced\n', 'a fence quoted whole loses its markers like any span (both sides of the check alike)');
+  assert.equal(unwrapCodeSpans(null), '');
+});
+
+test('quoteFragments: code spans compare as their content — alone, mixed with prose, two-backtick runs; an unclosed backtick stays literal', () => {
+  assert.deepEqual(quoteFragments('`#### New List: Validation States`'), ['#### New List: Validation States'], 'a quote that is one code span');
+  assert.deepEqual(
+    quoteFragments('The `#### New List` heading … stop only when `the app` is complete.'),
+    ['The #### New List heading', 'stop only when the app is complete.'],
+    'prose and spans join as plain text, then the ellipsis split applies',
+  );
+  assert.deepEqual(quoteFragments('`` a ` b `` and more text'), ['a ` b and more text'], 'two-backtick run with a single backtick inside');
+  assert.deepEqual(quoteFragments('The `` `x` ``-style span here'), ['The `x`-style span here'], 'the stripped inner spaces leave no gap before -style');
+  assert.deepEqual(quoteFragments('an `unclosed backtick stays literal'), ['an `unclosed backtick stays literal']);
 });
 
 test('githubSlug: the four gist examples, and makeSlugger suffixes duplicates -1, -2', () => {
@@ -216,6 +242,25 @@ test('checkFile: a quote whose paragraphs are each in the gist but not adjacent 
   assert.deepEqual(marked, []);
   const adjacent = checkFile({ ...base, text: `${fm}> - Next.js App Router, React, strict TypeScript, Node.js, and npm\n> - SQLite with direct parameterized SQL through \`better-sqlite3\`; no ORM` });
   assert.deepEqual(adjacent, [], 'list items that are adjacent in the gist pass as one fragment');
+});
+
+test('checkFile: a quote that is one code span of gist text passes; a span of non-gist text still fails; both sides compare as rendered text', () => {
+  const base = { name: 'x.md', gistText: GIST, siteRoutes: SITE_ROUTES, pages: {} };
+  const fm = '---\ntitle: t\ndescription: d\norder: 1\n---\n';
+  assert.deepEqual(checkFile({ ...base, text: `${fm}> \`#### Home Page\`` }), [], 'the span content is a gist heading; only the backticks are ours');
+  const bad = checkFile({ ...base, text: `${fm}> \`#### Home Page: Empty State\`` });
+  assert.equal(bad.length, 1, JSON.stringify(bad));
+  assert.equal(bad[0].kind, 'quote');
+  assert.equal(bad[0].line, 6);
+  assert.equal(bad[0].message, 'not verbatim: matches the gist up to "#### Home Page", then ": Empty State" differs');
+  const mixed = checkFile({ ...base, text: `${fm}> The \`#### New List\` heading …` });
+  assert.equal(mixed.length, 1, JSON.stringify(mixed));
+  assert.match(mixed[0].message, /^not in the gist: "The #### New List heading"/, 'the message shows the joined plain text, without backticks');
+  assert.deepEqual(
+    checkFile({ ...base, text: `${fm}> SQLite with direct parameterized SQL through better-sqlite3; no ORM` }),
+    [],
+    'the gist is unwrapped the same way, so its own spans compare as text too',
+  );
 });
 
 test('checkFile: frontmatter and h1 rules; anchors resolve against the target page when present', () => {
