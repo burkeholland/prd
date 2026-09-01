@@ -61,6 +61,15 @@ const kb = (bytes: number) => (bytes / 1000).toFixed(1);
 
 const MARK: Record<OpType, string> = { equal: '', add: '+', del: '−' };
 
+// Previous · All revisions · Next, rendered twice: under the header and again after the diff, so a
+// phone reader who has scrolled through revision 3's 900-odd rows is not sent back to the top.
+type NavLink = { href: string; label: string; rel?: string };
+const navLinks: NavLink[] = [
+  ...(prev ? [{ href: withBase(`/history/${prev.n}/`), label: 'Previous', rel: 'prev' }] : []),
+  { href: withBase('/history/'), label: 'All revisions' },
+  ...(next ? [{ href: withBase(`/history/${next.n}/`), label: 'Next', rel: 'next' }] : []),
+];
+
 // The <style> below is page-local but not Astro-scoped, and the diff cells carry no classes:
 // scoping stamps a data attribute on every element, and revision 3 renders ~950 rows × 4 cells
 // (that alone was 125 KB against a 120 KB budget). Rules are prefixed with `.revision` and
@@ -88,24 +97,6 @@ const description =
         <span title={`${int(rev.bytes)} bytes`}>{kb(rev.bytes)} KB</span>
         <span class="meta__sep" aria-hidden="true">·</span>
         <a href={rev.url} rel="noopener">View on GitHub</a>
-        <span class="meta__sep" aria-hidden="true">·</span>
-        <a href={withBase('/history/')}>All revisions</a>
-        {
-          prev && (
-            <>
-              <span class="meta__sep" aria-hidden="true">·</span>
-              <a href={withBase(`/history/${prev.n}/`)} rel="prev">Previous</a>
-            </>
-          )
-        }
-        {
-          next && (
-            <>
-              <span class="meta__sep" aria-hidden="true">·</span>
-              <a href={withBase(`/history/${next.n}/`)} rel="next">Next</a>
-            </>
-          )
-        }
         {
           isCurrent && (
             <mark class="badge">
@@ -114,6 +105,17 @@ const description =
           )
         }
       </p>
+      <nav class="revision__nav" aria-label="Revisions">
+        <ul>
+          {
+            navLinks.map((link) => (
+              <li>
+                <a href={link.href} rel={link.rel}>{link.label}</a>
+              </li>
+            ))
+          }
+        </ul>
+      </nav>
     </header>
 
     {
@@ -132,8 +134,8 @@ const description =
             <div class="table-scroll">
               <table class="diff">
                 <caption>
-                  The text of revision {rev.n} against revision {prev.n}: old and new line numbers, then the line; +
-                  marks an added line, − a removed one, with three unchanged lines of context around each change.
+                  The text of revision {rev.n} against revision {prev.n}: + marks an added line, − a removed one, with
+                  three unchanged lines of context around each change; old and new line numbers on the left where there is room.
                 </caption>
                 <colgroup>
                   <col class="diff__col-num" />
@@ -178,6 +180,18 @@ const description =
         </section>
       )
     }
+
+    <nav class="revision__nav" aria-label="Revisions, after the text">
+      <ul>
+        {
+          navLinks.map((link) => (
+            <li>
+              <a href={link.href} rel={link.rel}>{link.label}</a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
   </article>
 </Base>
 
@@ -221,11 +235,16 @@ const description =
     margin: 0 0.35em;
   }
 
+  /* "View on GitHub" stays on one line instead of breaking after "View on". */
+  .revision .meta > a {
+    white-space: nowrap;
+  }
+
   .revision .badge {
     display: inline-block;
     margin-left: 0.5em;
     padding: 0 0.6em;
-    font-size: 0.8rem;
+    font-size: 0.85rem;
     font-weight: 650;
     color: var(--accent-contrast);
     background: var(--accent);
@@ -241,6 +260,27 @@ const description =
   .revision .badge a:hover,
   .revision .badge a:focus-visible {
     text-decoration: underline;
+  }
+
+  /* Previous · All revisions · Next as a row of tappable items (≥ 32 px tall, label + 1.5em wide).
+     The list's negative inline margin cancels the first item's padding so the labels align with the text. */
+  .revision__nav {
+    font-size: 0.95rem;
+  }
+
+  .revision__nav ul {
+    list-style: none;
+    margin: 0 -0.75em;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.5rem;
+  }
+
+  .revision__nav a {
+    display: inline-block;
+    padding: 0.45em 0.75em;
+    white-space: nowrap;
   }
 
   .revision__diff,
@@ -360,6 +400,39 @@ const description =
   .revision table.diff tr.diff__del > td:nth-child(3) {
     color: var(--del);
     font-weight: 700;
+  }
+
+  /* Phones: the line-number columns go, so the text column is ≥ 320 px at 390 (≥ 290 at 360) instead
+     of 229. Hidden cells leave no slot in the table grid: each row's two remaining cells land in the
+     first two grid columns, so the four <col>s are re-mapped — the first two now size the mark and the
+     text, the last two are spanned only by the hunk header (colspan=4) and take nothing. */
+  @media (max-width: 639.98px) {
+    .revision table.diff thead th:nth-child(-n + 2),
+    .revision table.diff tr:not(.diff__hunk) > td:nth-child(-n + 2) {
+      display: none;
+    }
+
+    .revision .diff__col-num:first-child {
+      width: 1.2em;
+    }
+
+    .revision .diff__col-num:nth-child(2) {
+      width: auto;
+    }
+
+    .revision .diff__col-mark,
+    .revision .diff__col-mark + col {
+      width: 0;
+    }
+
+    .revision table.diff th,
+    .revision table.diff td {
+      padding: 0.1em 0.35em;
+    }
+
+    .revision table.diff tr.diff__hunk td {
+      padding: 0.35em;
+    }
   }
 
   .revision .preview {

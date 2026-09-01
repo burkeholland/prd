@@ -32,7 +32,15 @@ test('revision 1 is the first draft: a preview, not a diff', async ({ page }) =>
   await expect(page.locator('pre')).toHaveCount(1);
   await expect(page.locator('h2')).toContainText('First draft');
   await expect(page.locator('a', { hasText: 'Previous' })).toHaveCount(0);
-  await expect(page.locator('a', { hasText: 'Next' })).toHaveAttribute('href', to('/history/2/'));
+  // Both navs: one under the header, one after the first-draft section.
+  const navs = page.locator('nav.revision__nav');
+  await expect(navs).toHaveCount(2);
+  await expect(page.locator('.revision__header nav.revision__nav')).toHaveCount(1);
+  await expect(page.locator('section.revision__first + nav.revision__nav')).toHaveCount(1);
+  for (const nav of [navs.first(), navs.last()]) {
+    await expect(nav.locator('a', { hasText: 'Next' })).toHaveAttribute('href', to('/history/2/'));
+    await expect(nav.locator('a')).toHaveText(['All revisions', 'Next']);
+  }
 });
 
 test('revision 13 shows one diff table, hunks, the line-ending note and is noindex', async ({ page }) => {
@@ -48,10 +56,18 @@ test('revision 13 shows one diff table, hunks, the line-ending note and is noind
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex');
   await expect(page.locator('link[rel="canonical"]')).toHaveCount(0);
 
-  await expect(page.locator('a', { hasText: 'Previous' })).toHaveAttribute('href', to('/history/12/'));
-  await expect(page.locator('a', { hasText: 'Next' })).toHaveAttribute('href', to('/history/14/'));
-  await expect(page.locator('a', { hasText: 'All revisions' })).toHaveAttribute('href', to('/history/'));
-  await expect(page.locator('a', { hasText: 'View on GitHub' })).toHaveAttribute('href', /^https:\/\/gist\.github\.com\//);
+  // Previous / All revisions / Next are a list rendered twice — under the header and after the diff —
+  // with the same hrefs in each; "View on GitHub" stays in the meta line.
+  const navs = page.locator('nav.revision__nav');
+  await expect(navs).toHaveCount(2);
+  for (const nav of [navs.first(), navs.last()]) {
+    await expect(nav.locator('a', { hasText: 'Previous' })).toHaveAttribute('href', to('/history/12/'));
+    await expect(nav.locator('a', { hasText: 'Next' })).toHaveAttribute('href', to('/history/14/'));
+    await expect(nav.locator('a', { hasText: 'All revisions' })).toHaveAttribute('href', to('/history/'));
+    await expect(nav.locator('a')).toHaveText(['Previous', 'All revisions', 'Next']);
+  }
+  await expect(page.locator('p.meta a', { hasText: 'View on GitHub' })).toHaveAttribute('href', /^https:\/\/gist\.github\.com\//);
+  await expect(page.locator('p.meta a', { hasText: 'Previous' })).toHaveCount(0);
 });
 
 test('the last revision carries the badge that links to the sample page', async ({ page }) => {
@@ -59,6 +75,12 @@ test('the last revision carries the badge that links to the sample page', async 
   const badge = page.locator('mark');
   await expect(badge).toHaveCount(1);
   await expect(badge.locator('a')).toHaveAttribute('href', to('/sample/'));
+  // 0.85rem at the 17 px root: the last sub-14 px text on the diff pages was this badge (13.6 px).
+  await expect(badge).toHaveCSS('font-size', '14.45px');
+  const navs = page.locator('nav.revision__nav');
+  await expect(navs).toHaveCount(2);
+  await expect(navs.first().locator('a', { hasText: 'Next' })).toHaveCount(0);
+  await expect(navs.last().locator('a', { hasText: 'Next' })).toHaveCount(0);
   await expect(page.locator('a', { hasText: 'Next' })).toHaveCount(0);
 });
 
@@ -80,6 +102,56 @@ test('the biggest diff wraps without horizontal scroll at 320px', async ({ page 
   await expect(page.locator('table.diff')).toHaveCount(1);
   const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(scrollWidth).toBeLessThanOrEqual(320);
+});
+
+test('at 390px the diff drops the line numbers for a ≥ 320 px text column, and a tappable nav follows the table', async ({
+  page,
+}) => {
+  test.skip(count < 3, 'fewer than 3 revisions');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(to('/history/3/'));
+  const table = page.locator('table.diff');
+  await expect(table).toHaveCount(1);
+
+  // The two line-number columns are gone (header and body); the text cell has the room (was 229 px).
+  await expect(table.locator('thead th').nth(0)).toBeHidden();
+  await expect(table.locator('thead th').nth(1)).toBeHidden();
+  await expect(table.locator('thead th').nth(3)).toBeVisible();
+  const geometry = await page.evaluate(() => {
+    const rect = (el: Element | null) => el?.getBoundingClientRect() ?? null;
+    const table = document.querySelector('table.diff')!;
+    const scroll = document.querySelector<HTMLElement>('.table-scroll')!;
+    const navs = Array.from(document.querySelectorAll('nav.revision__nav'));
+    return {
+      scrollWidth: document.documentElement.scrollWidth,
+      textCell: rect(document.querySelector('tbody tr:not(.diff__hunk) td:nth-child(4)'))!.width,
+      hunkCell: rect(document.querySelector('tr.diff__hunk td[colspan="4"]'))!.width,
+      tableWidth: rect(table)!.width,
+      tableScroll: { scrollWidth: scroll.scrollWidth, clientWidth: scroll.clientWidth },
+      navCount: navs.length,
+      lastNavTop: rect(navs[navs.length - 1] ?? null)?.top ?? NaN,
+      tableBottom: rect(table)!.bottom,
+      linkHeights: Array.from(document.querySelectorAll('nav.revision__nav a'), (a) => a.getBoundingClientRect().height),
+    };
+  });
+  expect(geometry.scrollWidth, 'page scrollWidth').toBe(390);
+  expect(geometry.textCell, 'text cell width').toBeGreaterThanOrEqual(320);
+  // The hunk header (colspan=4) still spans the visible columns.
+  expect(geometry.hunkCell, 'hunk header width').toBeGreaterThanOrEqual(geometry.tableWidth - 2);
+  expect(geometry.tableScroll.scrollWidth, '.table-scroll does not scroll').toBe(geometry.tableScroll.clientWidth);
+
+  // Previous · All revisions · Next: once under the header, once after the diff, every item ≥ 32 px tall.
+  expect(geometry.navCount).toBe(2);
+  expect(geometry.lastNavTop, 'second nav below the table').toBeGreaterThan(geometry.tableBottom);
+  expect(geometry.linkHeights.length).toBe(6);
+  for (const height of geometry.linkHeights) expect(height, 'nav link tap target').toBeGreaterThanOrEqual(32);
+
+  // Back at desktop width the four columns are back, the number columns at their 3.6em.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(table.locator('thead th').nth(0)).toBeVisible();
+  await expect(table.locator('thead th').nth(1)).toBeVisible();
+  const colWidth = await page.evaluate(() => document.querySelector('col.diff__col-num')!.getBoundingClientRect().width);
+  expect(colWidth, 'col.diff__col-num at 1280').toBeGreaterThan(40);
 });
 
 test('the sitemap lists no revision page', async ({ request }) => {
