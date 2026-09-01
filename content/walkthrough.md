@@ -27,6 +27,8 @@ This page walks the sample in order: each of its seventeen sections gets a verba
 
 **Steal this** — Lead with a named screenshot of every screen and every state you care about, before you write a word of spec.
 
+*In the guide:* [Habit 2 — Show, don't describe](/guide#2-show-dont-describe).
+
 ## Technical specification and checklist
 
 > Before coding, create and commit `TECHNICAL_SPEC.md`. …
@@ -38,6 +40,8 @@ This page walks the sample in order: each of its seventeen sections gets a verba
 **Why it works** — It makes the agent read the whole instruction and restate it as atomic items. One-shot builds usually fail on a forgotten decision, not a wrong one: the agent starts on the first feature and never returns to the twelfth. A checklist it wrote itself is the memory that prevents that, and `Verify: method` gives each item its own definition of done.
 
 **Steal this** — Make the agent produce its own checkbox spec, with a verification method on every line, before it writes code.
+
+*In the guide:* [Habit 3 — Make the agent write its own checklist](/guide#3-make-the-agent-write-its-own-checklist).
 
 ## Stack and design
 
@@ -53,6 +57,8 @@ This page walks the sample in order: each of its seventeen sections gets a verba
 **Why it works** — Stack choice is the largest single guess an agent makes, made in the first minute, before anything can be checked. Naming the exact libraries removes it, and the negatives close doors the agent would otherwise walk through on its own. Naming Bulma also gives every later visual instruction a shared vocabulary, down to `button is-fullwidth`.
 
 **Steal this** — Name every library and runtime, and say which obvious alternatives are off the table.
+
+*In the guide:* [Habit 4 — Pin the stack and name the alternatives you are ruling out](/guide#4-pin-the-stack-and-name-the-alternatives-you-are-ruling-out).
 
 ## Product
 
@@ -85,6 +91,8 @@ This page walks the sample in order: each of its seventeen sections gets a verba
 
 **Steal this** — Put every route in a table with one line of behavior, then say which routes win when patterns overlap.
 
+*In the guide:* [Habit 5 — Be exact where exactness matters](/guide#5-be-exact-where-exactness-matters).
+
 ## Home page
 
 > - Submit with Enter key. Validation: non-empty after trim; must parse as an absolute `http` or `https` URL … Invalid: apply the invalid input state and show **"That doesn't look like a valid URL"**
@@ -95,6 +103,8 @@ This page walks the sample in order: each of its seventeen sections gets a verba
 **Why it works** — Every piece of copy is bold and exact, so the agent copies rather than writes. Validation is an algorithm, not an adjective: trim, parse as absolute http or https, allow a bare domain, require a dot in the host. Where a designer would say large, the gist gives a comparison the agent can check, "visibly the biggest input on the page after the editor's vanity field".
 
 **Steal this** — Put every user-visible string in bold, exactly as it should appear, and write validation as steps rather than adjectives.
+
+*In the guide:* [Habit 2 — Show, don't describe](/guide#2-show-dont-describe).
 
 ## Draft and editor
 
@@ -107,6 +117,8 @@ This page walks the sample in order: each of its seventeen sections gets a verba
 **Why it works** — The gist flags the one interaction that matters most and describes it by what is absent: no input boxes, no borders, no labels, no save buttons. Listing what must not appear stops the agent from building the standard form it would otherwise reach for. The publish bar gives the alias rule as observable behavior, with exact error strings and a 300ms availability check.
 
 **Steal this** — Mark the one interaction that matters most and describe it by what the user must not see as well as what they must.
+
+*In the guide:* [Habit 2 — Show, don't describe](/guide#2-show-dont-describe) · [Habit 5 — Be exact where exactness matters](/guide#5-be-exact-where-exactness-matters).
 
 ## Live metadata
 
@@ -134,6 +146,8 @@ This page walks the sample in order: each of its seventeen sections gets a verba
 
 **Steal this** — Define every identifier with a character set, a length range, and a uniqueness scope.
 
+*In the guide:* [Habit 5 — Be exact where exactness matters](/guide#5-be-exact-where-exactness-matters).
+
 ## Login and ownership
 
 > 1. **"with Twitter/X"**
@@ -147,6 +161,8 @@ This page walks the sample in order: each of its seventeen sections gets a verba
 **Why it works** — Real OAuth would have stalled the build on credentials the agent does not have. The gist replaces it with a mock specified tightly enough (at least two distinct users with stable IDs) that every login-dependent flow can still be built and tested. Ownership as the (user ID, provider) pair is a data-model decision made for the agent in one sentence, and "401 on update/delete" gives the failure mode a testable status code.
 
 **Steal this** — Replace a blocking dependency with a mock specified precisely enough that everything downstream can still be finished and tested.
+
+*In the guide:* [Habit 6 — State the invariants the code must never violate](/guide#6-state-the-invariants-the-code-must-never-violate).
 
 ## My Lists
 
@@ -212,6 +228,8 @@ This page walks the sample in order: each of its seventeen sections gets a verba
 
 **Steal this** — Name the operations that need transactions, the inputs that are untrusted, and the test hooks the suite will need.
 
+*In the guide:* [Habit 6 — State the invariants the code must never violate](/guide#6-state-the-invariants-the-code-must-never-violate).
+
 ## Scripts, tests, and documentation
 
 > Use Playwright for: the home page first-link flow (valid and invalid → "That doesn't look like a valid URL"); draft persistence across reload and logout; …
@@ -223,6 +241,8 @@ This page walks the sample in order: each of its seventeen sections gets a verba
 **Why it works** — The Playwright paragraph is the acceptance criteria for the whole product, written as one long list: each clause names a flow and, often, the exact string the test should find. Because those strings match the bold copy in earlier sections, a test cannot pass against paraphrased UI; the tests enforce the spec and catch an agent that drifted while building. The unit-test list tells the agent which logic must be pure enough to test in isolation.
 
 **Steal this** — Write the test list as the definition of done, naming the flows and the exact strings each test must find.
+
+*In the guide:* [Habit 7 — Define done as checks the agent can run](/guide#7-define-done-as-checks-the-agent-can-run).
 
 ## Completion
 
@@ -240,6 +260,8 @@ This page walks the sample in order: each of its seventeen sections gets a verba
 
 **Steal this** — End with a numbered exit procedure that re-runs the checks, reconciles the checklist, and forbids claiming a check that was not run.
 
+*In the guide:* [Habit 1 — Start with the mission and the stop condition](/guide#1-start-with-the-mission-and-the-stop-condition) · [Habit 7 — Define done as checks the agent can run](/guide#7-define-done-as-checks-the-agent-can-run).
+
 ## Patterns that repeat
 
 Each of these techniques removes a class of decisions the agent would otherwise make alone, and the fewer of those there are, the closer the build gets to one shot.
@@ -252,3 +274,5 @@ Each of these techniques removes a class of decisions the agent would otherwise 
 - **States required everywhere.** Loading, empty, error, and not-found states specified per feature, then required globally: Draft and editor, My Lists, Public list, Theme, responsive UI, and accessibility.
 - **Tests as the definition of done.** Unit-test subjects, an end-to-end list naming flows and strings, and an exit step that runs them: Scripts, tests, and documentation, Completion.
 - **A self-maintained checklist.** The agent writes its own spec first, checks items only with evidence, and reconciles it before finishing: Technical specification and checklist, Completion.
+
+*In the guide:* [Habit 6 — State the invariants the code must never violate](/guide#6-state-the-invariants-the-code-must-never-violate).
