@@ -33,6 +33,26 @@ const MIN_TAP = 32;
 /** The neighbour's left edge: it must not move while the button's label is shorter than at rest. */
 const leftOf = (locator: Locator) => locator.evaluate((el) => el.getBoundingClientRect().left);
 
+// The focused element: `kind` classifies it against the allowed set below; the label and raw parts name the
+// element in a failure message instead of printing an empty id.
+const activeElement = (page: Page) =>
+  page.evaluate(() => {
+    const el = document.activeElement;
+    if (!el) return { kind: 'none', label: 'none', tagName: '', id: '', className: '', inCard: false };
+    const tagName = el.tagName.toLowerCase();
+    const id = el.id;
+    const className = typeof el.className === 'string' ? el.className.trim() : '';
+    const label = `${tagName}${id ? `#${id}` : ''}${className ? `.${className.split(/\s+/).join('.')}` : ''}`;
+    const kind = el === document.body ? 'body' : el.matches('button.copy-prd') ? 'button.copy-prd' : el.matches('main#main') ? 'main#main' : 'other';
+    return { kind, label, tagName, id, className, inCard: document.querySelector('.source-card')?.contains(el) ?? false };
+  });
+// After a failed copy, focus may only be where the click left it: the button, the nearest focusable ancestor
+// `<main id="main" tabindex="-1">` (Windows WebKit does not mouse-focus buttons — Safari's behaviour), or
+// `<body>` (an engine that focused nothing). Never the status region, the Download link or anything else.
+// Measured (task #1537): Chromium and Firefox on Windows and Linux → the button; Windows WebKit → main#main;
+// Linux WebKit → the button (`<button class="copy-prd">`, whose empty id the old `id === 'main'` check read as '').
+const FOCUS_AFTER_CLICK = ['button.copy-prd', 'main#main', 'body'];
+
 test('/sample/ adds Copy the PRD as the third action, after Download .md, and keeps its three links', async ({ page }) => {
   await page.goto(to('/sample/'));
 
@@ -93,10 +113,7 @@ test('Copy the PRD works from the keyboard: focus, Enter', async ({ page, browse
   expect(await readClipboard(page)).toMatch(/^# Build The Urlist\n/);
 });
 
-test('when the gist cannot be fetched the button says so and leaves Download .md as the way out', async ({
-  page,
-  browserName,
-}) => {
+test('when the gist cannot be fetched the button says so and leaves Download .md as the way out', async ({ page }) => {
   await page.goto(to('/sample/'));
   await page.route('**/raw/build-the-urlist.md', (route) => route.fulfill({ status: 500 }));
   const button = copyButton(page);
@@ -105,14 +122,14 @@ test('when the gist cannot be fetched the button says so and leaves Download .md
   await expect(button).toHaveText(FAILED, { timeout: 3000 });
   await expect(button).not.toHaveAttribute('data-state');
   await expect(button).not.toHaveAttribute('aria-busy');
-  // The failure path leaves focus where the click put it. Chromium and Firefox focus the button; WebKit
-  // does not mouse-focus buttons (Safari's behaviour) and lands on the nearest focusable ancestor, the
-  // skip link's <main id="main" tabindex="-1">. Either way the script must not move focus anywhere else.
-  if (browserName === 'webkit') {
-    expect(await page.evaluate(() => document.activeElement?.id), 'focus on <main>, the nearest focusable ancestor').toBe('main');
-  } else {
-    await expect(button).toBeFocused();
-  }
+  // The failure path leaves focus where the click put it; the script has no `.focus()` call, so it must not
+  // move focus anywhere else. Which element the click focused is the engine's business (see FOCUS_AFTER_CLICK
+  // for the three measured answers), so one assertion for every engine: focus is in the allowed set.
+  const focus = await activeElement(page);
+  expect(
+    FOCUS_AFTER_CLICK,
+    `focus after the failure is on ${focus.label} (tagName=${JSON.stringify(focus.tagName)} id=${JSON.stringify(focus.id)} className=${JSON.stringify(focus.className)} inside .source-card=${focus.inCard}); allowed: the button, main#main or body`,
+  ).toContain(focus.kind);
   await expect(statusRegion(page)).toHaveText(FAILED);
   await expect(page.locator('.source-card__links a[download]')).toHaveText('Download .md');
 

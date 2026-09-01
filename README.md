@@ -122,26 +122,32 @@ screenshot loads eagerly.
 Public URL: **https://burkeholland.github.io/prd/**
 
 - Pages source = **GitHub Actions**, workflow `.github/workflows/deploy.yml`.
-  One `build` job runs on every push: `npm ci`, `node scripts/make-mocks.mjs`,
-  `npm run check`, `npm test`, `npm run build`, then the Playwright suite
-  against that same `dist/` (`PLAYWRIGHT_PREBUILT=1` makes the suite's web
-  server serve the existing build instead of building its own), and only then
-  uploads `dist/` as the Pages artifact — the site cannot publish a build the
-  browser suite did not run against. `make-mocks` runs before `astro check`
-  because `check` runs `astro sync`, which renders the markdown into the
-  content-layer cache that `astro build` reuses, so the WebP copies must exist
-  before that first render. Measured on a warm browser cache the job takes about
-  65 s — `npm ci` 5 s, `check` 6 s, unit tests 2 s, build 3 s, browser install
-  11 s, browser suite 27 s — and the Pages deploy itself 10 s to 3 min. Browser
-  failures appear as annotations on the run and the HTML report is attached to
-  the run as an artifact for a week. Pushes to other branches run the same
-  `build` job as CI and skip the deploy job. No secrets: Pages deploys with the
-  workflow's own OIDC token. Runs are serialised per branch
-  (`concurrency: pages-<ref>`), so a branch push can never cancel a pending
-  `main` deploy.
+  Three jobs run on every push. `build`: `npm ci`, `node scripts/make-mocks.mjs`,
+  `npm run check`, `npm test`, `npm run build`, then uploads `dist/` as a
+  one-day `dist` workflow artifact. `e2e`, a matrix of three legs (chromium,
+  webkit, firefox; `fail-fast: false`, so one engine's red never hides the
+  others), downloads that artifact and runs the Playwright suite against it
+  (`PLAYWRIGHT_PREBUILT=1` makes the suite's web server serve the downloaded
+  build instead of building its own; `PW_ENGINES=all` defines the webkit and
+  firefox projects). `deploy` downloads the same artifact and hands it to Pages
+  only after all three legs passed — nothing after `build` runs `astro build`
+  again, so the site cannot publish a build the browser suite did not run
+  against. `make-mocks` runs before `astro check` because `check` runs
+  `astro sync`, which renders the markdown into the content-layer cache that
+  `astro build` reuses, so the WebP copies must exist before that first render.
+  Measured 2026-09-01: `build` 31 s (`npm ci` 5 s, `check` 8 s, unit tests 2 s,
+  build 3 s, upload 2 s); each leg 80–100 s (`npm ci` 5 s, browser install
+  22–36 s on a cold cache, suite 40–50 s), the three in parallel — about 2½ min
+  from push to the deploy gate — and the Pages deploy itself 10 s to 3 min.
+  Browser failures appear as annotations on the run and each leg's HTML report
+  is attached to the run as `playwright-report-<engine>` for a week. Pushes to
+  other branches run `build` and the three legs as CI and skip the deploy job.
+  No secrets: Pages deploys with the workflow's own OIDC token. Runs are
+  serialised per branch (`concurrency: pages-<ref>`), so a branch push can
+  never cancel a pending `main` deploy.
 - `deploy.yml` pins the actions to their Node 24 majors (`checkout@v7`, `setup-node@v7`,
-  `cache@v6`, `upload-artifact@v7`, `upload-pages-artifact@v5`, `deploy-pages@v5`); bump
-  them together.
+  `cache@v6`, `upload-artifact@v7`, `download-artifact@v7`, `upload-pages-artifact@v5`,
+  `deploy-pages@v5`); bump them together.
 - `/build.json` is the build stamp — `{ "sha", "builtAt" }`, prerendered by
   `src/pages/build.json.ts` from `GITHUB_SHA` (`"local"` outside Actions) and the
   build clock. After `deploy-pages` the `deploy` job polls the live

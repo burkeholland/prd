@@ -87,14 +87,36 @@ test('768×1024: the "On this page" summary is thumb-sized without growing the c
   const details = page.locator('details.toc--inline');
   const summary = details.locator('> summary');
   await expect(details).not.toHaveAttribute('open');
-  const closed = await details.evaluate((node) => node.getBoundingClientRect().height);
+  const closedHeight = () => details.evaluate((node) => node.getBoundingClientRect().height);
+  const closed = await closedHeight();
   const summaryBox = await summary.evaluate((node) => node.getBoundingClientRect());
   expect(summaryBox.height, 'summary tap target').toBeGreaterThanOrEqual(MIN_TAP);
-  // The summary's padding is cancelled by an equal negative margin, so the closed box is the height it
-  // had before the padding: 1px border + 0.75rem padding + one 1.6-line of 17px text, each side.
-  // Chromium and WebKit lay the line box out at 37.38 px (54.69 total); Firefox rounds it to 37.90
-  // (55.20 total), so the tolerance is 1 px rather than toBeCloseTo's 0.05.
-  expect(Math.abs(closed - 54.69), `closed details height ${closed} (unchanged from main: 54.69 ± 1)`).toBeLessThanOrEqual(1);
+  // The summary's padding is cancelled by an equal negative margin (task #1473), so the closed box must be
+  // exactly the height it has with neither: 1px border + 0.75rem padding + one 1.6-line of 17px text, each
+  // side. That height depends on the engine's line-box rounding and on the system sans (the site ships no
+  // web fonts): measured 54.69 Chromium/WebKit, 55.20 Windows Firefox, 55.70 Linux Firefox — so it is not
+  // asserted as a constant. Instead the padding and margin are neutralised in place and the box re-measured
+  // in the same engine with the same font: the two must agree to a hair (task #1537: identical to the
+  // digit in all six engine × OS pairs). A loose absolute bound still catches a gross regression (the trick
+  // cancels 0.6rem; had it grown the box, that would be +9.6 px).
+  expect(closed, `closed details height ${closed} px is a sane one-line box`).toBeGreaterThanOrEqual(45);
+  expect(closed, `closed details height ${closed} px is a sane one-line box`).toBeLessThanOrEqual(65);
+  await page.addStyleTag({
+    content:
+      'details.toc--inline > summary { padding-top: 0 !important; padding-bottom: 0 !important; margin-top: 0 !important; margin-bottom: 0 !important; }',
+  });
+  await page.evaluate(() => new Promise(requestAnimationFrame));
+  const plainSummary = await summary.evaluate((node) => {
+    const style = getComputedStyle(node);
+    return { paddingTop: style.paddingTop, marginTop: style.marginTop, height: node.getBoundingClientRect().height };
+  });
+  expect(plainSummary, 'the injected style neutralised the summary padding and margin').toMatchObject({ paddingTop: '0px', marginTop: '0px' });
+  expect(plainSummary.height, 'without its padding the summary is shorter than the tap target').toBeLessThan(MIN_TAP);
+  const closedWithoutThumbSizing = await closedHeight();
+  expect(
+    Math.abs(closed - closedWithoutThumbSizing),
+    `closed details height ${closed} px vs ${closedWithoutThumbSizing} px with the summary's padding and margin removed — same engine, same font, so the thumb-sizing must not change the closed box`,
+  ).toBeLessThanOrEqual(0.05);
 
   for (const [path, count] of [
     ['/guide/', 13],
