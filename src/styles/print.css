@@ -187,6 +187,11 @@
     overflow-wrap: anywhere;
   }
 
+  /* Section permalinks (rehype-anchors): the hover # never prints. */
+  .prose :is(h2, h3, h4) > a.heading-link::after {
+    content: none;
+  }
+
   .placeholder {
     border-radius: 0;
   }

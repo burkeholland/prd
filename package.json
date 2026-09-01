@@ -6,9 +6,9 @@
   "description": "PRD Field Guide — how to write a product requirements doc an AI agent can build from, with a real one as the worked example.",
   "scripts": {
     "predev": "node scripts/make-mocks.mjs",
-    "dev": "astro dev --port 4410",
+    "dev": "astro dev --port 4410 --force",
     "prebuild": "node scripts/make-mocks.mjs",
-    "build": "astro build",
+    "build": "astro build --force",
     "preview": "astro preview --port 4411",
     "check": "astro check",
     "test": "vitest run && node --test \"scripts/**/*.test.mjs\" \"scripts/check-*.mjs\"",

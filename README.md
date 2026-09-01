@@ -55,15 +55,19 @@ npx playwright test tests/e2e/template.spec.ts   copy buttons on /template (clip
 npx playwright test tests/e2e/sample.spec.ts   "Copy the PRD" on /sample (clipboard, keyboard, failure path)
 ```
 
+`build` and `dev` pass `--force` so a change to a remark/rehype plugin is never served from
+Astro's content cache (`node_modules/.astro/data-store.json`, shared between worktrees).
+
 Ports: **4410** dev, **4411** preview / Playwright by default; `PREVIEW_PORT`
 overrides the e2e preview port. The site lives under the `/prd` base path
 locally too, so open `http://localhost:4410/prd/` — the bare `/` is not served.
 
-Rendered markdown goes through two rehype plugins (`astro.config.mjs`):
+Rendered markdown goes through three rehype plugins (`astro.config.mjs`):
 `src/lib/rehype-base.mjs` prefixes root-relative URLs with the base, and
 `src/lib/rehype-figures.mjs` turns each block-level image into a lazy-loaded
 `<figure>` captioned from the nearest preceding `####` heading — this is how the
-gist's screenshots render on `/sample`. The root `.gitattributes` marks
+gist's screenshots render on `/sample`. `src/lib/rehype-anchors.mjs` wraps each
+h2–h4 in a link to its own id. The root `.gitattributes` marks
 `content/gist/**` and `public/raw/**` `-text` so the CRLF gist snapshot stays
 byte-exact on every checkout.
 
