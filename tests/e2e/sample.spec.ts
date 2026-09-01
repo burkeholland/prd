@@ -105,15 +105,14 @@ test('when the gist cannot be fetched the button says so and leaves Download .md
   await expect(button).toHaveText(RESET, { timeout: RESET_TIMEOUT });
 });
 
-test('/sample/ ships exactly one script beyond the nav helper and no template Copy buttons; /guide/ and /walkthrough/ ship none', async ({ page }) => {
-  // `script[data-nav]` is the inline phone-nav helper every page carries (tests/e2e/site.spec.ts covers it).
+test('/sample/ ships exactly one script and no template Copy buttons; /guide/ and /walkthrough/ ship none', async ({ page }) => {
   await page.goto(to('/sample/'));
-  await expect(page.locator('script:not([data-nav])')).toHaveCount(1);
+  await expect(page.locator('script')).toHaveCount(1);
   await expect(page.locator('button.copy-button')).toHaveCount(0);
 
   for (const path of ['/guide/', '/walkthrough/']) {
     await page.goto(to(path));
-    await expect(page.locator('script:not([data-nav])'), `${path} script elements`).toHaveCount(0);
+    await expect(page.locator('script'), `${path} script elements`).toHaveCount(0);
   }
 });
 

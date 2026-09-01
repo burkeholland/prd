@@ -84,15 +84,14 @@ test('the last revision carries the badge that links to the sample page', async 
   await expect(page.locator('a', { hasText: 'Next' })).toHaveCount(0);
 });
 
-test('every revision page responds 200 and ships no script beyond the nav helper', async ({ page, request }) => {
+test('every revision page responds 200 and ships no script', async ({ page, request }) => {
   for (let n = 1; n <= count; n++) {
     const response = await request.get(to(`/history/${n}/`));
     expect(response.status(), `/history/${n}/ status`).toBe(200);
   }
-  // `script[data-nav]` is the inline phone-nav helper every page carries (tests/e2e/site.spec.ts covers it).
   for (const n of [1, 3, 13].filter((n) => n <= count)) {
     await page.goto(to(`/history/${n}/`));
-    expect(await page.evaluate(() => document.querySelectorAll('script:not([data-nav])').length), `/history/${n}/ scripts`).toBe(0);
+    expect(await page.evaluate(() => document.querySelectorAll('script').length), `/history/${n}/ scripts`).toBe(0);
   }
 });
 
