@@ -25,6 +25,11 @@ const HEIGHT = 630;
 const MAX_BYTES = 200_000;
 const MAX_TITLE_LINES = 2;
 const MAX_SUBTITLE_LINES = 3;
+// Copy is shrunk in these steps, never below these sizes; a card that still does not fit fails the run.
+const TITLE_STEP_PX = 4;
+const TITLE_MIN_PX = 48;
+const SUBTITLE_STEP_PX = 2;
+const SUBTITLE_MIN_PX = 24;
 
 const here = dirname(fileURLToPath(import.meta.url));
 const source = resolve(here, 'og.html');
@@ -36,10 +41,10 @@ function pngSize(bytes) {
 }
 
 /**
- * Runs in the page: fills the three text slots, then shrinks the title/subtitle font until each
- * fits its line budget and the whole card fits the viewport. Returns what it measured.
+ * Runs in the page: fills the three text slots, then shrinks the title/subtitle font (down to the
+ * floors) until each fits its line budget and the whole card fits the viewport. Returns what it measured.
  */
-function layoutCard({ eyebrow, title, subtitle, maxTitleLines, maxSubtitleLines, height }) {
+function layoutCard({ eyebrow, title, subtitle, maxTitleLines, maxSubtitleLines, height, titleStep, titleMin, subtitleStep, subtitleMin }) {
   const slot = (id) => {
     const el = document.getElementById(id);
     if (!el) throw new Error(`og.html has no #${id}`);
@@ -50,8 +55,12 @@ function layoutCard({ eyebrow, title, subtitle, maxTitleLines, maxSubtitleLines,
     const lineHeight = px(el, 'lineHeight');
     return Math.round(el.getBoundingClientRect().height / (Number.isNaN(lineHeight) ? px(el, 'fontSize') * 1.2 : lineHeight));
   };
-  const shrink = (el, step) => {
-    el.style.fontSize = `${px(el, 'fontSize') - step}px`;
+  /** Shrinks by one step; false once the floor is reached. */
+  const shrink = (el, step, min) => {
+    const next = px(el, 'fontSize') - step;
+    if (next < min) return false;
+    el.style.fontSize = `${next}px`;
+    return true;
   };
   const overflows = () => document.documentElement.scrollHeight > height;
 
@@ -62,10 +71,10 @@ function layoutCard({ eyebrow, title, subtitle, maxTitleLines, maxSubtitleLines,
   titleEl.textContent = title;
   subtitleEl.textContent = subtitle;
 
-  for (let i = 0; i < 12 && lines(titleEl) > maxTitleLines; i++) shrink(titleEl, 4);
-  for (let i = 0; i < 12 && lines(subtitleEl) > maxSubtitleLines; i++) shrink(subtitleEl, 2);
+  while (lines(titleEl) > maxTitleLines && shrink(titleEl, titleStep, titleMin));
+  while (lines(subtitleEl) > maxSubtitleLines && shrink(subtitleEl, subtitleStep, subtitleMin));
   // A two-line title over a three-line subtitle can still be too tall together: tighten the subtitle.
-  for (let i = 0; i < 12 && overflows(); i++) shrink(subtitleEl, 2);
+  while (overflows() && shrink(subtitleEl, subtitleStep, subtitleMin));
 
   return {
     titleLines: lines(titleEl),
@@ -90,6 +99,10 @@ try {
       maxTitleLines: MAX_TITLE_LINES,
       maxSubtitleLines: MAX_SUBTITLE_LINES,
       height: HEIGHT,
+      titleStep: TITLE_STEP_PX,
+      titleMin: TITLE_MIN_PX,
+      subtitleStep: SUBTITLE_STEP_PX,
+      subtitleMin: SUBTITLE_MIN_PX,
     });
     if (fit.scrollHeight > HEIGHT) {
       console.error(`public${card.file}: the copy overflows the card (${fit.scrollHeight}px > ${HEIGHT}px)`);
