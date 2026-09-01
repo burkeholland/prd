@@ -21,7 +21,25 @@ export default defineConfig({
     baseURL: ORIGIN,
     trace: 'retain-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  // `chromium` always. `webkit` and `firefox` only with PW_ENGINES=all (e.g.
+  // `$env:PW_ENGINES = 'all'; npx playwright test --project=webkit`), so a plain `npx playwright test`
+  // stays Chromium-only and as fast as today until CI turns the other engines on. Desktop Safari's
+  // descriptor defaults to deviceScaleFactor 2, which changes the responsive-image pick and every
+  // pixel measurement; pin it to 1 so the three engines see the same page.
+  // Clipboard permissions live on the chromium project: WebKit rejects `clipboard-write` and Firefox
+  // `clipboard-read`, and a rejected permission fails every test in the file that requests it.
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'], permissions: ['clipboard-read', 'clipboard-write'] },
+    },
+    ...(process.env.PW_ENGINES === 'all'
+      ? [
+          { name: 'webkit', use: { ...devices['Desktop Safari'], deviceScaleFactor: 1 } },
+          { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+        ]
+      : []),
+  ],
   webServer: {
     // Tests run against the production build served by `astro preview`. With PLAYWRIGHT_PREBUILT set
     // (deploy.yml) the existing dist/ is served without rebuilding: CI tests the artifact it deploys.

@@ -11,6 +11,8 @@ const to = (path: string) => `${BASE}${path}`;
 // rules apply and the document has exactly one paper width to fit in.
 const A4 = { width: 794, height: 1123 };
 
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 /** Scrolls every lazy image into view and waits until it has loaded (or failed). */
 async function loadImages(page: Page) {
   await page.locator('.doc__body img').evaluateAll(async (nodes) => {
@@ -106,7 +108,12 @@ async function expectPrintsCleanly(page: Page, path: string) {
     expect(link.color, `${path} ${link.href} color`).toBe(link.parentColor);
     expect(link.color, `${path} ${link.href} color`).not.toBe('rgb(15, 110, 86)');
     if (link.href.startsWith('http')) {
-      expect(link.after, `${path} ${link.href} ::after`).toContain(`(${link.href})`);
+      // `content: " (" attr(href) ")"` serialises differently per engine: Chromium joins it into one
+      // string `"(https://…)"`, WebKit keeps the list `" (" "https://…" ")"`, and Firefox returns the
+      // unresolved `" (" attr(href) ")"` (it cannot resolve attr() in computed style). Strip quotes
+      // and whitespace and accept the URL or the attr() reference.
+      const after = link.after.replace(/["\s]/g, '');
+      expect(after, `${path} ${link.href} ::after`).toMatch(new RegExp(`^\\((${escapeRegExp(link.href)}|attr\\(href\\))\\)$`));
     } else {
       expect(link.decoration, `${path} ${link.href} decoration`).toBe('none');
       expect(link.after, `${path} ${link.href} ::after`).toBe('none');
@@ -141,9 +148,7 @@ test('/template/ prints content only in black on white, without the download but
   await expect(page.locator('.doc__actions a.button')).toBeHidden();
 });
 
-// Last on purpose: after the assertions it saves the sample PRD as an A4 PDF (Chromium headless only)
-// under test-results/ (ignored, never committed) and reports its page count and size as evidence.
-test('/sample/ prints content only with its seven screenshots and saves as an A4 PDF', async ({ page }, testInfo) => {
+test('/sample/ prints content only with its seven screenshots', async ({ page }) => {
   const counts = await expectPrintsCleanly(page, '/sample/');
   expect(counts.pres, 'code blocks checked').toBeGreaterThan(0);
   expect(counts.external, 'external links checked').toBeGreaterThan(0);
@@ -165,8 +170,18 @@ test('/sample/ prints content only with its seven screenshots and saves as an A4
     expect(img.width, 'screenshot fits the paper').toBeLessThanOrEqual(A4.width);
     expect(img.radius, 'screenshot corners').toBe('0px');
   }
+});
 
-  // Chromium headless only: the configured project.
+// Last on purpose: saves the sample PRD as an A4 PDF under test-results/ (ignored, never committed) and
+// reports its page count and size as evidence. `page.pdf()` exists in Chromium headless only, so the
+// CSS assertions above run in every engine and only this half skips elsewhere.
+test('/sample/ saves as an A4 PDF', async ({ page, browserName }, testInfo) => {
+  test.skip(browserName !== 'chromium', 'page.pdf() is Chromium-only in Playwright');
+  await page.setViewportSize(A4);
+  await page.emulateMedia({ media: 'print' });
+  await page.goto(to('/sample/'));
+  await loadImages(page);
+
   const dir = resolve('test-results');
   mkdirSync(dir, { recursive: true });
   const path = resolve(dir, 'sample.pdf');

@@ -92,7 +92,9 @@ test('768×1024: the "On this page" summary is thumb-sized without growing the c
   expect(summaryBox.height, 'summary tap target').toBeGreaterThanOrEqual(MIN_TAP);
   // The summary's padding is cancelled by an equal negative margin, so the closed box is the height it
   // had before the padding: 1px border + 0.75rem padding + one 1.6-line of 17px text, each side.
-  expect(closed, 'closed details height (unchanged from main)').toBeCloseTo(54.6875, 1);
+  // Chromium and WebKit lay the line box out at 37.38 px (54.69 total); Firefox rounds it to 37.90
+  // (55.20 total), so the tolerance is 1 px rather than toBeCloseTo's 0.05.
+  expect(Math.abs(closed - 54.69), `closed details height ${closed} (unchanged from main: 54.69 ± 1)`).toBeLessThanOrEqual(1);
 
   for (const [path, count] of [
     ['/guide/', 13],
