@@ -126,4 +126,9 @@ test('a generation failure is explicit and leaves the current draft intact', asy
   await expect(page.locator('#section-input-summary-outcome')).toHaveValue(
     'Keep this section after the failed export.',
   );
+
+  await page.unroute('**/*.woff');
+  const retry = await clickDownload(page, '#download-pdf');
+  expect(retry.suggestedFilename()).toBe('keep-this-title.pdf');
+  expect((await bytesFrom(retry)).subarray(0, 5)).toEqual(Buffer.from('%PDF-'));
 });

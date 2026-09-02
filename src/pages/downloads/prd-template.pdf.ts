@@ -14,7 +14,7 @@ const require = createRequire(import.meta.url);
 const font = (weight: 400 | 700) =>
   readFile(
     require.resolve(
-      `@fontsource/noto-sans/files/noto-sans-latin-ext-${weight}-normal.woff`,
+      `@fontsource/noto-sans/files/noto-sans-latin-${weight}-normal.woff`,
     ),
   );
 

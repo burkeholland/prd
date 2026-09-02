@@ -37,6 +37,28 @@ const printableText = (value: string): string =>
     .replace(/\t/g, '    ')
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '');
 
+const assertFontCoverage = (
+  font: PDFFont,
+  values: readonly string[],
+  label: string,
+) => {
+  const supported = new Set(font.getCharacterSet());
+  for (const value of values) {
+    for (const character of Array.from(printableText(value))) {
+      const codePoint = character.codePointAt(0);
+      if (
+        codePoint !== undefined &&
+        !/\s/u.test(character) &&
+        !supported.has(codePoint)
+      ) {
+        throw new Error(
+          `The PDF ${label} font cannot render U+${codePoint.toString(16).toUpperCase().padStart(4, '0')}.`,
+        );
+      }
+    }
+  }
+};
+
 const splitLongWord = (
   word: string,
   maxWidth: number,
@@ -105,6 +127,16 @@ export const generatePrdPdf = async (
 
   const regular = await pdf.embedFont(fonts.regular, { subset: true });
   const bold = await pdf.embedFont(fonts.bold, { subset: true });
+  assertFontCoverage(
+    bold,
+    [document.title, ...document.sections.map((section) => section.title)],
+    'heading',
+  );
+  assertFontCoverage(
+    regular,
+    document.sections.map((section) => section.body),
+    'body',
+  );
   const layout: PrdPdfLayoutLine[] = [];
   let page: PDFPage;
   let pageNumber = 0;

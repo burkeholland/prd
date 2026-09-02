@@ -163,8 +163,8 @@ const blankDownloads = [
 </Base>
 
 <script>
-  import notoSansRegularUrl from '@fontsource/noto-sans/files/noto-sans-latin-ext-400-normal.woff?url';
-  import notoSansBoldUrl from '@fontsource/noto-sans/files/noto-sans-latin-ext-700-normal.woff?url';
+  import notoSansRegularUrl from '@fontsource/noto-sans/files/noto-sans-latin-400-normal.woff?url';
+  import notoSansBoldUrl from '@fontsource/noto-sans/files/noto-sans-latin-700-normal.woff?url';
   import {
     clearPrdEditorDraft,
     createBlankPrdEditorState,
@@ -353,7 +353,8 @@ const blankDownloads = [
     | Promise<{ regular: Uint8Array; bold: Uint8Array }>
     | undefined;
   const loadPdfFonts = () => {
-    pdfFonts ??= Promise.all(
+    if (pdfFonts) return pdfFonts;
+    const pending = Promise.all(
       [notoSansRegularUrl, notoSansBoldUrl].map(async (url) => {
         const response = await fetch(url);
         if (!response.ok) {
@@ -362,7 +363,11 @@ const blankDownloads = [
         return new Uint8Array(await response.arrayBuffer());
       }),
     ).then(([regular, bold]) => ({ regular, bold }));
-    return pdfFonts;
+    pdfFonts = pending;
+    void pending.catch(() => {
+      if (pdfFonts === pending) pdfFonts = undefined;
+    });
+    return pending;
   };
 
   const generateDownload = async (

@@ -62,7 +62,7 @@ file is missing the matching page renders "Content is on its way." instead of
 failing the build.
 
 PRD exports use `docx` for valid Office Open XML packages and `pdf-lib` with
-`@pdf-lib/fontkit` for paginated PDFs. The Latin Extended Noto Sans files from
+`@pdf-lib/fontkit` for paginated PDFs. The Latin Noto Sans files from
 `@fontsource/noto-sans` are embedded in PDFs for selectable Unicode text; they are
 not used as site fonts. `jszip` is a development-only parser for DOCX integrity
 tests. Astro prerenders the three blank files during every build.

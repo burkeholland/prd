@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import fontkit from '@pdf-lib/fontkit';
 import JSZip from 'jszip';
 import { PDFDocument } from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
@@ -20,7 +21,7 @@ const require = createRequire(import.meta.url);
 const font = (weight: 400 | 700) =>
   readFile(
     require.resolve(
-      `@fontsource/noto-sans/files/noto-sans-latin-ext-${weight}-normal.woff`,
+      `@fontsource/noto-sans/files/noto-sans-latin-${weight}-normal.woff`,
     ),
   );
 
@@ -113,6 +114,14 @@ describe('Word export', () => {
 describe('PDF export', () => {
   it('is deterministic, reloadable, paginated, selectable, and lays out every heading without clipping', async () => {
     const [regular, bold] = await Promise.all([font(400), font(700)]);
+    for (const face of [fontkit.create(regular), fontkit.create(bold)]) {
+      for (const character of 'Product requirements document “Café” — 50%') {
+        expect(
+          face.hasGlyphForCodePoint(character.codePointAt(0)!),
+          `font contains ${character}`,
+        ).toBe(true);
+      }
+    }
     const first = await generatePrdPdf(FILLED_STATE, { regular, bold });
     const second = await generatePrdPdf(FILLED_STATE, { regular, bold });
     expect(second.bytes).toEqual(first.bytes);
@@ -144,5 +153,12 @@ describe('PDF export', () => {
         );
       }
     }
+  });
+
+  it('rejects unsupported PDF glyphs instead of silently drawing missing-glyph boxes', async () => {
+    const [regular, bold] = await Promise.all([font(400), font(700)]);
+    await expect(
+      generatePrdPdf({ ...FILLED_STATE, title: 'Launch 🚀' }, { regular, bold }),
+    ).rejects.toThrow('PDF heading font cannot render U+1F680');
   });
 });
