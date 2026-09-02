@@ -27,11 +27,13 @@ scripts/              Node scripts + their node:test tests (each one documented 
   check-*.mjs         node:test checks: content quotes verbatim and links resolvable; template.md = prd-template.md
   make-mocks.mjs      WebP copies of the screenshots (sharp), run as prebuild/predev
   make-og.mjs, og.html  render the social preview cards with Playwright's Chromium
+  preview.mjs           Astro preview with the standard DOCX MIME type added
   lib/                pure helpers (gist, gist-git, history, content) + their *.test.mjs
 src/                  Astro site
   layouts/            Base.astro (head, nav, footer) and Doc.astro (a markdown document + its table of contents)
   components/         Nav, Footer, Toc
-  pages/              one .astro per route: index, sample, guide, walkthrough, history, template, 404
+  pages/              one .astro per route: index, create, sample, guide, walkthrough, history, template, 404
+  pages/downloads/    prerendered Markdown, DOCX, and PDF blank-template files -> /downloads/prd-template.*
   pages/history/[n].astro  one text-diff page per gist revision       -> /history/<n>
   lib/*.ts            base (withBase), site (SITE, NAV, routes), seo (canonical URL + social cards), toc, diff, history, history-notes
   lib/rehype-*.mjs    the three rehype plugins (base, figures, anchors) — see Develop
@@ -52,13 +54,18 @@ The defaults are **4410** (dev) and **4411** (preview / Playwright); set
 ## Develop
 
 Astro 5, static output, strict TypeScript, npm. No UI or CSS framework, no web
-fonts, no external requests at runtime, and no JavaScript except two page-scoped
-scripts — the copy buttons on `/template/` and "Copy the PRD" on `/sample/`, both
-progressive enhancements (without them the pages are exactly the rendered
-markdown). Markdown is loaded from the repo-root
+fonts, and no external requests at runtime. JavaScript is page-scoped: copy actions
+on `/template/` and `/sample/`, plus the local draft editor and in-browser downloads
+on `/create/`. Markdown is loaded from the repo-root
 `content/` folder through content collections (`src/content.config.ts`); when a
 file is missing the matching page renders "Content is on its way." instead of
 failing the build.
+
+PRD exports use `docx` for valid Office Open XML packages and `pdf-lib` with
+`@pdf-lib/fontkit` for paginated PDFs. The Latin Extended Noto Sans files from
+`@fontsource/noto-sans` are embedded in PDFs for selectable Unicode text; they are
+not used as site fonts. `jszip` is a development-only parser for DOCX integrity
+tests. Astro prerenders the three blank files during every build.
 
 ```
 npm install            install dependencies (Playwright: npx playwright install chromium)

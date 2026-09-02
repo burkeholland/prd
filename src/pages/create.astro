@@ -6,6 +6,11 @@ import { PRD_TEMPLATE } from '../lib/prd-template';
 const title = 'Create a PRD';
 const description =
   'Draft a product requirements document from a practical, adaptable template and keep it in this browser.';
+const blankDownloads = [
+  { format: 'Markdown', extension: 'md' },
+  { format: 'Word', extension: 'docx' },
+  { format: 'PDF', extension: 'pdf' },
+] as const;
 ---
 
 <Base title={title} description={description}>
@@ -13,11 +18,17 @@ const description =
     <section class="editor-nojs" aria-labelledby="nojs-heading">
       <h1 id="nojs-heading">{title}</h1>
       <p>The online editor needs JavaScript, but the blank template is available without it.</p>
-      <p>
-        <a class="button" href={withBase('/prd-template.md')} download>
-          Download the blank Markdown template
-        </a>
-      </p>
+      <ul class="editor-blank-links">
+        {
+          blankDownloads.map(({ format, extension }) => (
+            <li>
+              <a href={withBase(`/downloads/prd-template.${extension}`)} download>
+                Download the blank {format} template
+              </a>
+            </li>
+          ))
+        }
+      </ul>
     </section>
   </noscript>
 
@@ -26,6 +37,16 @@ const description =
       <h1>{title}</h1>
       <p>{PRD_TEMPLATE.guidance}</p>
       <p class="editor-privacy">Draft content stays in this browser unless you download it.</p>
+      <p class="editor-blank-downloads">
+        <strong>Blank template:</strong>
+        {
+          blankDownloads.map(({ format, extension }) => (
+            <a href={withBase(`/downloads/prd-template.${extension}`)} download>
+              {format}
+            </a>
+          ))
+        }
+      </p>
     </header>
 
     <div class="editor-summary" aria-label="Draft status">
@@ -91,6 +112,45 @@ const description =
           ))
         }
 
+        <section class="editor-downloads" aria-labelledby="download-heading">
+          <h2 id="download-heading">Download current draft</h2>
+          <div class="editor-download-actions">
+            <button
+              id="download-md"
+              class="editor-button"
+              type="button"
+              data-export-format="md"
+            >
+              Markdown (.md)
+            </button>
+            <button
+              id="download-docx"
+              class="editor-button"
+              type="button"
+              data-export-format="docx"
+            >
+              Word (.docx)
+            </button>
+            <button
+              id="download-pdf"
+              class="editor-button"
+              type="button"
+              data-export-format="pdf"
+            >
+              PDF (.pdf)
+            </button>
+          </div>
+          <p
+            id="download-status"
+            class="editor-download-status"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            Files are generated in this browser.
+          </p>
+        </section>
+
         <div class="editor-actions">
           <button id="save-draft" class="editor-button editor-button--primary" type="button">
             Save draft
@@ -103,6 +163,8 @@ const description =
 </Base>
 
 <script>
+  import notoSansRegularUrl from '@fontsource/noto-sans/files/noto-sans-latin-ext-400-normal.woff?url';
+  import notoSansBoldUrl from '@fontsource/noto-sans/files/noto-sans-latin-ext-700-normal.woff?url';
   import {
     clearPrdEditorDraft,
     createBlankPrdEditorState,
@@ -111,6 +173,12 @@ const description =
     type PrdEditorState,
     type PrdEditorStorage,
   } from '../lib/prd-editor-state';
+  import {
+    prdBytesResponseBody,
+    prdExportFilename,
+    PRD_EXPORT_MIME_TYPES,
+    type PrdExportFormat,
+  } from '../lib/prd-export';
   import { PRD_TEMPLATE } from '../lib/prd-template';
 
   const editor = document.querySelector<HTMLElement>('[data-prd-editor]');
@@ -120,6 +188,10 @@ const description =
   const status = document.querySelector('#save-status');
   const saveButton = document.querySelector('#save-draft');
   const startOverButton = document.querySelector('#start-over');
+  const downloadStatus = document.querySelector('#download-status');
+  const downloadButtons = Array.from(
+    document.querySelectorAll<HTMLButtonElement>('[data-export-format]'),
+  );
 
   if (
     !editor ||
@@ -128,7 +200,9 @@ const description =
     !(completion instanceof HTMLOutputElement) ||
     !(status instanceof HTMLParagraphElement) ||
     !(saveButton instanceof HTMLButtonElement) ||
-    !(startOverButton instanceof HTMLButtonElement)
+    !(startOverButton instanceof HTMLButtonElement) ||
+    !(downloadStatus instanceof HTMLParagraphElement) ||
+    downloadButtons.length !== 3
   ) {
     throw new Error('The PRD editor markup is incomplete.');
   }
@@ -146,6 +220,11 @@ const description =
   const showStatus = (message: string, state: string) => {
     status.textContent = message;
     status.dataset.state = state;
+  };
+
+  const showDownloadStatus = (message: string, state: string) => {
+    downloadStatus.textContent = message;
+    downloadStatus.dataset.state = state;
   };
 
   const dateFormatter = new Intl.DateTimeFormat(undefined, {
@@ -270,6 +349,92 @@ const description =
     persistDraft('explicit');
   });
 
+  let pdfFonts:
+    | Promise<{ regular: Uint8Array; bold: Uint8Array }>
+    | undefined;
+  const loadPdfFonts = () => {
+    pdfFonts ??= Promise.all(
+      [notoSansRegularUrl, notoSansBoldUrl].map(async (url) => {
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`PDF font request failed with status ${response.status}.`);
+        }
+        return new Uint8Array(await response.arrayBuffer());
+      }),
+    ).then(([regular, bold]) => ({ regular, bold }));
+    return pdfFonts;
+  };
+
+  const generateDownload = async (
+    format: PrdExportFormat,
+    state: PrdEditorState,
+  ): Promise<Uint8Array> => {
+    switch (format) {
+      case 'md': {
+        const { exportPrdMarkdown } = await import('../lib/prd-export');
+        return exportPrdMarkdown(state);
+      }
+      case 'docx': {
+        const { exportPrdDocx } = await import('../lib/prd-export-docx');
+        return exportPrdDocx(state);
+      }
+      case 'pdf': {
+        const [{ generatePrdPdf }, fonts] = await Promise.all([
+          import('../lib/prd-export-pdf'),
+          loadPdfFonts(),
+        ]);
+        return (await generatePrdPdf(state, fonts)).bytes;
+      }
+    }
+  };
+
+  const startDownload = (
+    bytes: Uint8Array,
+    format: PrdExportFormat,
+    filename: string,
+  ) => {
+    const blob = new Blob([prdBytesResponseBody(bytes)], {
+      type: PRD_EXPORT_MIME_TYPES[format],
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.hidden = true;
+    document.body.append(link);
+    try {
+      link.click();
+    } finally {
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    }
+  };
+
+  for (const button of downloadButtons) {
+    button.addEventListener('click', async () => {
+      const format = button.dataset.exportFormat as PrdExportFormat;
+      const state = readState();
+      const filename = prdExportFilename(state.title, format);
+      button.disabled = true;
+      button.setAttribute('aria-busy', 'true');
+      showDownloadStatus(`Generating ${filename}.`, 'pending');
+      try {
+        const bytes = await generateDownload(format, state);
+        startDownload(bytes, format, filename);
+        showDownloadStatus(`Downloaded ${filename}.`, 'downloaded');
+      } catch (error) {
+        console.error(`Could not generate ${format} download.`, error);
+        showDownloadStatus(
+          `Download failed for ${filename}. Your draft is unchanged.`,
+          'error',
+        );
+      } finally {
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
+      }
+    });
+  }
+
   startOverButton.addEventListener('click', () => {
     const confirmed = window.confirm(
       'Start over? This removes the local draft from this browser and clears all fields.',
@@ -340,6 +505,15 @@ const description =
     margin-top: 1rem;
   }
 
+  .editor-blank-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
   .editor-header {
     max-width: var(--measure);
     display: grid;
@@ -353,6 +527,14 @@ const description =
   }
 
   .editor-privacy {
+    font-size: 0.92rem;
+  }
+
+  .editor-blank-downloads {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.85rem;
+    align-items: baseline;
     font-size: 0.92rem;
   }
 
@@ -376,6 +558,10 @@ const description =
   }
 
   #save-status[data-state='error'] {
+    color: var(--text);
+  }
+
+  .editor-download-status[data-state='error'] {
     color: var(--text);
   }
 
@@ -509,10 +695,30 @@ const description =
     resize: vertical;
   }
 
+  .editor-downloads {
+    display: grid;
+    gap: 0.75rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .editor-downloads h2 {
+    font-size: 1.25rem;
+  }
+
+  .editor-download-actions,
   .editor-actions {
     display: flex;
     flex-wrap: wrap;
     gap: 0.75rem;
+  }
+
+  .editor-download-status {
+    color: var(--text-muted);
+    font-size: 0.92rem;
+  }
+
+  .editor-actions {
     padding-top: 1.5rem;
     border-top: 1px solid var(--border);
   }

@@ -16,7 +16,7 @@ test.beforeEach(async ({ page }) => {
   await page.reload();
 });
 
-test('renders one labeled title, 12 labeled canonical sections, prompts, and one polite live region', async ({
+test('renders one labeled title, 12 labeled canonical sections, prompts, and polite status regions', async ({
   page,
 }) => {
   const title = page.locator('input#document-title');
@@ -43,8 +43,9 @@ test('renders one labeled title, 12 labeled canonical sections, prompts, and one
   }
 
   const liveRegions = page.locator('[aria-live="polite"]');
-  await expect(liveRegions).toHaveCount(1);
-  await expect(liveRegions).toHaveAttribute('role', 'status');
+  await expect(liveRegions).toHaveCount(2);
+  await expect(page.locator('#save-status')).toHaveAttribute('role', 'status');
+  await expect(page.locator('#download-status')).toHaveAttribute('role', 'status');
 });
 
 test('automatically saves and restores the title and all 12 section values after reload', async ({
@@ -203,6 +204,9 @@ test('keyboard flow reaches every field and action, and outline links focus thei
   const expectedOrder = [
     'document-title',
     ...PRD_TEMPLATE_SECTIONS.map((section) => `section-input-${section.id}`),
+    'download-md',
+    'download-docx',
+    'download-pdf',
     'save-draft',
     'start-over',
   ];
@@ -239,14 +243,14 @@ test('at 320px the page does not overflow and every outline link and button is a
   expect(dimensions).toEqual({ scrollWidth: 320, viewport: 320 });
 
   const targets = page.locator('.editor-outline a, .editor-button');
-  await expect(targets).toHaveCount(14);
+  await expect(targets).toHaveCount(17);
   const heights = await targets.evaluateAll((nodes) =>
     nodes.map((node) => node.getBoundingClientRect().height),
   );
   for (const height of heights) expect(height).toBeGreaterThanOrEqual(32);
 });
 
-test('without JavaScript the editor is replaced by the blank template download', async ({
+test('without JavaScript the editor is replaced by all three blank template downloads', async ({
   browser,
 }) => {
   const context = await browser.newContext({ javaScriptEnabled: false });
@@ -254,11 +258,18 @@ test('without JavaScript the editor is replaced by the blank template download',
   await page.goto(CREATE_PATH);
 
   await expect(page.locator('[data-prd-editor]')).toBeHidden();
-  const download = page.getByRole('link', {
-    name: 'Download the blank Markdown template',
-  });
-  await expect(download).toBeVisible();
-  await expect(download).toHaveAttribute('href', '/prd/prd-template.md');
+  const downloads = page.locator('.editor-nojs a[download]');
+  await expect(downloads).toHaveCount(3);
+  await expect(downloads).toHaveText([
+    'Download the blank Markdown template',
+    'Download the blank Word template',
+    'Download the blank PDF template',
+  ]);
+  expect(await downloads.evaluateAll((links) => links.map((link) => link.getAttribute('href')))).toEqual([
+    '/prd/downloads/prd-template.md',
+    '/prd/downloads/prd-template.docx',
+    '/prd/downloads/prd-template.pdf',
+  ]);
 
   await context.close();
 });
