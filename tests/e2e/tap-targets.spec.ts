@@ -58,12 +58,11 @@ test('1024×768: the sidebar TOC fades out at its end while links hide below it,
     scrolled.asideBottom - MIN_TAP,
   );
 
-  // /guide/ has 13 links. With Segoe UI / Arial metrics they fit under the 717 px cap with the fade
-  // (717 / 717 measured); a wider system font can wrap one more line, so the "fits" case is asserted
-  // at a height every sans-serif fits and this size checks only that the fade never hides the last link.
+  // /guide/ has 10 links (three sections plus seven rules). At either tested height, the fade must
+  // sit below its final link whether the system font makes the sidebar scroll or fit exactly.
   await page.goto(to('/guide/'));
   const guide = await sidebarGeometry(aside);
-  expect(guide.links, 'guide TOC links').toBe(13);
+  expect(guide.links, 'guide TOC links').toBe(10);
   expect(guide.fade.position, 'guide ::after position').toBe('sticky');
   await scrollAsideToEnd(aside);
   const guideEnd = await sidebarGeometry(aside);
@@ -119,7 +118,7 @@ test('768×1024: the "On this page" summary is thumb-sized without growing the c
   ).toBeLessThanOrEqual(0.05);
 
   for (const [path, count] of [
-    ['/guide/', 13],
+    ['/guide/', 10],
     ['/walkthrough/', 18],
   ] as const) {
     await page.goto(to(path));

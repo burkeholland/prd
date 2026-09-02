@@ -355,11 +355,18 @@ test('the sample source card has the generic intro, actions, and gist metadata',
   }
 });
 
-test('the guide links to the history page', async ({ page }) => {
+test('the guide keeps secondary pages out and ends with only the Example and Template links', async ({ page }) => {
   await page.goto(to('/guide/'));
-  const links = page.locator(`main a[href="${to('/history/')}"]`);
-  expect(await links.count(), 'guide → history links').toBeGreaterThanOrEqual(1);
-  await expect(links.filter({ hasText: 'See how it evolved' })).toHaveCount(1);
+
+  await expect(page.locator(`.doc__body a[href="${to('/history/')}"]`)).toHaveCount(0);
+  await expect(page.locator(`.doc__body a[href="${to('/walkthrough/')}"]`)).toHaveCount(0);
+
+  const finalParagraph = page.locator('.doc__body > p').last();
+  await expect(finalParagraph.locator('a')).toHaveText(['Read the example PRD', 'Use the PRD template']);
+  expect(await finalParagraph.locator('a').evaluateAll((links) => links.map((link) => link.getAttribute('href')))).toEqual([
+    to('/sample/'),
+    to('/template/'),
+  ]);
 });
 
 test('the template page has a download button for the clean template', async ({ page }) => {
@@ -376,8 +383,29 @@ test('the template page has a download button for the clean template', async ({ 
   expect(await response.text()).toMatch(/^# Build \{Product Name\}/);
 });
 
-test('the guide has at least six sections and a table of contents that resolves', async ({ page }) => {
-  await expectTocResolves(page, '/guide/', 6);
+test('the guide has three sections, seven numbered rules and checks, and ten resolving TOC links', async ({ page }) => {
+  const { headings, links } = await expectTocResolves(page, '/guide/', 3);
+  expect(headings, 'guide H2 headings').toBe(3);
+  expect(links, 'guide TOC links').toBe(10);
+
+  const h2s = page.locator('.doc__body h2');
+  await expect(h2s).toHaveText(['Seven rules', 'Vague vs. specific', 'Before you hand it off']);
+  for (const heading of await h2s.all()) await expect(heading).toBeVisible();
+
+  const rules = page.locator('.doc__body h3');
+  await expect(rules).toHaveCount(7);
+  await expect(rules).toHaveText([
+    '1. State the outcome and stop condition',
+    '2. Show every important screen and state',
+    '3. Pin the stack and constraints',
+    '4. Write observable behavior exactly',
+    '5. State invariants and non-goals',
+    '6. Turn requirements into checks',
+    '7. Define done with commands and journeys',
+  ]);
+  for (const heading of await rules.all()) await expect(heading).toBeVisible();
+
+  await expect(page.locator('.doc__body strong').filter({ hasText: /^Check:$/ })).toHaveCount(7);
 });
 
 test('the sample PRD has a table of contents that resolves', async ({ page }) => {
