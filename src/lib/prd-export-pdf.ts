@@ -1,5 +1,14 @@
 import fontkit from '@pdf-lib/fontkit';
-import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
+import {
+  PDFDocument,
+  PDFHexString,
+  PDFName,
+  rgb,
+  type PDFDict,
+  type PDFFont,
+  type PDFPage,
+  type PDFRef,
+} from 'pdf-lib';
 import {
   createPrdTemplateDocument,
   type PrdTemplateStateInput,
@@ -31,6 +40,46 @@ const PAGE_HEIGHT = 792;
 const MARGIN = 54;
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
 const FIXED_DATE = new Date('2000-01-01T00:00:00.000Z');
+
+interface PdfOutlineEntry {
+  readonly title: string;
+  readonly page: PDFPage;
+}
+
+const addDocumentOutline = (
+  pdf: PDFDocument,
+  entries: readonly PdfOutlineEntry[],
+) => {
+  if (entries.length === 0) return;
+
+  const outline = pdf.context.obj({ Type: 'Outlines' });
+  const outlineRef = pdf.context.register(outline);
+  const items: { readonly dictionary: PDFDict; readonly reference: PDFRef }[] =
+    entries.map(({ title, page }) => {
+      const dictionary = pdf.context.obj({
+        Title: PDFHexString.fromText(title),
+        Parent: outlineRef,
+        Dest: pdf.context.obj([page.ref, PDFName.of('Fit')]),
+      });
+      return {
+        dictionary,
+        reference: pdf.context.register(dictionary),
+      };
+    });
+
+  for (const [index, item] of items.entries()) {
+    const previous = items[index - 1];
+    const next = items[index + 1];
+    if (previous) item.dictionary.set(PDFName.of('Prev'), previous.reference);
+    if (next) item.dictionary.set(PDFName.of('Next'), next.reference);
+  }
+
+  outline.set(PDFName.of('First'), items[0]!.reference);
+  outline.set(PDFName.of('Last'), items.at(-1)!.reference);
+  outline.set(PDFName.of('Count'), pdf.context.obj(items.length));
+  pdf.catalog.set(PDFName.of('Outlines'), outlineRef);
+  pdf.catalog.set(PDFName.of('PageMode'), PDFName.of('UseOutlines'));
+};
 
 const printableText = (value: string): string =>
   value
@@ -138,7 +187,8 @@ export const generatePrdPdf = async (
     'body',
   );
   const layout: PrdPdfLayoutLine[] = [];
-  let page: PDFPage;
+  const outline: PdfOutlineEntry[] = [];
+  let page!: PDFPage;
   let pageNumber = 0;
   let y = 0;
 
@@ -210,6 +260,7 @@ export const generatePrdPdf = async (
   };
 
   addPage();
+  outline.push({ title: document.title, page });
   drawWrapped(document.title, {
     font: bold,
     fontSize: 20,
@@ -220,6 +271,7 @@ export const generatePrdPdf = async (
 
   for (const section of document.sections) {
     ensureSpace(42);
+    outline.push({ title: section.title, page });
     drawWrapped(section.title, {
       font: bold,
       fontSize: 14,
@@ -264,6 +316,7 @@ export const generatePrdPdf = async (
     gap(15);
   }
 
+  addDocumentOutline(pdf, outline);
   return {
     bytes: await pdf.save({ useObjectStreams: false }),
     layout,

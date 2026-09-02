@@ -82,6 +82,39 @@ for (const path of ROUTES) {
   }
 }
 
+for (const path of ['/', '/sample/']) {
+  for (const colorScheme of SCHEMES) {
+    test(`axe phone: ${path} ${colorScheme} has no blocking violations`, async ({
+      page,
+      browserName,
+    }) => {
+      test.skip(
+        browserName !== 'chromium',
+        'axe is DOM/ARIA analysis and is already engine-independent',
+      );
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.emulateMedia({ colorScheme });
+      await page.goto(to(path));
+
+      const results = await new AxeBuilder({ page }).withTags(TAGS).analyze();
+      const blocking = results.violations
+        .filter(
+          (violation) =>
+            BLOCKING.has(violation.impact ?? '') ||
+            (!VERBATIM_ROUTES.has(path) && BLOCKING_RULES.has(violation.id)),
+        )
+        .map((violation) => ({
+          id: violation.id,
+          impact: violation.impact,
+          nodes: violation.nodes.length,
+        }));
+      expect(blocking, `${path} ${colorScheme} phone axe violations`).toEqual(
+        [],
+      );
+    });
+  }
+}
+
 /** The element that has focus, with enough detail to name it and to judge its focus ring. */
 const focused = (page: Page) =>
   page.evaluate(() => {
