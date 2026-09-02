@@ -687,7 +687,8 @@ test('at 390px the history table stacks each revision — number, date, note, co
   await expect(rows.nth(2).locator('.history__plus')).not.toHaveClass(/\bis-empty\b/);
 
   // The header row is for assistive tech only at this width; the caption stays readable.
-  await expect(table.locator('thead')).not.toBeInViewport();
+  await expect(table.locator('thead')).toHaveCSS('position', 'absolute');
+  await expect(table.locator('thead')).toHaveCSS('width', '1px');
   await expect(table.locator('caption')).toBeVisible();
 
   // The chart's two KB labels stay inside the chart at phone width.
@@ -724,7 +725,8 @@ test('the history table stacks below 1120px and is a real table with thumb-sized
     expect(await scrollWidth(), `${width} scrollWidth`).toBe(width);
     const wrapper = await scroller();
     expect(wrapper.scrollWidth, `${width} .table-scroll overflow`).toBe(wrapper.clientWidth);
-    await expect(table.locator('thead')).not.toBeInViewport();
+    await expect(table.locator('thead')).toHaveCSS('position', 'absolute');
+    await expect(table.locator('thead')).toHaveCSS('width', '1px');
 
     const revisionLinks = await boxes('tbody th a');
     expect(revisionLinks.length, 'revision links').toBeGreaterThan(0);
