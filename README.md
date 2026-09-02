@@ -175,13 +175,14 @@ Public URL: **https://burkeholland.github.io/prd/**
 
 ### When the gist changes
 
-- The daily `refresh-gist.yml` run (13:23 UTC — the odd minute keeps it off the
-  top of the hour, where GitHub delays or drops scheduled runs under load)
+- The primary `refresh-gist.yml` schedule runs at 13:23 UTC, and a backup checks
+  again at 15:47 UTC. Both deliberately use odd minutes to avoid the top of the
+  hour, though GitHub may still delay or drop scheduled runs under load. Each
   re-snapshots the gist and, when a new revision exists, opens a pull request
   from `gist-refresh/<sha>`. Its CI is red on `tests/unit/history-notes.test.ts`
   until that revision has a note in `content/gist/history-notes.json` — that is
-  the intended gate, not a flake. If the scheduled run is skipped (GitHub sheds
-  cron load), `gh workflow run refresh-gist.yml --ref main` does the same thing.
+  the intended gate, not a flake. If both scheduled checks are skipped,
+  `gh workflow run refresh-gist.yml --ref main` does the same thing.
 - `npm run notes:missing` prints each un-annotated revision — number, date,
   `+/−` counts, full sha, previous sha — followed by the unified diff of the PRD
   markdown between it and the previous revision (exit 1 while anything is

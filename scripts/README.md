@@ -25,9 +25,11 @@ Git does not record a gist's owner or description: `--owner`/`--description` set
 existing `content/gist/meta.json` (default owner `burkeholland`, no description). The screenshots are plain HTTPS downloads.
 
 Automatic refresh: the workflow **Refresh the sample PRD snapshot** (`.github/workflows/refresh-gist.yml`) reruns this
-script and `fetch-gist-history.mjs` daily at 13:23 UTC. When the gist changed it pushes `gist-refresh/<revision>` and
-opens a pull request (gist revision link, diff stat, a `Checks: pass` / `Checks: FAIL` line from `node --test`); it
-never commits to `main`. By hand: `gh workflow run refresh-gist.yml -f dry_run=true` (fetch + diff only, no push, no PR).
+script and `fetch-gist-history.mjs` on a primary schedule at 13:23 UTC, with a backup check at 15:47 UTC. Both avoid
+the top of the hour, though GitHub may still delay or drop either run. When the gist changed it pushes
+`gist-refresh/<revision>` and opens a pull request (gist revision link, diff stat, a `Checks: pass` / `Checks: FAIL`
+line from `node --test`); it never commits to `main`. By hand: `gh workflow run refresh-gist.yml -f dry_run=true`
+(fetch + diff only, no push, no PR).
 
 Tests: `node --test "scripts/**/*.test.mjs"` — offline unit tests for `scripts/lib/gist.mjs` and `scripts/lib/gist-git.mjs`
 (the thin git layer: `git clone`/`log`/`diff --numstat`/`cat-file blob`/`rev-parse`/`ls-tree`, tested by injecting the
