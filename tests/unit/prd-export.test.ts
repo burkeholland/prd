@@ -2,7 +2,13 @@ import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import fontkit from '@pdf-lib/fontkit';
 import JSZip from 'jszip';
-import { PDFDocument } from 'pdf-lib';
+import {
+  PDFDict,
+  PDFDocument,
+  PDFHexString,
+  PDFName,
+  PDFString,
+} from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
 import {
   exportPrdMarkdown,
@@ -48,6 +54,21 @@ const xmlText = (xml: string): string =>
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&amp;/g, '&');
+
+const pdfOutlineTitles = (pdf: PDFDocument): string[] => {
+  const root = pdf.catalog.lookup(PDFName.of('Outlines'), PDFDict);
+  const titles: string[] = [];
+  let item = root.lookupMaybe(PDFName.of('First'), PDFDict);
+  while (item) {
+    titles.push(
+      item
+        .lookup(PDFName.of('Title'), PDFString, PDFHexString)
+        .decodeText(),
+    );
+    item = item.lookupMaybe(PDFName.of('Next'), PDFDict);
+  }
+  return titles;
+};
 
 describe('PRD export names and Markdown', () => {
   it('sanitizes titles and uses the documented empty-title fallback', () => {
@@ -129,6 +150,10 @@ describe('PDF export', () => {
 
     const parsed = await PDFDocument.load(first.bytes);
     expect(parsed.getPageCount()).toBeGreaterThanOrEqual(1);
+    expect(pdfOutlineTitles(parsed)).toEqual([
+      FILLED_STATE.title,
+      ...PRD_TEMPLATE_SECTIONS.map((section) => section.title),
+    ]);
     expect(first.layout.length).toBeGreaterThan(PRD_TEMPLATE_SECTIONS.length);
 
     const laidOutText = first.layout.map((line) => line.text).join(' ');
