@@ -6,7 +6,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const SECTION_COUNT = 14;
-const LABELS = ['**Write here:**', '**Example from the sample:**', '**Skeleton:**'];
+const LABELS = ['**Write:**', '**Example:**', '**Template:**'];
+const OLD_LABELS = ['**Write here:**', '**Example from the sample:**', '**Skeleton:**'];
 const PLACEHOLDER = /\{[^{}\n]+\}/g;
 
 const read = (rel) =>
@@ -49,17 +50,12 @@ function labelIndex(body, label) {
 }
 
 const annotatedBody = annotated.replace(/^---\n[\s\S]*?\n---\n/, '');
-const allAnnotated = h2Sections(annotatedBody);
-// The section h2s run from the page's first h2 (the intro has none) up to "## Before you hand it over".
-const end = allAnnotated.findIndex((s) => s.title === 'Before you hand it over');
-const annotatedSections = allAnnotated.slice(0, end);
+const annotatedSections = h2Sections(annotatedBody);
 const cleanSections = h2Sections(clean);
+const firstH2 = annotatedBody.search(/^## /m);
+const opening = annotatedBody.slice(0, firstH2);
 
-test('annotated page closes the section h2s with "## Before you hand it over"', () => {
-  assert.ok(end > 0, 'missing "## Before you hand it over" after the section h2s');
-});
-
-test(`annotated page has exactly ${SECTION_COUNT} section h2s before it`, () => {
+test(`annotated page has exactly ${SECTION_COUNT} section h2s`, () => {
   assert.equal(annotatedSections.length, SECTION_COUNT, annotatedSections.map((s) => s.title).join(' | '));
 });
 
@@ -73,6 +69,26 @@ test('each annotated section has the three labels, once each, in order', () => {
     }
     assert.ok(positions[0] < positions[1] && positions[1] < positions[2], `"${s.title}" labels out of order`);
   }
+});
+
+test('annotated page uses none of the old section labels', () => {
+  for (const label of OLD_LABELS) {
+    assert.equal(annotatedBody.split(label).length - 1, 0, `found old label ${label}`);
+  }
+});
+
+test('opening is concise and links only to the example and clean download', () => {
+  assert.ok(firstH2 > 0, 'missing first h2');
+  const visible = opening.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+  const words = visible.match(/[A-Za-z0-9][A-Za-z0-9'’-]*/g) ?? [];
+  assert.ok(words.length <= 90, `opening has ${words.length} words`);
+  const links = [...opening.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)].map((m) => m[1]);
+  assert.deepEqual(links, ['/sample', '/prd-template.md']);
+});
+
+test('annotated page uses generic voice and has no removed cross-sell links', () => {
+  const forbidden = [/\bBurke\b/i, /\bone[- ]shot\b/i, /\bone pass\b/i, /\/walkthrough/i, /\/history/i];
+  for (const pattern of forbidden) assert.doesNotMatch(annotatedBody, pattern);
 });
 
 test('each annotated section quotes the sample in a blockquote and has one ```md skeleton', () => {

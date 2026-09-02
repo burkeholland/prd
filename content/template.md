@@ -4,21 +4,19 @@ description: "The skeleton of a PRD an agent can build from — copy it, keep th
 order: 4
 ---
 
-The sample's skeleton: its sections in its order, each with a rule, a line from [the sample](/sample), and a copyable block. The [guide](/guide) names the habits behind them, and the [walkthrough](/walkthrough) shows each in use.
+Use this 14-section template to write a PRD an agent can build from. Each section tells you what to write, shows a real excerpt from the [Example PRD](/sample), and gives you Markdown to copy.
 
-To use it: keep the section order, delete nothing without deciding it does not apply, replace every `{…}` placeholder starting with `{Product Name}`, and never leave a section saying "TBD". [Download the clean template](/prd-template.md), or copy the skeletons below.
-
-This template follows the order of the sample's seventeen sections, with its opening paragraph given a Mission section of its own, its Navigation bar subsection promoted to a section, its five screen sections (Home page, Draft and editor, My Lists, Delete, Public list) folded into one Screens section, its two data sections (Live metadata, Aliases and publication) folded into Data and integrations, and Login and ownership renamed Identity and ownership — fourteen in all.
+Replace every `{...}` placeholder with a decision. Delete a section only after deciding it does not apply, and leave no TBDs. [Download the clean Markdown template](/prd-template.md) or copy each block below.
 
 ## Mission and stop condition
 
-**Write here:** One paragraph, first, directly under the title as in the sample: what to build, where, and when to stop. Without a stop condition the agent decides what counts as done.
+**Write:** State what to build, where to build it, and the condition for stopping. This fixes the scope and definition of done.
 
-**Example from the sample:**
+**Example:**
 
 > Build the complete application in this repository. Work autonomously from start to finish and stop only when the app is complete.
 
-**Skeleton:**
+**Template:**
 
 ```md
 Build the complete {Product Name} application in this repository. Work autonomously from start to finish and stop only when the app is complete.
@@ -26,15 +24,15 @@ Build the complete {Product Name} application in this repository. Work autonomou
 
 ## Mocks
 
-**Write here:** One named h4 per screen and per visible state — validation, empty, signed in and out — each with a screenshot. A mock settles layout; prose leaves it to be guessed.
+**Write:** Add a named screenshot for every screen and visible state, including validation, empty, signed-in, and signed-out states. This fixes the intended layout and state design.
 
-**Example from the sample:**
+**Example:**
 
 <!-- Shown as markdown source in a code span, not as a live h4, so the page's outline does not skip h2 → h4 (axe heading-order). -->
 
 > `#### New List: Validation States`
 
-**Skeleton:**
+**Template:**
 
 ```md
 #### {Screen name}
@@ -48,13 +46,13 @@ Build the complete {Product Name} application in this repository. Work autonomou
 
 ## Technical specification and checklist
 
-**Write here:** Make the agent write its own spec and checklist before coding, and give the checkbox format exactly. Every requirement then carries a verification method: "done" is proven, not declared.
+**Write:** Require a technical specification and atomic checklist before implementation, including the exact checkbox format and verification method. This fixes how each requirement will be proved complete.
 
-**Example from the sample:**
+**Example:**
 
 > Use the format `- [ ] Requirement — Verify: method`. Maintain it throughout implementation. Check an item only after its implementation exists and its verification passes; reopen it if later work breaks it.
 
-**Skeleton:**
+**Template:**
 
 ```md
 Before coding, create and commit `TECHNICAL_SPEC.md`: architecture, data model, routes/API, security boundaries, key assumptions, and an atomic Markdown checkbox for every requirement in this document, grouped by feature, each with a verification method.
@@ -64,14 +62,14 @@ Use the format `- [ ] Requirement — Verify: method`. Check an item only after 
 
 ## Stack and design
 
-**Write here:** Pin every layer by name and name what you are ruling out ("no ORM", "no second CSS framework"). Each unpinned layer is a decision the agent makes silently.
+**Write:** Name every technology, tool, version policy, and ruled-out alternative. This fixes implementation choices before work begins.
 
-**Example from the sample:**
+**Example:**
 
 > - Next.js App Router, React, strict TypeScript, Node.js, and npm
 > - SQLite with direct parameterized SQL through `better-sqlite3`; no ORM
 
-**Skeleton:**
+**Template:**
 
 ```md
 Use:
@@ -86,13 +84,13 @@ Design system: {CSS framework} for every screen, {icon set} for all icons; no se
 
 ## Product
 
-**Write here:** What it is, who can do what, invariants as plain rules, and what does *not* exist, exact strings in bold. An agent not told "no soft delete" will often build one.
+**Write:** Define users, capabilities, invariants, exact strings, destructive behavior, and excluded features. This fixes the product boundaries.
 
-**Example from the sample:**
+**Example:**
 
 > Deletion is **permanent**: the list's alias becomes immediately available to anyone. There is no soft delete, restore, tombstone, or anonymous list in this product.
 
-**Skeleton:**
+**Template:**
 
 ```md
 {Product Name} lets {who} {do what} and {publish or share it how}.
@@ -106,14 +104,14 @@ The server is authoritative: revalidate {input, ownership, and uniqueness} on ev
 
 ## Routes
 
-**Write here:** A table of every route, the reserved first segments, and the 404 text in bold. Nothing is implied; the catch-all row says how many segments it swallows.
+**Write:** List every route, reserved segment, catch-all behavior, and exact 404 message. This fixes URL precedence and unmatched-path behavior.
 
-**Example from the sample:**
+**Example:**
 
 > | `/{vanity}` | Public list — **a single path segment only** |
 > 404 page (everything else, including multi-segment paths): show the text **"Sorry, there's nothing at this address."**
 
-**Skeleton:**
+**Template:**
 
 ```md
 | Route | Behavior |
@@ -129,14 +127,14 @@ Static routes take priority over `/{vanity}`. Reserved first segments: `{segment
 
 ## Navigation
 
-**Write here:** Items in order with exact labels, when each shows or hides, both states of the right side, and the unsaved-work guard with its exact modal strings.
+**Write:** List navigation items in order, their visibility rules, signed-in and signed-out controls, and any unsaved-work guard. This fixes the available actions in every state.
 
-**Example from the sample:**
+**Example:**
 
 > 1. `New` — a "create/add" icon
 > 2. `My Lists` — a "user/account" icon — **only when signed in**
 
-**Skeleton:**
+**Template:**
 
 ```md
 A navbar. Left: {brand or logo} (alt "{alt text}"). Menu items in this order, each an icon plus label:
@@ -154,13 +152,13 @@ Document title: "{exact document title}".
 
 ## Screens
 
-**Write here:** One h3 per screen: regions top to bottom, every string bold and exact, each control with placeholder, validation rule, and error text, every loading and empty state. Numbers, not adjectives.
+**Write:** Describe each screen from top to bottom, including exact text, controls, validation, responsive layout, and loading, empty, and error states. This fixes what each state must display and do.
 
-**Example from the sample:**
+**Example:**
 
 > - Helper text above the input (left-aligned, regular-weight body text — not a small bold form label): **"Enter a link and press enter"**
 
-**Skeleton:**
+**Template:**
 
 ```md
 ### {Screen name}
@@ -181,14 +179,14 @@ Document title: "{exact document title}".
 
 ## Data and integrations
 
-**Write here:** Anything fetched, parsed, or generated: precedence as an ordered list, every limit as a number, the safety rules. A precedence list cannot be misread; "use the best title" can.
+**Write:** Specify each external or generated data flow, precedence rule, numeric limit, and safety constraint. This fixes how data is selected and what inputs are allowed.
 
-**Example from the sample:**
+**Example:**
 
 > - Title: `<title>` tag → `og:title` → `twitter:title` → first `<h1>` → `og:site_name`
 > - Description: `og:description` → `twitter:description` → `meta[name=description]`
 
-**Skeleton:**
+**Template:**
 
 ```md
 {Integration} runs **server-side** after {trigger}. Cap it at {N} seconds; failure {what the user sees} and never blocks {core action}.
@@ -205,13 +203,13 @@ Safety: {allowed protocols} only, reject {non-public addresses}, at most {N} red
 
 ## Identity and ownership
 
-**Write here:** How sign-in works, whether any real provider is called, what ownership is keyed on, how the session is carried, what non-owners get. A status code is a number; "an error" is a guess.
+**Write:** Define sign-in behavior, session handling, the ownership key, protected capabilities, and exact failure status codes. This fixes who may act on each resource.
 
-**Example from the sample:**
+**Example:**
 
 > An owner can load, edit, and delete their list. Non-owner requests for an owner's list fail (401 on update/delete). My Lists requires login.
 
-**Skeleton:**
+**Template:**
 
 ```md
 Show a login modal: heading "{exact heading}", then {N} full-width buttons in this order, each with its provider's icon:
@@ -228,13 +226,13 @@ An owner can {load, edit, and delete} their {item}. Non-owner requests fail ({st
 
 ## Theme, responsive UI, and accessibility
 
-**Write here:** The theme control and where its choice is stored, the narrowest working width as a number, the accessibility standard by name and level, and truthful states. "Responsive" is an adjective; these are checks.
+**Write:** Set theme behavior and persistence, minimum supported width, accessibility target, and truthful UI states. This fixes visual preferences and usability requirements across conditions.
 
-**Example from the sample:**
+**Example:**
 
 > Support current Chromium from desktop down to 320 CSS pixels with no page-level horizontal scrolling; the editor, modals, and public page must remain usable.
 
-**Skeleton:**
+**Template:**
 
 ```md
 Theme control: {where it lives}, items **{Theme 1}**, **{Theme 2}**, **{Theme 3}**. Persist the choice in `{storage key}` (default `"{default theme}"`) and apply it via `{attribute}` on `<html>` before first paint.
@@ -248,13 +246,13 @@ Show truthful loading, empty, success, blocked, and error states. Never present 
 
 ## Storage and security
 
-**Write here:** Migrations, transactions, what survives a restart, how untrusted text is rendered, and the test-only reset with method, path, and status code. Name what must never be committed.
+**Write:** Specify migrations, transaction boundaries, persistence, untrusted-data handling, CSRF protection, and the test-only reset. This fixes data durability and security boundaries.
 
-**Example from the sample:**
+**Example:**
 
 > Use versioned SQL migrations or an idempotent versioned initializer. Enable SQLite foreign keys. Use transactions for publish, save, delete, and reset.
 
-**Skeleton:**
+**Template:**
 
 ```md
 Use {migration strategy}. Enable {database integrity setting}. Use transactions for {the write operations}.
@@ -268,13 +266,13 @@ Provide a test-only reset, `POST /{reset-path}` returning `{status}`, that {what
 
 ## Scripts, tests, and documentation
 
-**Write here:** The npm scripts by name, a named list of what unit and browser tests cover, and what the README explains. A named list turns "well tested" into files you can count.
+**Write:** Name required scripts, unit and browser test coverage, test isolation, and README content. This fixes how the implementation is operated and verified.
 
-**Example from the sample:**
+**Example:**
 
 > Use Vitest for URL and alias validation, random alias generation, metadata parse precedence (title/description/image including the favicon fallback), ownership, SQLite transactions, and share URL construction.
 
-**Skeleton:**
+**Template:**
 
 ```md
 Provide npm scripts: `dev`, `build`, `start`, `lint`, `typecheck`, `test`, `test:e2e`, `{db scripts}`.
@@ -290,14 +288,14 @@ Ship a README covering setup, environment variables, commands, {local sign-in}, 
 
 ## Completion
 
-**Write here:** Numbered steps the agent can run — commands, journeys, a restart — not qualities the result should have, ending with: claim nothing that did not run. This lets the agent stop on its own.
+**Write:** List the exact commands, user journeys, restart check, and checklist reconciliation required before handoff. This fixes the evidence required to declare the product complete.
 
-**Example from the sample:**
+**Example:**
 
 > 1. Run `npm run lint`, `npm run typecheck`, `npm test`, `npm run test:e2e`, and `npm run build`.
 > 2. Start the production build and confirm the app responds.
 
-**Skeleton:**
+**Template:**
 
 ```md
 Before you finish:
@@ -311,29 +309,3 @@ Before you finish:
 
 Report what you built, assumptions, exact command results, and anything incomplete with its reason. Do not claim a check passed unless you ran it.
 ```
-
-## Before you hand it over
-
-Read it once the way the agent will — front to back, no questions.
-
-- [ ] The first paragraph states the mission and the stop condition.
-- [ ] Every screen has a mock or an exact layout rule.
-- [ ] The stack is pinned by name, including the alternatives ruled out.
-- [ ] Every user-visible string — labels, errors, headings, placeholders — is written out exactly.
-- [ ] Every route is listed, with what happens for everything else.
-- [ ] Every limit is a number: timeouts, sizes, lengths, redirect counts, breakpoints.
-- [ ] The invariants are rules the code must never break, including what must not exist.
-- [ ] The unit tests and the browser tests each have a named list of what they cover.
-- [ ] The completion checks are commands and journeys the agent can run.
-- [ ] Nothing says TBD, and every `{…}` placeholder is gone.
-
-## Hand it to an agent
-
-The hand-over itself is four steps.
-
-1. **Put the PRD in an empty repository.** The sample's first line assumes one: "Build the complete application in this repository." Empty, so the document is the agent's only source of truth.
-2. **Start an agent there that can edit files and run commands, and give it the PRD as its instruction** — the whole file, not a summary; point it at the file or paste it.
-3. **Let it run to the end.** The PRD says to stop only when the app is complete. If it stops with a question, the answer belongs in the PRD, not in the chat: fix the document and start again ([habit 1](/guide#1-start-with-the-mission-and-the-stop-condition)).
-4. **Run the Completion checks yourself.** The PRD's last section is the agent's exit list, and yours. Run the same commands, walk the same journeys, and read the report against the checklist above.
-
-The worked example of all four is [the sample](/sample), ending in [its Completion section](/sample#completion).
