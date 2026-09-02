@@ -48,7 +48,7 @@ async function expectPrintsCleanly(page: Page, path: string) {
 
   await expect(page.locator('main'), `${path} main`).toBeVisible();
   await expect(page.locator('.doc__body'), `${path} body`).toBeVisible();
-  await expect(page.locator('h1'), `${path} h1`).toHaveCount(1);
+  await expect(page.locator('h1'), `${path} h1`).toHaveCount(path === '/sample/' ? 2 : 1);
 
   // Black on white, 11pt.
   const body = await page.locator('body').evaluate((el) => {

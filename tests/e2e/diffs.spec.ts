@@ -84,15 +84,14 @@ test('the last revision carries the badge that links to the sample page', async 
   await expect(page.locator('a', { hasText: 'Next' })).toHaveCount(0);
 });
 
-test('every revision page responds 200 and ships no script beyond the nav helper', async ({ page, request }) => {
+test('every revision page responds 200 and ships no script', async ({ page, request }) => {
   for (let n = 1; n <= count; n++) {
     const response = await request.get(to(`/history/${n}/`));
     expect(response.status(), `/history/${n}/ status`).toBe(200);
   }
-  // `script[data-nav]` is the inline phone-nav helper every page carries (tests/e2e/site.spec.ts covers it).
   for (const n of [1, 3, 13].filter((n) => n <= count)) {
     await page.goto(to(`/history/${n}/`));
-    expect(await page.evaluate(() => document.querySelectorAll('script:not([data-nav])').length), `/history/${n}/ scripts`).toBe(0);
+    await expect(page.locator('script'), `/history/${n}/ scripts`).toHaveCount(0);
   }
 });
 
@@ -312,7 +311,7 @@ test('the sitemap lists no revision page', async ({ request }) => {
   expect(locs.filter((loc) => /\/history\/\d+\/?$/.test(loc)), 'revision pages in the sitemap').toEqual([]);
 });
 
-test('revision 3 leads with its hand-written note, and the nav marks "How it evolved" current', async ({ page }) => {
+test('revision 3 leads with its hand-written note without adding history to the primary nav', async ({ page }) => {
   test.skip(count < 3, 'fewer than 3 revisions');
   const note = noteFor(3);
   expect(note, 'a note for revision 3 in history-notes.json').toBeTruthy();
@@ -325,11 +324,8 @@ test('revision 3 leads with its hand-written note, and the nav marks "How it evo
   await expect(page.locator('.revision__header > :nth-child(2)')).toHaveClass(/\blede\b/);
   await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', note!);
 
-  // Only the section's item is current; the prefix rule must not light Home too.
-  const current = page.locator('nav.site-nav a[aria-current="page"]');
-  await expect(current).toHaveCount(1);
-  await expect(current).toHaveText('How it evolved');
-  await expect(current).toHaveAttribute('href', to('/history/'));
+  await expect(page.locator('nav.site-nav a')).toHaveText(['Good PRD', 'Example', 'Template']);
+  await expect(page.locator('nav.site-nav a[aria-current="page"]')).toHaveCount(0);
 });
 
 test('the history table links every row to its diff page and keeps the + and − columns in place', async ({ page }) => {

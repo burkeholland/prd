@@ -26,7 +26,7 @@ const readClipboard = async (page: Page) => normalise(await page.evaluate(() => 
 
 const copyButton = (page: Page) => page.locator('button.copy-prd');
 const statusRegion = (page: Page) => page.locator('.source-card .copy-prd-status[role="status"]');
-const evolvedLink = (page: Page) => page.locator('.source-card__links a', { hasText: 'How it evolved' });
+const historyLink = (page: Page) => page.locator('.source-card__links a', { hasText: 'Revision history' });
 // Phone tap targets: every control in the card is at least this tall (task #1435).
 const MIN_TAP = 32;
 
@@ -62,7 +62,7 @@ test('/sample/ adds Copy the PRD as the third action, after Download .md, and ke
   await expect(button).toHaveAttribute('type', 'button');
 
   const items = page.locator('.source-card__links > li');
-  await expect(items).toHaveText(['View on GitHub', 'Download .md', RESET, 'How it evolved']);
+  await expect(items).toHaveText(['View original', 'Download .md', RESET, 'Revision history']);
   await expect(items.nth(2).locator('button.copy-prd')).toHaveCount(1);
   await expect(page.locator('.source-card__links a')).toHaveCount(3);
 
@@ -76,15 +76,15 @@ test('clicking Copy the PRD puts the whole gist on the clipboard, says Copied, t
   clipboardOnlyInChromium(browserName);
   await page.goto(to('/sample/'));
   const button = copyButton(page);
-  const neighbour = evolvedLink(page);
+  const neighbour = historyLink(page);
   const restingLeft = await leftOf(neighbour);
 
   await button.click();
   await expect(button).toHaveText('Copied', { timeout: 3000 });
   await expect(button).toHaveAttribute('data-state', 'copied');
   await expect(button).not.toHaveAttribute('aria-busy');
-  // The button keeps its resting width while it says Copied, so How it evolved does not slide over.
-  expect(await leftOf(neighbour), 'How it evolved left while Copied').toBe(restingLeft);
+  // The button keeps its resting width while it says Copied, so Revision history does not slide over.
+  expect(await leftOf(neighbour), 'Revision history left while Copied').toBe(restingLeft);
 
   const expected = normalise(readFileSync(RAW, 'utf8'));
   expect(expected.length, 'the gist is a long document').toBeGreaterThan(20_000);
@@ -98,7 +98,7 @@ test('clicking Copy the PRD puts the whole gist on the clipboard, says Copied, t
 
   await expect(button).toHaveText(RESET, { timeout: RESET_TIMEOUT });
   await expect(button).not.toHaveAttribute('data-state');
-  expect(await leftOf(neighbour), 'How it evolved left after the reset').toBe(restingLeft);
+  expect(await leftOf(neighbour), 'Revision history left after the reset').toBe(restingLeft);
 });
 
 test('Copy the PRD works from the keyboard: focus, Enter', async ({ page, browserName }) => {
@@ -136,15 +136,14 @@ test('when the gist cannot be fetched the button says so and leaves Download .md
   await expect(button).toHaveText(RESET, { timeout: RESET_TIMEOUT });
 });
 
-test('/sample/ ships exactly one script beyond the nav helper and no template Copy buttons; /guide/ and /walkthrough/ ship none', async ({ page }) => {
-  // `script[data-nav]` is the inline phone-nav helper every page carries (tests/e2e/site.spec.ts covers it).
+test('/sample/ ships only its Copy the PRD script and no template Copy buttons; /guide/ and /walkthrough/ ship none', async ({ page }) => {
   await page.goto(to('/sample/'));
-  await expect(page.locator('script:not([data-nav])')).toHaveCount(1);
+  await expect(page.locator('script')).toHaveCount(1);
   await expect(page.locator('button.copy-button')).toHaveCount(0);
 
   for (const path of ['/guide/', '/walkthrough/']) {
     await page.goto(to(path));
-    await expect(page.locator('script:not([data-nav])'), `${path} script elements`).toHaveCount(0);
+    await expect(page.locator('script'), `${path} script elements`).toHaveCount(0);
   }
 });
 

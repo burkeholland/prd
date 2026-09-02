@@ -31,7 +31,7 @@ describe('canonicalUrl', () => {
 describe('OG_IMAGE', () => {
   it('describes the 1200×630 preview image under the site root', () => {
     expect(OG_IMAGE).toMatchObject({ path: '/og.png', width: 1200, height: 630 });
-    expect(OG_IMAGE.alt).toContain('PRD Field Guide');
+    expect(OG_IMAGE.alt).toContain('PRD Guide');
   });
 });
 
@@ -44,14 +44,28 @@ describe('SOCIAL_CARDS', () => {
   });
 
   it('uses the site-wide image and alt for the home page and a distinct file per other page', () => {
-    expect(SOCIAL_CARDS['/']).toMatchObject({ file: OG_IMAGE.path, title: 'PRD Field Guide', alt: OG_IMAGE.alt });
+    expect(SOCIAL_CARDS['/']).toMatchObject({ file: OG_IMAGE.path, title: 'PRD Guide', alt: OG_IMAGE.alt });
     const files = cards.map((card) => card.file);
     expect(new Set(files).size).toBe(files.length);
     for (const [route, card] of Object.entries(SOCIAL_CARDS)) {
       if (route === '/') continue;
       expect(card.file, `${route} file`).toMatch(/^\/og\/[a-z-]+\.png$/);
-      expect(card.alt, `${route} alt`).toBe(`${card.title} — PRD Field Guide`);
+      expect(card.alt, `${route} alt`).toBe(`${card.title} — PRD Guide`);
     }
+  });
+
+  it('uses generic descriptions for the home and example cards', () => {
+    expect(SOCIAL_CARDS['/'].subtitle).toBe(
+      'A good PRD tells the builder what to make, which decisions are fixed, and how to know when the work is done.',
+    );
+    expect(SOCIAL_CARDS['/sample/']).toMatchObject({
+      title: 'Example PRD',
+      subtitle:
+        'A complete PRD for a link-sharing app, with mocks, routes, data rules, tests, and completion checks.',
+    });
+    expect(`${SOCIAL_CARDS['/'].subtitle} ${SOCIAL_CARDS['/sample/'].subtitle}`).not.toMatch(
+      /Burke|Microsoft|one[- ]?(?:shot|pass)|proof|showcase/i,
+    );
   });
 
   it('names a PNG that exists under public/ for every card', () => {

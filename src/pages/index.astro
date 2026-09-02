@@ -3,60 +3,29 @@ import Base from '../layouts/Base.astro';
 import { SITE } from '../lib/site';
 import { withBase } from '../lib/base';
 
-// Card titles are the pages' one site-wide name (NAV in ../lib/site), so a card reads the same
-// as the nav item it leads to.
 const cards = [
   {
-    href: withBase('/sample/'),
-    title: 'The sample PRD',
-    text: 'Build The Urlist: the complete instruction Burke Holland gave an agent to build a link-sharing app — mocks, stack, routes, exact copy, tests, and a definition of done.',
-  },
-  {
     href: withBase('/guide/'),
-    title: 'The guide',
-    text: 'Seven habits that separate a PRD an agent can execute from one it has to guess at.',
+    title: 'What makes a good PRD',
+    text: 'Seven practical rules for writing requirements that are specific, testable, and complete.',
   },
   {
-    href: withBase('/walkthrough/'),
-    title: 'The walkthrough',
-    text: 'The sample PRD, section by section: what each part does, why it works, and what to steal.',
+    href: withBase('/sample/'),
+    title: 'Example PRD',
+    text: 'A complete PRD for a small application, with mocks, routes, constraints, and completion checks.',
   },
   {
-    href: withBase('/history/'),
-    title: 'How it evolved',
-    text: 'Every revision of the sample PRD, and what each one changed.',
+    href: withBase('/template/'),
+    title: 'PRD template',
+    text: 'A section-by-section starting point you can copy and adapt.',
   },
-];
-
-// The thesis itself is stated once, in the lede; these say what follows from it.
-const differences = [
-  'No follow-up questions — every decision must already be in the document.',
-  'Exactness where it matters: routes, copy strings, limits, error messages.',
-  'Done is defined by checks the agent can run itself.',
-  'A guess is never free: it costs a follow-up prompt, a wrong screen, or a rebuild.',
 ];
 ---
 
-<Base title={`${SITE.name} — Write a PRD an agent can build`}>
+<Base title={`Write a good PRD. · ${SITE.name}`}>
   <section class="hero">
-    <h1>Write a PRD an agent can build.</h1>
-    <p class="lede">
-      A product requirements document (PRD) this specific lets a coding agent build the whole app
-      in one pass — or close to it. <a href="https://github.com/burkeholland">Burke Holland</a> of
-      Microsoft wrote <em>Build The Urlist</em> for The Urlist, a link-sharing app, handed it to a
-      coding agent, and got a working app back. This site shows that document, explains what makes
-      it work, traces how it evolved, and gives you a template.
-    </p>
-  </section>
-
-  <!-- Reading order, above the cards. No heading of its own, so the outline stays h1 → the cards' h2s. -->
-  <section class="strip" aria-label="Reading order">
-    <p class="strip__label">New here?</p>
-    <p class="strip__text">
-      Read <a href={withBase('/sample/')}>the sample PRD</a> (about ten minutes), then the seven
-      habits in <a href={withBase('/guide/')}>the guide</a>, then copy
-      <a href={withBase('/template/')}>the template</a>.
-    </p>
+    <h1>Write a good PRD.</h1>
+    <p class="lede">{SITE.tagline}</p>
   </section>
 
   <ul class="cards">
@@ -71,31 +40,4 @@ const differences = [
       ))
     }
   </ul>
-
-  <p class="ready">
-    Ready to write? <a href={withBase('/template/')}>The template <span aria-hidden="true">→</span></a>
-  </p>
-
-  <section class="different">
-    <h2>Why specificity wins</h2>
-    <ul>
-      {differences.map((point) => <li>{point}</li>)}
-    </ul>
-  </section>
 </Base>
-
-<style>
-  .ready {
-    margin-top: 1.25rem;
-    font-size: 0.95rem;
-    color: var(--text-muted);
-  }
-
-  /* Padding grows the tap target to >= 32 px; the equal negative margin keeps the line unchanged. */
-  .ready a {
-    font-weight: 600;
-    display: inline-block;
-    padding-block: 0.4em;
-    margin-block: -0.4em;
-  }
-</style>

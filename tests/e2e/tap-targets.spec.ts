@@ -58,12 +58,11 @@ test('1024×768: the sidebar TOC fades out at its end while links hide below it,
     scrolled.asideBottom - MIN_TAP,
   );
 
-  // /guide/ has 13 links. With Segoe UI / Arial metrics they fit under the 717 px cap with the fade
-  // (717 / 717 measured); a wider system font can wrap one more line, so the "fits" case is asserted
-  // at a height every sans-serif fits and this size checks only that the fade never hides the last link.
+  // /guide/ has 10 links (three sections plus seven rules). At either tested height, the fade must
+  // sit below its final link whether the system font makes the sidebar scroll or fit exactly.
   await page.goto(to('/guide/'));
   const guide = await sidebarGeometry(aside);
-  expect(guide.links, 'guide TOC links').toBe(13);
+  expect(guide.links, 'guide TOC links').toBe(10);
   expect(guide.fade.position, 'guide ::after position').toBe('sticky');
   await scrollAsideToEnd(aside);
   const guideEnd = await sidebarGeometry(aside);
@@ -119,7 +118,7 @@ test('768×1024: the "On this page" summary is thumb-sized without growing the c
   ).toBeLessThanOrEqual(0.05);
 
   for (const [path, count] of [
-    ['/guide/', 13],
+    ['/guide/', 10],
     ['/walkthrough/', 18],
   ] as const) {
     await page.goto(to(path));
@@ -133,7 +132,7 @@ test('768×1024: the "On this page" summary is thumb-sized without growing the c
   }
 });
 
-test('768×1024: the 404 page\'s six way-home links and the home "The template →" link are ≥ 32 px tall', async ({
+test('the 404 page links and the three-link primary nav are thumb-sized without sideways scroll', async ({
   page,
 }) => {
   await page.setViewportSize(TABLET_PORTRAIT);
@@ -143,19 +142,26 @@ test('768×1024: the 404 page\'s six way-home links and the home "The template �
   const links = await page.locator('.doc__body ul a').evaluateAll((nodes) =>
     nodes.map((node) => ({ text: node.textContent ?? '', height: node.getBoundingClientRect().height })),
   );
-  expect(links.length, '404 way-home links').toBe(6);
+  expect(links.length, '404 way-home links').toBe(3);
   for (const link of links) expect(link.height, `"${link.text}" tap target`).toBeGreaterThanOrEqual(MIN_TAP);
   expect(await noSidewaysScroll(page), '404 page has no sideways scroll').toMatchObject({ scrollWidth: 768, viewport: 768 });
 
-  await page.goto(to('/'));
-  const ready = await page.locator('p.ready').evaluate((node) => ({
-    height: node.getBoundingClientRect().height,
-    link: node.querySelector('a')?.getBoundingClientRect().height ?? 0,
-  }));
-  expect(ready.link, 'template link tap target').toBeGreaterThanOrEqual(MIN_TAP);
-  // The padding is cancelled by an equal negative margin: the line stays a single 0.95rem × 1.6 line.
-  expect(ready.height, 'p.ready stays one line').toBeLessThanOrEqual(30);
-  expect(await noSidewaysScroll(page), 'home has no sideways scroll').toMatchObject({ scrollWidth: 768, viewport: 768 });
+  await page.setViewportSize({ width: 320, height: 780 });
+  for (const path of ['/', '/guide/', '/sample/', '/template/', '/walkthrough/', '/history/', '/history/3/']) {
+    await page.goto(to(path));
+    const nav = page.locator('nav.site-nav a');
+    await expect(nav, `${path} nav links`).toHaveCount(3);
+    const heights = await nav.evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().height));
+    for (const height of heights) expect(height, `${path} nav link tap target`).toBeGreaterThanOrEqual(MIN_TAP);
+    expect(
+      await nav.evaluateAll((nodes) => nodes.map((node) => node.getClientRects().length > 0)),
+      `${path} visible nav links`,
+    ).toEqual([true, true, true]);
+    expect(await noSidewaysScroll(page), `${path} has no sideways scroll`).toMatchObject({
+      scrollWidth: 320,
+      viewport: 320,
+    });
+  }
 });
 
 // /history/'s current row as rects, for the badge hit-area test: the row, the pill (`mark`), its link's

@@ -7,16 +7,11 @@ import { expect, test, type Page } from '@playwright/test';
 const BASE = '/prd';
 const to = (path: string) => `${BASE}${path}`;
 
-// `title` is set only where the page's <title> does not start with the nav label (doc pages
-// title themselves by their h1, see Doc.astro). One name per page: these labels are also the
-// card titles on `/` and how prose names each page.
+// The brand is the Home link. The nav contains only the site's three primary jobs.
 const NAV: { href: string; label: string; title?: string }[] = [
-  { href: '/', label: 'Home' },
-  { href: '/sample/', label: 'The sample PRD' },
-  { href: '/guide/', label: 'The guide', title: 'How to write a PRD an agent can build from' },
-  { href: '/walkthrough/', label: 'The walkthrough', title: 'Example PRD, section by section' },
-  { href: '/history/', label: 'How it evolved', title: 'Revision history' },
-  { href: '/template/', label: 'The template', title: 'PRD template' },
+  { href: '/guide/', label: 'Good PRD', title: 'What makes a good PRD' },
+  { href: '/sample/', label: 'Example', title: 'Example PRD' },
+  { href: '/template/', label: 'Template', title: 'PRD template' },
 ];
 
 // Doc pages and the repo-root content file each one renders. Files that other tasks may not
@@ -34,7 +29,7 @@ const CONTENT = {
 };
 const present = (file: string) => existsSync(resolve(file));
 
-const BRAND = 'PRD Field Guide';
+const BRAND = 'PRD Guide';
 const PLACEHOLDER = 'Content is on its way.';
 const MOCKS = to('/mocks/');
 
@@ -59,7 +54,7 @@ async function expectTocResolves(page: Page, path: string, minHeadings: number) 
   return { headings: h2s, links: hrefs.length };
 }
 
-test('home has one h1, four cards named like the nav, and makes no cross-origin requests', async ({ page }) => {
+test('home has one heading, one sentence, and exactly three linked choices', async ({ page }) => {
   const origins = new Set<string>();
   page.on('request', (request) => origins.add(new URL(request.url()).origin));
 
@@ -67,399 +62,95 @@ test('home has one h1, four cards named like the nav, and makes no cross-origin 
 
   const h1 = page.locator('h1');
   await expect(h1).toHaveCount(1);
-  await expect(h1).toHaveText('Write a PRD an agent can build.');
-
-  const cards = page.locator('a.card');
-  await expect(cards).toHaveCount(4);
-  await expect(cards.nth(0)).toHaveAttribute('href', to('/sample/'));
-  await expect(cards.nth(1)).toHaveAttribute('href', to('/guide/'));
-  await expect(cards.nth(2)).toHaveAttribute('href', to('/walkthrough/'));
-  await expect(cards.nth(3)).toHaveAttribute('href', to('/history/'));
-  // One name per page: each card carries the nav label of the page it leads to.
-  const labelOf = (href: string) => NAV.find((item) => item.href === href)?.label ?? '';
-  await expect(cards.locator('h2')).toHaveText(
-    ['/sample/', '/guide/', '/walkthrough/', '/history/'].map(labelOf),
+  await expect(h1).toHaveText('Write a good PRD.');
+  await expect(page.locator('p.lede')).toHaveText(
+    'A good PRD tells the builder what to make, which decisions are fixed, and how to know when the work is done.',
   );
 
-  await expect(page.locator('nav.site-nav a')).toHaveCount(6);
+  const cards = page.locator('a.card');
+  await expect(cards).toHaveCount(3);
+  expect(await cards.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('href')))).toEqual([
+    to('/guide/'),
+    to('/sample/'),
+    to('/template/'),
+  ]);
+  await expect(cards.locator('h2')).toHaveText(['What makes a good PRD', 'Example PRD', 'PRD template']);
+  await expect(cards.locator('p')).toHaveText([
+    'Seven practical rules for writing requirements that are specific, testable, and complete.',
+    'A complete PRD for a small application, with mocks, routes, constraints, and completion checks.',
+    'A section-by-section starting point you can copy and adapt.',
+  ]);
+
+  await expect(page.locator('nav.site-nav a')).toHaveCount(3);
   await expect(page.locator('nav.site-nav a')).toHaveText(NAV.map((item) => item.label));
+  await expect(page.locator('a.brand')).toHaveText(BRAND);
+  await expect(page.locator('a.brand')).toHaveAttribute('href', to('/'));
 
   const own = new URL(page.url()).origin;
   expect([...origins]).toEqual([own]);
 });
 
-test('home states the thesis once: the lede defines PRD and names Burke; "Why specificity wins" has four points', async ({
-  page,
-}) => {
+test('home has no extra sections or personal and performance framing', async ({ page }) => {
   await page.goto(to('/'));
 
-  const lede = page.locator('p.lede');
-  await expect(lede).toContainText('product requirements document (PRD)');
-  await expect(lede).toContainText('Burke Holland');
-  await expect(lede.locator('a[href="https://github.com/burkeholland"]')).toHaveText('Burke Holland');
-  await expect(lede).toContainText('a link-sharing app');
-  await expect(lede).toContainText('traces how it evolved');
-  // The lede says "agent" for the actor, never "model", and the page does not repeat the thesis.
-  const text = (await page.locator('main').innerText()).toLowerCase();
-  expect(text.includes('model'), 'the word "model" on /').toBe(false);
-  expect(text.split('build the whole app').length - 1, 'thesis stated once').toBe(1);
-
-  const heading = page.locator('h2', { hasText: 'Why specificity wins' });
-  await expect(heading).toHaveCount(1);
-  await expect(heading).toHaveText('Why specificity wins');
-  await expect(heading.locator('xpath=following-sibling::ul[1]/li')).toHaveCount(4);
-});
-
-test('home puts a reading order above the cards and a template line below them', async ({ page }) => {
-  await page.goto(to('/'));
-
-  const strip = page.locator('section.strip');
-  await expect(strip).toHaveCount(1);
-  await expect(strip.locator('.strip__label')).toHaveText('New here?');
-  await expect(strip).toContainText(
-    'Read the sample PRD (about ten minutes), then the seven habits in the guide, then copy the template.',
+  await expect(page.locator('main > *')).toHaveCount(2);
+  await expect(page.locator('.strip, .ready, .different')).toHaveCount(0);
+  expect(await page.locator('main').innerText()).not.toMatch(
+    /Burke|Microsoft|one[- ]?(?:shot|pass)|proof|showcase|origin story/i,
   );
-  await expect(strip.locator('a')).toHaveCount(3);
-  await expect(strip.locator('a', { hasText: 'the sample PRD' })).toHaveAttribute('href', to('/sample/'));
-  await expect(strip.locator('a', { hasText: 'the guide' })).toHaveAttribute('href', to('/guide/'));
-  await expect(strip.locator('a', { hasText: 'the template' })).toHaveAttribute('href', to('/template/'));
-
-  // DOM order: hero → reading order → cards → "Ready to write?" → "Why specificity wins".
-  const order = await page.evaluate(() =>
-    Array.from(document.querySelectorAll('main > *'), (el) => el.className || el.tagName.toLowerCase()),
-  );
-  expect(order.indexOf('strip'), 'strip precedes the cards').toBeLessThan(order.indexOf('cards'));
-  expect(order.indexOf('cards'), 'cards precede the template line').toBeLessThan(order.indexOf('ready'));
-
-  const ready = page.locator('p.ready');
-  await expect(ready).toHaveText('Ready to write? The template →');
-  await expect(ready.locator('a')).toHaveAttribute('href', to('/template/'));
-  // No heading of its own in the strip or the line, so the outline stays h1 → h2s (axe heading-order).
-  await expect(strip.locator('h1, h2, h3, h4, h5, h6')).toHaveCount(0);
 });
 
-test('home on a phone (390×844): one-row header under 110px, no sideways scroll, reading order above the fold', async ({
+test('the three-link nav fits at 320px without scrolling or hiding a target', async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(to('/'));
+  await page.setViewportSize({ width: 320, height: 780 });
+  const paths = ['/', ...NAV.map((item) => item.href), '/walkthrough/', '/history/', '/history/3/'];
+  for (const path of paths) {
+    const response = await page.goto(to(path));
+    expect(response?.status(), `${path} status`).toBe(200);
 
-  const geometry = await page.evaluate(() => {
-    const rect = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
-    const items = Array.from(document.querySelectorAll('nav.site-nav li'), (li) => li.getBoundingClientRect());
-    const links = Array.from(document.querySelectorAll('nav.site-nav a'), (a) => a.getBoundingClientRect().height);
-    const lede = document.querySelector<HTMLElement>('p.lede')!;
-    return {
-      header: rect('.site-header').height,
-      navRows: new Set(items.map((item) => Math.round(item.top))).size,
-      linkMinHeight: Math.min(...links),
-      scrollWidth: document.documentElement.scrollWidth,
-      stripBottom: rect('section.strip').bottom,
-      ledeWords: lede.innerText.trim().split(/\s+/).length,
-    };
-  });
-  expect(geometry.header, '.site-header height').toBeLessThanOrEqual(110);
-  expect(geometry.navRows, 'nav rows').toBe(1);
-  expect(geometry.linkMinHeight, 'nav link tap target').toBeGreaterThanOrEqual(32);
-  expect(geometry.scrollWidth, 'no horizontal scroll').toBe(390);
-  expect(geometry.stripBottom, 'the "New here?" strip ends on the first screen').toBeLessThanOrEqual(844);
-  expect(geometry.ledeWords, 'lede word count').toBeLessThanOrEqual(70);
-  // The row scrolls; nothing is hidden, so every route stays reachable from the header.
-  await expect(page.locator('nav.site-nav a')).toHaveCount(6);
+    const nav = page.locator('nav.site-nav');
+    const links = nav.locator('a');
+    await expect(links, `${path} nav labels`).toHaveText(NAV.map((item) => item.label));
+    const geometry = await nav.evaluate((node) => {
+      const list = node.querySelector('ul')!;
+      return {
+        linkHeights: Array.from(node.querySelectorAll('a'), (link) => link.getBoundingClientRect().height),
+        listScrollWidth: list.scrollWidth,
+        listClientWidth: list.clientWidth,
+        documentScrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      };
+    });
+    expect(Math.min(...geometry.linkHeights), `${path} nav target height`).toBeGreaterThanOrEqual(32);
+    expect(geometry.listScrollWidth, `${path} nav does not scroll`).toBeLessThanOrEqual(geometry.listClientWidth);
+    expect(geometry.documentScrollWidth, `${path} page does not scroll`).toBeLessThanOrEqual(geometry.clientWidth);
+  }
 });
 
-test('phone nav (390×844, and 640–767 e.g. 700×400 / 760×400): one swipeable row that starts with the current page\'s item in view, Home at 0; 768 keeps the wrapped list', async ({
-  page,
-}) => {
-  // Chromium 133+ lands the row on the current item natively (`scroll-initial-target: nearest`); Safari and
-  // Firefox lack it and get the same landing from the inline `script[data-nav]` in Nav.astro (task #1508).
-  // Playwright here runs Chromium only (playwright.config.ts), so the script's path is forced at the end.
-  await page.setViewportSize({ width: 390, height: 844 });
-  type Edges = { left: number; right: number };
-  type Geometry = {
-    scrollLeft: number;
-    /** The page must not scroll vertically when the row lands on its item. */
-    scrollY: number;
-    list: Edges;
-    current: Edges;
-    /** The item the list's left edge cuts through, if any (its start is off the scrollport). */
-    cut: Edges | null;
-    homeLeft: number;
-    brandLeft: number;
-    /** The left-edge fade, `.site-nav::before`; `left` is where it starts on the page. */
-    fade: { left: number; width: number; opacity: number };
-    scrollWidth: number;
-    /** `.site-header` height and the number of distinct nav-item rows. */
-    header: number;
-    navRows: number;
-    /** Distinct `li` tops, ascending (two entries when the wrapped list takes two rows). */
-    rowTops: number[];
-    /** One `li`'s height and the list's row gap: their sum is the pitch of a second row. */
-    liHeight: number;
-    rowGap: number;
-    /** The list's scrollable vs visible width: equal when the six labels fit one row. */
-    ul: { scrollWidth: number; clientWidth: number };
-    /** `content` of the two fades, `none` where the phone block does not apply. */
-    before: string;
-    after: string;
-    brandHeight: number;
-    /** What the engine (or a test override) claims to support, whether the left fade's scroll-driven
-     *  animation has a live timeline (WebKit 26 passes `@supports` but never attaches one), and the
-     *  `data-scrolled` the script sets where it does not: present = the script owns the fade, `true` = scrolled. */
-    initialTarget: boolean;
-    scrollTimeline: boolean;
-    fadeTimeline: boolean;
-    jsFade: boolean;
-    isScrolled: boolean;
-  };
-  const geometry = () =>
-    page.evaluate(
-      () =>
-        // Two frames in: the left fade is a scroll-driven animation that samples its timeline in the
-        // frame's animation step, so a style read straight after `load` still sees the pre-frame opacity.
-        new Promise<Geometry>((resolve) =>
-          requestAnimationFrame(() =>
-            requestAnimationFrame(() => {
-              const nav = document.querySelector<HTMLElement>('nav.site-nav')!;
-              const ul = nav.querySelector('ul')!;
-              const list = ul.getBoundingClientRect();
-              const current = nav.querySelector('a[aria-current="page"]')!.getBoundingClientRect();
-              const items = Array.from(ul.querySelectorAll('li'), (li) => li.getBoundingClientRect());
-              const cut = items.find((li) => li.left < list.left && li.right > list.left);
-              const rowTops = [...new Set(items.map((li) => Math.round(li.top)))]
-                .sort((a, b) => a - b)
-                .map((rounded) => items.find((li) => Math.round(li.top) === rounded)!.top);
-              const fade = getComputedStyle(nav, '::before');
-              const brand = document.querySelector('.brand')!.getBoundingClientRect();
-              resolve({
-                scrollLeft: ul.scrollLeft,
-                scrollY: window.scrollY,
-                list: { left: list.left, right: list.right },
-                current: { left: current.left, right: current.right },
-                cut: cut ? { left: cut.left, right: cut.right } : null,
-                homeLeft: nav.querySelector('a')!.getBoundingClientRect().left,
-                brandLeft: brand.left,
-                fade: {
-                  left: nav.getBoundingClientRect().left + parseFloat(fade.left),
-                  width: parseFloat(fade.width),
-                  opacity: parseFloat(fade.opacity),
-                },
-                scrollWidth: document.documentElement.scrollWidth,
-                header: document.querySelector('.site-header')!.getBoundingClientRect().height,
-                navRows: rowTops.length,
-                rowTops,
-                liHeight: items[0].height,
-                rowGap: parseFloat(getComputedStyle(ul).rowGap),
-                ul: { scrollWidth: ul.scrollWidth, clientWidth: ul.clientWidth },
-                before: fade.content,
-                after: getComputedStyle(nav, '::after').content,
-                brandHeight: brand.height,
-                initialTarget: CSS.supports('scroll-initial-target: nearest'),
-                scrollTimeline: CSS.supports('animation-timeline: scroll()'),
-                fadeTimeline: nav.getAnimations({ subtree: true }).some((animation) => animation.timeline !== null),
-                jsFade: 'scrolled' in nav.dataset,
-                isScrolled: nav.dataset.scrolled === 'true',
-              });
-            }),
-          ),
-        ),
+test('public HTML never names the example author', async ({ request }) => {
+  for (const path of ['/', ...NAV.map((item) => item.href), '/walkthrough/', '/history/', '/history/3/']) {
+    const response = await request.get(to(path));
+    expect(response.status(), `${path} status`).toBe(200);
+    expect((await response.text()).match(/Burke Holland/g) ?? [], `${path} exact author-name occurrences`).toEqual(
+      [],
     );
-  // Home is never under the left fade: at scrollLeft 0 it is not painted in any engine — animated to 0 in
-  // Chromium, hidden by the script's `data-scrolled` where the fade animation has no live timeline (Firefox,
-  // WebKit 26), and the script never reports the row scrolled at rest.
-  const expectHomeClearOfFade = (g: Geometry, label: string) => {
-    expect(g.isScrolled, `${label} data-scrolled not true at scrollLeft 0`).toBe(false);
-    expect(g.fade.opacity, `${label} left fade hidden at scrollLeft 0`).toBe(0);
-  };
-
-  // The template is the last item and the walkthrough the fourth: both start off the right edge otherwise.
-  for (const path of ['/template/', '/walkthrough/']) {
-    await page.goto(to(path));
-    const g = await geometry();
-    expect(g.current.left, `${path} current item left edge`).toBeGreaterThanOrEqual(g.list.left);
-    // 40px = the 2.5rem fades: the lit item must sit clear of both, not under either.
-    expect(g.current.left, `${path} current item clear of the left fade`).toBeGreaterThanOrEqual(g.list.left + 40);
-    expect(g.current.right, `${path} current item right edge`).toBeLessThanOrEqual(g.list.right - 40);
-    expect(g.scrollY, `${path} the page itself did not scroll`).toBe(0);
-    expect(g.scrollWidth, `${path} no horizontal scroll`).toBe(390);
-    // A pre-scrolled row fades in at the left instead of cutting the first visible item mid-word: the
-    // fade starts where the list does, is at least 2.5rem wide, and is painted (opacity 1) once scrolled.
-    expect(g.fade.left, `${path} left fade starts at the list's left edge`).toBeCloseTo(g.list.left, 1);
-    expect(g.fade.width, `${path} left fade width`).toBeGreaterThanOrEqual(40);
-    expect(g.fade.opacity, `${path} left fade painted when scrolled`).toBe(1);
-    // The script owns (paints and widens) the fade exactly where no scroll-driven animation does — Firefox has
-    // none, WebKit 26 leaves it without a timeline; Chromium's is live, so it never sees `data-scrolled`.
-    expect(g.jsFade, `${path} script owns the fade exactly where the fade animation has no live timeline`).toBe(!g.fadeTimeline);
-    expect(g.isScrolled, `${path} data-scrolled is true where the script owns the fade`).toBe(g.jsFade);
-    if (g.initialTarget) expect(g.jsFade, `${path} Chromium: the CSS animation owns the fade, no data-scrolled`).toBe(false);
-    if (path === '/template/') {
-      // The row is scrolled to its end here, so an item really is cut by the list's left edge.
-      expect(g.cut, `${path} an item spans the list's left edge`).not.toBeNull();
-      expect(g.cut!.left, `${path} cut item starts off the scrollport`).toBeLessThan(g.list.left);
-    }
   }
-
-  // Home is the first item: nothing moves. Its left edge is the brand's (17px at 390 wide, the value
-  // before the left fade existed), and the fade is not painted at scrollLeft 0, so Home is never under it.
-  await page.goto(to('/'));
-  const home = await geometry();
-  expect(home.scrollLeft, '/ row scrollLeft').toBe(0);
-  expect(home.scrollWidth, '/ no horizontal scroll').toBe(390);
-  expect(home.homeLeft, '/ Home link left edge').toBeCloseTo(17, 1);
-  expect(home.homeLeft, '/ Home lines up with the brand').toBeCloseTo(home.brandLeft, 1);
-  expectHomeClearOfFade(home, '/');
-  // The brand link is a thumb-sized target (task #1475) without making the header taller: 97.83 at 390
-  // is the height from before it had any block padding.
-  expect(home.brandHeight, '/ 390: a.brand height').toBeGreaterThanOrEqual(32);
-  expect(home.header, '/ 390: .site-header height (unchanged)').toBeCloseTo(97.83, 0);
-
-  // 640–767 (landscape phones, task #1475): the same one swipeable row. Before, the wrapped list took two
-  // rows here and the header was 144.9 px — 40 % of a 360 px-tall screen. The lit item still lands clear
-  // of the left fade and the document never scrolls sideways (the list scrolls inside itself).
-  await page.setViewportSize({ width: 700, height: 400 });
-  for (const path of ['/template/', '/walkthrough/']) {
-    await page.goto(to(path));
-    const g = await geometry();
-    expect(g.header, `${path} 700: .site-header height (one nav row, was 144.9)`).toBeLessThan(110);
-    expect(g.header, `${path} 700: .site-header height (the 390 px value)`).toBeCloseTo(97.83, 0);
-    expect(g.navRows, `${path} 700: nav rows`).toBe(1);
-    expect(g.ul.scrollWidth, `${path} 700: the six labels do not fit, the row scrolls`).toBeGreaterThan(g.ul.clientWidth);
-    expect(g.current.left, `${path} 700: current item clear of the left fade`).toBeGreaterThanOrEqual(g.list.left + 40);
-    expect(g.before, `${path} 700: left fade present`).not.toBe('none');
-    expect(g.after, `${path} 700: right fade present`).not.toBe('none');
-    expect(g.scrollWidth, `${path} 700: no horizontal scroll`).toBe(700);
-    expect(g.brandHeight, `${path} 700: a.brand height`).toBeGreaterThanOrEqual(32);
-  }
-  await page.goto(to('/'));
-  const home700 = await geometry();
-  expect(home700.scrollLeft, '/ 700: row scrollLeft').toBe(0);
-  expect(home700.homeLeft, '/ 700: Home lines up with the brand').toBeCloseTo(home700.brandLeft, 1);
-  expectHomeClearOfFade(home700, '/ 700:');
-
-  // 760, the last width before the list wraps: the row needs its start gutter, 1rem gaps and 2.5rem end
-  // padding, so on Windows fonts the six labels are still 7 px short of fitting (737 vs 730) and the row
-  // scrolls; wider Linux fonts overflow more. Either way it is one row under 110 px with Home at the brand.
-  await page.setViewportSize({ width: 760, height: 400 });
-  await page.goto(to('/'));
-  const home760 = await geometry();
-  expect(home760.header, '/ 760: .site-header height').toBeLessThan(110);
-  expect(home760.navRows, '/ 760: nav rows').toBe(1);
-  expect(home760.after, '/ 760: right fade present').not.toBe('none');
-  expect(
-    home760.ul.scrollWidth,
-    '/ 760: the row still scrolls — the six labels are 7 px short of fitting on Windows fonts (737 vs 730)',
-  ).toBeGreaterThan(home760.ul.clientWidth);
-  expect(home760.scrollLeft, '/ 760: row scrollLeft').toBe(0);
-  expect(home760.homeLeft, '/ 760: Home lines up with the brand').toBeCloseTo(home760.brandLeft, 1);
-  expectHomeClearOfFade(home760, '/ 760:');
-  expect(home760.scrollWidth, '/ 760: no horizontal scroll').toBe(760);
-
-  // 768 (portrait tablet): untouched — brand row plus the wrapped list, no fades, nothing scrolls. How many
-  // rows the list takes depends on the font: with Segoe UI (Windows) the six labels fit one row and the
-  // header is 106.33; with CI's DejaVu Sans, ≈ 8 % wider, they wrap to two rows and the header grows by
-  // exactly one row pitch (`li` height + row gap, 38.53). Assert that relation, not the Windows outcome —
-  // either way the brand's padding must not have added to the height.
-  await page.setViewportSize({ width: 768, height: 1024 });
-  await page.goto(to('/guide/'));
-  const tablet = await geometry();
-  expect([1, 2], "/guide/ 768: nav rows (1 on Windows fonts, 2 on CI's wider DejaVu)").toContain(tablet.navRows);
-  const rowPitch =
-    tablet.navRows === 2 ? tablet.rowTops[1] - tablet.rowTops[0] : tablet.liHeight + tablet.rowGap;
-  expect(
-    tablet.header,
-    '/guide/ 768: header = brand row + nav rows (106.33 with one row, one row pitch more with two)',
-  ).toBeCloseTo(106.33 + (tablet.navRows - 1) * rowPitch, 0);
-  expect(tablet.before, '/guide/ 768: no left fade').toBe('none');
-  expect(tablet.after, '/guide/ 768: no right fade').toBe('none');
-  expect(tablet.ul.scrollWidth, '/guide/ 768: the wrapped list does not overflow').toBe(tablet.ul.clientWidth);
-  expect(tablet.brandHeight, '/guide/ 768: a.brand height').toBeGreaterThanOrEqual(32);
-
-  // Desktop: brand and nav share one row; the brand's padding does not change that height either.
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto(to('/guide/'));
-  const desktop = await geometry();
-  expect(desktop.header, '/guide/ 1280: .site-header height (unchanged)').toBeCloseTo(69.28, 0);
-  expect(desktop.after, '/guide/ 1280: no right fade').toBe('none');
-  expect(desktop.brandHeight, '/guide/ 1280: a.brand height').toBeGreaterThanOrEqual(32);
-
-  // The landing helper is the one script every page carries: inline (no `src`), marked `data-nav` so the
-  // "no script" assertions elsewhere can exclude it, and small. Nothing else may hide behind the marker.
-  const pages = [...NAV.map((item) => item.href), ...(present(CONTENT.history) ? ['/history/1/'] : [])];
-  for (const path of pages) {
-    await page.goto(to(path));
-    const helper = page.locator('script[data-nav]');
-    await expect(helper, `${path} nav helper`).toHaveCount(1);
-    await expect(helper, `${path} nav helper is inline`).not.toHaveAttribute('src');
-    expect((await helper.textContent())!.length, `${path} nav helper size`).toBeLessThanOrEqual(700);
-  }
-
-  // Chromium takes the native path above, so the script's landing is proven by forcing its path here: the HTML
-  // document gets a `<style>` neutralising the property right before `</head>` (the stylesheet is inlined —
-  // astro.config.mjs `inlineStylesheets: 'always'` — so there is no CSS request to rewrite, and `addStyleTag`
-  // would be too late: it lands after first layout, when `scroll-initial-target` has already positioned the
-  // row) and `CSS.supports` denies it, exactly what Safari and Firefox present. The landing must be the same.
-  const neutralise = (html: string) =>
-    html.replace('</head>', '<style>.site-nav li { scroll-initial-target: none !important; }</style></head>');
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.route(new RegExp(`${to('/(template|walkthrough)/')}$`), async (route) => {
-    const response = await route.fetch();
-    await route.fulfill({ response, body: neutralise(await response.text()) });
-  });
-  await page.addInitScript(() => {
-    // `CSS.supports` has two overloads — `(conditionText)` and `(property, value)` — so call the one the
-    // caller used instead of spreading a `[string, string?]` tuple, which matches neither (ts2345).
-    const native = CSS.supports.bind(CSS);
-    CSS.supports = ((property: string, value?: string) =>
-      `${property}:${value ?? ''}`.includes('scroll-initial-target')
-        ? false
-        : value === undefined
-          ? native(property)
-          : native(property, value)) as typeof CSS.supports;
-  });
-  for (const path of ['/template/', '/walkthrough/']) {
-    await page.goto(to(path));
-    // Text matchers skip <head> and <style>, so the injected rule is read out, not located by text.
-    const styles = await page.locator('head style').evaluateAll((els) => els.map((el) => el.textContent ?? ''));
-    expect(styles.filter((css) => css.includes('scroll-initial-target: none')), `${path} forced: rule injected`).toHaveLength(1);
-    const g = await geometry();
-    expect(g.initialTarget, `${path} forced: scroll-initial-target reported unsupported`).toBe(false);
-    expect(g.scrollLeft, `${path} forced: the script scrolled the row`).toBeGreaterThan(0);
-    expect(g.current.left, `${path} forced: current item clear of the left fade`).toBeGreaterThanOrEqual(g.list.left + 40);
-    expect(g.current.right, `${path} forced: current item right edge`).toBeLessThanOrEqual(g.list.right - 40);
-    expect(g.scrollY, `${path} forced: the page itself did not scroll`).toBe(0);
-    expect(g.scrollWidth, `${path} forced: no horizontal scroll`).toBe(390);
-    expect(g.jsFade, `${path} forced: the script owns the fade only where the fade animation has no live timeline`).toBe(!g.fadeTimeline);
-  }
-
-  // Negative control: the same page with the helper stripped from its HTML lands at scrollLeft 0 with the
-  // current item off the right edge — the assertions above would have caught the Safari/Firefox bug. Registered
-  // later, this handler runs instead of the one above, so it has to neutralise the property itself.
-  await page.route(`**${to('/template/')}`, async (route) => {
-    const response = await route.fetch();
-    const html = neutralise(await response.text());
-    await route.fulfill({ response, body: html.replace(/<script[^>]*\bdata-nav\b[^>]*>[\s\S]*?<\/script>/, '') });
-  });
-  await page.goto(to('/template/'));
-  await expect(page.locator('script[data-nav]'), '/template/ control: helper stripped').toHaveCount(0);
-  const control = await geometry();
-  expect(control.initialTarget, '/template/ control: scroll-initial-target reported unsupported').toBe(false);
-  expect(control.scrollLeft, '/template/ control: without the helper the row stays at 0').toBe(0);
-  expect(control.current.left, '/template/ control: without the helper the current item is off the right edge').toBeGreaterThanOrEqual(
-    control.list.right,
-  );
 });
 
-test('every nav route responds 200 with a title that starts with its label', async ({ page }) => {
+test('every primary route responds 200 with a title that starts with its public content label', async ({ page }) => {
+  await page.goto(to('/'));
+  expect(await page.title()).toBe('Write a good PRD. · PRD Guide');
+
   for (const item of NAV) {
     const response = await page.goto(to(item.href));
     expect(response?.status(), `${item.href} status`).toBe(200);
 
     const title = await page.title();
     const prefix = item.title ?? item.label;
-    const allowed = item.href === '/' ? [prefix, BRAND] : [prefix];
     expect(
-      allowed.some((prefix) => title.startsWith(prefix)),
-      `${item.href} title "${title}" should start with ${allowed.join(' or ')}`,
+      title.startsWith(prefix),
+      `${item.href} title "${title}" should start with ${prefix}`,
     ).toBe(true);
   }
 });
@@ -474,15 +165,20 @@ test('no page whose content exists says it is on its way', async ({ page }) => {
     const html = await page.content();
     expect(html.split(PLACEHOLDER).length - 1, `${path} placeholder occurrences`).toBe(0);
     await expect(page.locator('p.placeholder'), `${path} placeholder element`).toHaveCount(0);
-    await expect(page.locator('h1'), `${path} h1 count`).toHaveCount(1);
+    await expect(page.locator('h1'), `${path} h1 count`).toHaveCount(path === '/sample/' ? 2 : 1);
   }
 });
 
-test('the footer links to the gist and to the site source', async ({ page }) => {
+test('the footer has generic links to the example, site source, and issue form', async ({ page }) => {
   await page.goto(to('/'));
-  const source = page.locator('footer a', { hasText: 'Source' });
-  await expect(source).toHaveAttribute('href', 'https://github.com/burkeholland/prd');
-  await expect(page.locator('footer a', { hasText: 'Report a problem' })).toHaveAttribute(
+  const links = page.locator('footer a');
+  await expect(links).toHaveText(['Example source', 'Site source', 'Report a problem']);
+  await expect(links.nth(0)).toHaveAttribute(
+    'href',
+    'https://gist.github.com/burkeholland/f71d1156812fd91e4369308358892817',
+  );
+  await expect(links.nth(1)).toHaveAttribute('href', 'https://github.com/burkeholland/prd');
+  await expect(links.nth(2)).toHaveAttribute(
     'href',
     'https://github.com/burkeholland/prd/issues/new',
   );
@@ -507,7 +203,8 @@ test('the sample PRD renders the gist with one h1 and seven local, captioned, la
 }) => {
   await page.goto(to('/sample/'));
 
-  const h1 = page.locator('h1');
+  await expect(page.locator('.source-card h1')).toHaveText('Example PRD');
+  const h1 = page.locator('.doc__body h1');
   await expect(h1).toHaveCount(1);
   await expect(h1).toHaveText('Build The Urlist');
 
@@ -606,7 +303,7 @@ test('the sample PRD offers the gist as a download that matches the file on disk
   expect(body.length).toBeGreaterThan(0);
 });
 
-test('the sample source card reads the gist metadata', async ({ page }) => {
+test('the sample source card has the generic intro, actions, and gist metadata', async ({ page }) => {
   const meta = JSON.parse(readFileSync(resolve(CONTENT.gistMeta), 'utf8')) as {
     html_url: string;
     revision: string;
@@ -615,14 +312,22 @@ test('the sample source card reads the gist metadata', async ({ page }) => {
   await page.goto(to('/sample/'));
 
   const card = page.locator('.source-card');
-  await expect(card.locator('h1')).toHaveCount(0);
-  // The intro says whose document it is, that it is unaltered, and what the screenshots show.
-  const intro = card.locator('.source-card__title + p');
-  await expect(intro).toContainText('Burke Holland’s real PRD for The Urlist, word for word from his GitHub gist');
-  await expect(intro).toContainText('the target, not what the agent built');
-  await expect(card).not.toContainText('verbatim');
-  await expect(card.locator('a', { hasText: 'View on GitHub' })).toHaveAttribute('href', meta.html_url);
-  await expect(card.locator('.source-card__links a', { hasText: 'How it evolved' })).toHaveAttribute(
+  await expect(card.locator('h1')).toHaveText('Example PRD');
+  await expect(card.locator(':scope > p:not(.source-card__meta):not(.copy-prd-status)')).toHaveText([
+    'A complete PRD for a link-sharing app, shown exactly as written. It includes mocks, stack choices, routes, data rules, exact interface copy, tests, and completion checks.',
+    'The screenshots show the reference product described by the document.',
+  ]);
+  await expect(page.locator('meta[name="description"]')).toHaveAttribute(
+    'content',
+    'A complete PRD for a link-sharing app, shown exactly as written. It includes mocks, stack choices, routes, data rules, exact interface copy, tests, and completion checks.',
+  );
+  await expect(card.locator('.source-card__links a')).toHaveText([
+    'View original',
+    'Download .md',
+    'Revision history',
+  ]);
+  await expect(card.locator('a', { hasText: 'View original' })).toHaveAttribute('href', meta.html_url);
+  await expect(card.locator('.source-card__links a', { hasText: 'Revision history' })).toHaveAttribute(
     'href',
     to('/history/'),
   );
@@ -650,11 +355,18 @@ test('the sample source card reads the gist metadata', async ({ page }) => {
   }
 });
 
-test('the guide links to the history page', async ({ page }) => {
+test('the guide keeps secondary pages out and ends with only the Example and Template links', async ({ page }) => {
   await page.goto(to('/guide/'));
-  const links = page.locator(`main a[href="${to('/history/')}"]`);
-  expect(await links.count(), 'guide → history links').toBeGreaterThanOrEqual(1);
-  await expect(links.filter({ hasText: 'See how it evolved' })).toHaveCount(1);
+
+  await expect(page.locator(`.doc__body a[href="${to('/history/')}"]`)).toHaveCount(0);
+  await expect(page.locator(`.doc__body a[href="${to('/walkthrough/')}"]`)).toHaveCount(0);
+
+  const finalParagraph = page.locator('.doc__body > p').last();
+  await expect(finalParagraph.locator('a')).toHaveText(['Read the example PRD', 'Use the PRD template']);
+  expect(await finalParagraph.locator('a').evaluateAll((links) => links.map((link) => link.getAttribute('href')))).toEqual([
+    to('/sample/'),
+    to('/template/'),
+  ]);
 });
 
 test('the template page has a download button for the clean template', async ({ page }) => {
@@ -671,8 +383,29 @@ test('the template page has a download button for the clean template', async ({ 
   expect(await response.text()).toMatch(/^# Build \{Product Name\}/);
 });
 
-test('the guide has at least six sections and a table of contents that resolves', async ({ page }) => {
-  await expectTocResolves(page, '/guide/', 6);
+test('the guide has three sections, seven numbered rules and checks, and ten resolving TOC links', async ({ page }) => {
+  const { headings, links } = await expectTocResolves(page, '/guide/', 3);
+  expect(headings, 'guide H2 headings').toBe(3);
+  expect(links, 'guide TOC links').toBe(10);
+
+  const h2s = page.locator('.doc__body h2');
+  await expect(h2s).toHaveText(['Seven rules', 'Vague vs. specific', 'Before you hand it off']);
+  for (const heading of await h2s.all()) await expect(heading).toBeVisible();
+
+  const rules = page.locator('.doc__body h3');
+  await expect(rules).toHaveCount(7);
+  await expect(rules).toHaveText([
+    '1. State the outcome and stop condition',
+    '2. Show every important screen and state',
+    '3. Pin the stack and constraints',
+    '4. Write observable behavior exactly',
+    '5. State invariants and non-goals',
+    '6. Turn requirements into checks',
+    '7. Define done with commands and journeys',
+  ]);
+  for (const heading of await rules.all()) await expect(heading).toBeVisible();
+
+  await expect(page.locator('.doc__body strong').filter({ hasText: /^Check:$/ })).toHaveCount(7);
 });
 
 test('the sample PRD has a table of contents that resolves', async ({ page }) => {
@@ -850,8 +583,7 @@ test('the history page lists every gist revision, badges the published one, and 
   const values = page.locator('svg.size-chart text.size-chart__value');
   await expect(values).toHaveCount(2);
   await expect(values).toHaveText([kb(Math.max(...bytes)), kb(Math.min(...bytes))]);
-  // No script beyond the inline phone-nav helper every page carries (the phone nav test covers it).
-  await expect(page.locator('script:not([data-nav])')).toHaveCount(0);
+  await expect(page.locator('script')).toHaveCount(0);
 });
 
 test('the history page tells the story in numbers from the data and labels whose counts are whose', async ({ page }) => {
@@ -983,7 +715,8 @@ test('at 390px the history table stacks each revision — number, date, note, co
   await expect(rows.nth(2).locator('.history__plus')).not.toHaveClass(/\bis-empty\b/);
 
   // The header row is for assistive tech only at this width; the caption stays readable.
-  await expect(table.locator('thead')).not.toBeInViewport();
+  await expect(table.locator('thead')).toHaveCSS('position', 'absolute');
+  await expect(table.locator('thead')).toHaveCSS('width', '1px');
   await expect(table.locator('caption')).toBeVisible();
 
   // The chart's two KB labels stay inside the chart at phone width.
@@ -1020,7 +753,8 @@ test('the history table stacks below 1120px and is a real table with thumb-sized
     expect(await scrollWidth(), `${width} scrollWidth`).toBe(width);
     const wrapper = await scroller();
     expect(wrapper.scrollWidth, `${width} .table-scroll overflow`).toBe(wrapper.clientWidth);
-    await expect(table.locator('thead')).not.toBeInViewport();
+    await expect(table.locator('thead')).toHaveCSS('position', 'absolute');
+    await expect(table.locator('thead')).toHaveCSS('width', '1px');
 
     const revisionLinks = await boxes('tbody th a');
     expect(revisionLinks.length, 'revision links').toBeGreaterThan(0);
