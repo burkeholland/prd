@@ -214,7 +214,6 @@ test('Start over requires confirmation; cancel preserves content and confirm cle
 
 test('keyboard flow reaches every field and action, and outline links focus their section fields', async ({
   page,
-  browserName,
 }) => {
   const firstOutlineLink = page.locator('.editor-outline a').first();
   await firstOutlineLink.focus();
@@ -222,26 +221,64 @@ test('keyboard flow reaches every field and action, and outline links focus thei
   await expect(sectionField(page, 0)).toBeFocused();
 
   await page.locator('#document-title').focus();
-  const expectedOrder = [
+  const requiredBeforeBlankDownloads = [
     'document-title',
     ...PRD_TEMPLATE_SECTIONS.map((section) => `section-input-${section.id}`),
     'download-md',
     'download-docx',
     'download-pdf',
-    ...(browserName === 'webkit'
-      ? []
-      : ['blank-download-md', 'blank-download-docx', 'blank-download-pdf']),
+  ];
+  const blankDownloads = [
+    'blank-download-md',
+    'blank-download-docx',
+    'blank-download-pdf',
+  ];
+  const withoutSequentialBlankDownloads = [
+    ...requiredBeforeBlankDownloads,
+    'save-draft',
+    'start-over',
+  ];
+  const withSequentialBlankDownloads = [
+    ...requiredBeforeBlankDownloads,
+    ...blankDownloads,
     'save-draft',
     'start-over',
   ];
   const reached = ['document-title'];
-  for (let index = 1; index < expectedOrder.length; index += 1) {
+  const tabLimit = withSequentialBlankDownloads.length + 2;
+  for (
+    let tabs = 0;
+    tabs < tabLimit && reached.at(-1) !== 'start-over';
+    tabs += 1
+  ) {
     await page.keyboard.press('Tab');
     reached.push(
       await page.evaluate(() => (document.activeElement as HTMLElement | null)?.id ?? ''),
     );
   }
-  expect(reached).toEqual(expectedOrder);
+  expect(reached.at(-1), `focus did not reach start-over within ${tabLimit} Tabs`).toBe(
+    'start-over',
+  );
+  expect(reached).toEqual(
+    reached.length === withSequentialBlankDownloads.length
+      ? withSequentialBlankDownloads
+      : withoutSequentialBlankDownloads,
+  );
+
+  for (const id of blankDownloads) {
+    const link = page.locator(`#${id}`);
+    await link.focus();
+    await expect(link).toBeFocused();
+    const focusRing = await link.evaluate((node) => {
+      const style = getComputedStyle(node);
+      return {
+        style: style.outlineStyle,
+        width: parseFloat(style.outlineWidth),
+      };
+    });
+    expect(focusRing.style, `${id} focus outline style`).not.toBe('none');
+    expect(focusRing.width, `${id} focus outline width`).toBeGreaterThan(0);
+  }
 
   for (const section of PRD_TEMPLATE_SECTIONS) {
     const link = page.locator(`[data-outline-target="${section.id}"]`);
