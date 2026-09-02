@@ -1,12 +1,12 @@
 ---
 title: "PRD template"
-description: "The skeleton of a PRD an agent can build from — copy it, keep the order, fill every section."
+description: "An annotated PRD starting point you can adapt to fit the product and its constraints."
 order: 4
 ---
 
-Use this 14-section template to write a PRD an agent can build from. Each section tells you what to write, shows a real excerpt from the [Example PRD](/sample), and gives you Markdown to copy.
+This annotated template is a starting point for writing decisions an agent can act on. Each section includes a prompt, a real excerpt from the [Example PRD](/sample), and Markdown to copy.
 
-Replace every `{...}` placeholder with a decision. Delete a section only after deciding it does not apply, and leave no TBDs. [Download the clean Markdown template](/prd-template.md) or copy each block below.
+Change, remove, reorder, or skip sections that do not apply. Replace the `{...}` placeholders you keep with product decisions. [Download the clean Markdown template](/prd-template.md) or copy individual blocks below.
 
 ## Mission and stop condition
 

@@ -4,7 +4,7 @@ description: "Seven practical rules for writing requirements that are specific, 
 order: 2
 ---
 
-A PRD is good when the builder can act without guessing and can prove the result is done. It should settle the decisions that shape the product, describe what people will see and do, and turn completion into evidence.
+A useful PRD lets the builder act without guessing and prove the result is done. The [template](/template) is a starting point: adapt or skip its sections to fit the product. Settle the decisions that shape the product, describe what people will see and do, and turn completion into evidence.
 
 ## Seven rules
 
