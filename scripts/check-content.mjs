@@ -15,7 +15,13 @@ import { fileURLToPath } from 'node:url';
 import { checkFile, extractBlockquotes, extractHeadings, extractInternalLinks, parseFrontmatter, quoteFragments } from './lib/content.mjs';
 
 const PAGE_ROUTES = ['/', '/sample', '/guide', '/walkthrough', '/history', '/template'];
-const FILE_ROUTES = ['/prd-template.md', '/raw/build-the-urlist.md'];
+const FILE_ROUTES = [
+  '/prd-template.md',
+  '/downloads/prd-template.md',
+  '/downloads/prd-template.docx',
+  '/downloads/prd-template.pdf',
+  '/raw/build-the-urlist.md',
+];
 
 function resolveRoot() {
   const i = process.argv.indexOf('--root');

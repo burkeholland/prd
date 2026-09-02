@@ -145,6 +145,17 @@ export interface SerializePrdMarkdownOptions {
   readonly blankPlaceholders?: boolean;
 }
 
+export interface PrdTemplateDocumentSection {
+  readonly id: PrdTemplateSectionId;
+  readonly title: string;
+  readonly body: string;
+}
+
+export interface PrdTemplateDocument {
+  readonly title: string;
+  readonly sections: readonly PrdTemplateDocumentSection[];
+}
+
 export const PRD_TEMPLATE = {
   defaultTitle: 'Product requirements document',
   guidance:
@@ -152,10 +163,11 @@ export const PRD_TEMPLATE = {
   sections: PRD_TEMPLATE_SECTIONS,
 } as const;
 
-const normalizeLineEndings = (value: string): string => value.replace(/\r\n?/g, '\n');
+export const normalizePrdLineEndings = (value: string): string =>
+  value.replace(/\r\n?/g, '\n');
 
-const normalizeTitle = (title: string | null | undefined): string => {
-  const normalized = normalizeLineEndings(title ?? '')
+export const normalizePrdTitle = (title: string | null | undefined): string => {
+  const normalized = normalizePrdLineEndings(title ?? '')
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
@@ -164,8 +176,9 @@ const normalizeTitle = (title: string | null | undefined): string => {
   return normalized || PRD_TEMPLATE.defaultTitle;
 };
 
-const normalizeSectionValue = (value: string | null | undefined): string =>
-  normalizeLineEndings(value ?? '').trim();
+export const normalizePrdSectionValue = (
+  value: string | null | undefined,
+): string => normalizePrdLineEndings(value ?? '').trim();
 
 export const createBlankPrdTemplateState = (
   title: string = PRD_TEMPLATE.defaultTitle,
@@ -176,17 +189,31 @@ export const createBlankPrdTemplateState = (
   ) as Record<PrdTemplateSectionId, string>,
 });
 
+export const createPrdTemplateDocument = (
+  state: PrdTemplateStateInput,
+  options: SerializePrdMarkdownOptions = {},
+): PrdTemplateDocument => ({
+  title: normalizePrdTitle(state.title),
+  sections: PRD_TEMPLATE.sections.map((section) => {
+    const value = normalizePrdSectionValue(state.values?.[section.id]);
+    return {
+      id: section.id,
+      title: section.title,
+      body: value || (options.blankPlaceholders ? `{${section.title}}` : ''),
+    };
+  }),
+});
+
 export const serializePrdMarkdown = (
   state: PrdTemplateStateInput,
   options: SerializePrdMarkdownOptions = {},
 ): string => {
-  const sections = PRD_TEMPLATE.sections.map((section) => {
-    const value = normalizeSectionValue(state.values?.[section.id]);
-    const body = value || (options.blankPlaceholders ? `{${section.title}}` : '');
-    return `## ${section.title}${body ? `\n\n${body}` : ''}`;
+  const document = createPrdTemplateDocument(state, options);
+  const sections = document.sections.map((section) => {
+    return `## ${section.title}${section.body ? `\n\n${section.body}` : ''}`;
   });
 
-  return [`# ${normalizeTitle(state.title)}`, ...sections].join('\n\n') + '\n';
+  return [`# ${document.title}`, ...sections].join('\n\n') + '\n';
 };
 
 export const serializeBlankPrdMarkdown = (

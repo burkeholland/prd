@@ -44,8 +44,8 @@ export default defineConfig({
     // Tests run against the production build served by `astro preview`. With PLAYWRIGHT_PREBUILT set
     // (deploy.yml) the existing dist/ is served without rebuilding: CI tests the artifact it deploys.
     command: process.env.PLAYWRIGHT_PREBUILT
-      ? `npx astro preview --port ${PORT}`
-      : `npm run build && npx astro preview --port ${PORT}`,
+      ? `node scripts/preview.mjs --port ${PORT}`
+      : `npm run build && node scripts/preview.mjs --port ${PORT}`,
     url: `${ORIGIN}${BASE}/`,
     reuseExistingServer: false,
     timeout: 180_000,
