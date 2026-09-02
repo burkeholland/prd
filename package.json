@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "PRD Field Guide — how to write a product requirements doc an AI agent can build from, with a real one as the worked example.",
+  "description": "A practical browser-based template for drafting and downloading product requirements documents.",
   "scripts": {
     "predev": "node scripts/make-mocks.mjs",
     "dev": "astro dev --port 4410 --force",

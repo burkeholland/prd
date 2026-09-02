@@ -97,11 +97,13 @@ test('every block copies its own text (the last one is the multi-line Completion
   await expect(page.locator('main .copy-status')).toHaveText('Copied the Completion skeleton');
 });
 
-test('the other pages ship no template Copy buttons and only the sample ships a script', async ({ page }) => {
+test('the other pages ship no template Copy buttons and only interactive pages ship a script', async ({ page }) => {
   for (const path of ['/', '/sample/', '/guide/', '/walkthrough/']) {
     await page.goto(to(path));
     await expect(page.locator('button.copy-button'), `${path} copy buttons`).toHaveCount(0);
-    if (path !== '/sample/') await expect(page.locator('script'), `${path} script elements`).toHaveCount(0);
+    if (path === '/guide/' || path === '/walkthrough/') {
+      await expect(page.locator('script'), `${path} script elements`).toHaveCount(0);
+    }
   }
 });
 

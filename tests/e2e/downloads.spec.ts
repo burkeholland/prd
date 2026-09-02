@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { expect, test, type Download, type Page } from '@playwright/test';
 import { PRD_TEMPLATE_SECTIONS } from '../../src/lib/prd-template';
 
-const CREATE_PATH = '/prd/create/';
+const CREATE_PATH = '/prd/';
 const SENTINEL = 'PRIVATE-DRAFT-SENTINEL-8251';
 
 const bytesFrom = async (download: Download): Promise<Buffer> => {

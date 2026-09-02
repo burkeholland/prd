@@ -1,7 +1,6 @@
 export const SITE = {
-  name: 'PRD Guide',
-  tagline:
-    'A good PRD tells the builder what to make, which decisions are fixed, and how to know when the work is done.',
+  name: 'PRD Template',
+  tagline: 'Use this template as a starting point. Add, remove, or change sections to fit your project.',
   gistUrl: 'https://gist.github.com/burkeholland/f71d1156812fd91e4369308358892817',
   gistTitle: 'Build The Urlist',
   repoUrl: 'https://github.com/burkeholland/prd',
@@ -9,11 +8,11 @@ export const SITE = {
 
 // Internal page hrefs carry a trailing slash (GitHub Pages serves the directory form
 // without a redirect). Render them through `withBase()` from ./base.
-// The brand is the Home link; these are the site's three primary jobs.
+// The brand is a separate Home link; these are the site's three primary actions.
 export const NAV = [
-  { href: '/guide/', label: 'Good PRD' },
+  { href: '/', label: 'Create' },
   { href: '/sample/', label: 'Example' },
-  { href: '/template/', label: 'Template' },
+  { href: '/#downloads', label: 'Downloads' },
 ] as const;
 
 // Fixed route → content entry map. Pages look entries up by id, never by listing.

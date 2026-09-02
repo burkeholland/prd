@@ -23,7 +23,7 @@ export const OG_IMAGE = {
   path: '/og.png',
   width: 1200,
   height: 630,
-  alt: 'PRD Guide — practical guidance for writing a good PRD',
+  alt: 'PRD Template — create a product requirements document',
 } as const;
 
 /** One social preview card: the PNG under public/ (base-less path) and the copy drawn on it. */

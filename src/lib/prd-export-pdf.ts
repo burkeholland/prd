@@ -119,9 +119,9 @@ export const generatePrdPdf = async (
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
   pdf.setTitle(document.title);
-  pdf.setAuthor('PRD Guide');
-  pdf.setCreator('PRD Guide');
-  pdf.setProducer('PRD Guide');
+  pdf.setAuthor('PRD Template');
+  pdf.setCreator('PRD Template');
+  pdf.setProducer('PRD Template');
   pdf.setCreationDate(FIXED_DATE);
   pdf.setModificationDate(FIXED_DATE);
 
