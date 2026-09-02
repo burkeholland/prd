@@ -7,7 +7,8 @@ const to = (path: string) => `${BASE}${path}`;
 
 // Canonical URLs are absolute (astro.config.mjs `site` + `base`) and end in a slash for pages.
 const SITE = 'https://burkeholland.github.io';
-const ROUTES = ['/', '/sample/', '/guide/', '/walkthrough/', '/history/', '/template/'] as const;
+const SOCIAL_CARD_ROUTES = ['/', '/sample/', '/guide/', '/walkthrough/', '/history/', '/template/'] as const;
+const PAGE_ROUTES = [...SOCIAL_CARD_ROUTES, '/create/'] as const;
 const canonicalOf = (path: string) => `${SITE}${BASE}${path}`;
 // Each page has its own preview card (src/lib/seo.ts); everything else falls back to the home one.
 const imageOf = (file: string) => `${SITE}${BASE}${file}`;
@@ -16,7 +17,7 @@ const HOME_IMAGE = imageOf(SOCIAL_CARDS['/'].file);
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 test('every page has one canonical URL and a matching Open Graph / Twitter card', async ({ page }) => {
-  for (const path of ROUTES) {
+  for (const path of SOCIAL_CARD_ROUTES) {
     await page.goto(to(path));
     const expected = canonicalOf(path);
     const card = SOCIAL_CARDS[path];
@@ -65,7 +66,7 @@ test('every social card is served as a 1200×630 PNG under 200 KB', async ({ req
   }
 });
 
-test('the sitemap index points at one sitemap listing exactly the six pages by canonical URL', async ({ request }) => {
+test('the sitemap index points at one sitemap listing exactly the seven pages by canonical URL', async ({ request }) => {
   const index = await request.get(to('/sitemap-index.xml'));
   expect(index.status()).toBe(200);
   const indexXml = await index.text();
@@ -76,8 +77,8 @@ test('the sitemap index points at one sitemap listing exactly the six pages by c
   const sitemap = await request.get(to('/sitemap-0.xml'));
   expect(sitemap.status()).toBe(200);
   const locs = [...(await sitemap.text()).matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
-  expect(locs).toHaveLength(6);
-  expect(new Set(locs)).toEqual(new Set(ROUTES.map(canonicalOf)));
+  expect(locs).toHaveLength(7);
+  expect(new Set(locs)).toEqual(new Set(PAGE_ROUTES.map(canonicalOf)));
   expect(locs.filter((loc) => loc.includes('404')), 'status pages in the sitemap').toEqual([]);
 });
 
@@ -86,7 +87,7 @@ test('the sitemap index points at one sitemap listing exactly the six pages by c
 // only sheets under 4 KB — ours is 16 KB) names the page it broke. `/history/16/` carries its own scoped
 // <style> as well and `/nope/` is the 404; both must still carry the shared rules. Engine-neutral: the check
 // reads the <head>, not the layout. Text matchers skip <head> and <style>, so the CSS is read out with evaluate.
-const INLINE_CSS_ROUTES = [...ROUTES, '/history/16/', '/nope/'] as const;
+const INLINE_CSS_ROUTES = [...PAGE_ROUTES, '/history/16/', '/nope/'] as const;
 for (const path of INLINE_CSS_ROUTES) {
   test(`${path} inlines the shared stylesheet instead of linking it`, async ({ page }) => {
     const response = await page.goto(to(path));
