@@ -43,8 +43,8 @@ const CUT_REVISION = 3;
 const cut = list.find((row) => row.n === CUT_REVISION) ?? smallest;
 const shown = current ?? list[list.length - 1]!;
 
-const title = 'How this PRD evolved';
-const description = `${SITE.gistTitle} went through ${totals.count} revisions over ${totals.days} days — what grew, what was rewritten, and when.`;
+const title = 'Revision history';
+const description = `${totals.count} revisions over ${totals.days} days, showing what changed and when.`;
 
 const ROW_HEIGHT = 22;
 const BAR_HEIGHT = 14;
@@ -66,19 +66,15 @@ const baseline = (row: (typeof list)[number]) => list.indexOf(row) * ROW_HEIGHT 
     <header class="history-page__header">
       <h1>{title}</h1>
       <p class="lede">
-        <a href={withBase('/sample/')}>{SITE.gistTitle}</a> went through {totals.count} revisions over{' '}
-        {totals.days} days, from <time datetime={history.first_committed_at}>{totals.firstDate}</time> to{' '}
+        The <a href={withBase('/sample/')}>Example PRD</a> has {totals.count} revisions over {totals.days} days, from{' '}
+        <time datetime={history.first_committed_at}>{totals.firstDate}</time> to{' '}
         <time datetime={history.last_committed_at}>{totals.lastDate}</time>.
       </p>
       <p class="history-page__story">
-        The first draft was {kb(totals.firstBytes, 0)} KB and {totals.firstSections} sections. Revision {cut.n} cut
-        it to {kb(cut.bytes, 0)} KB and {cut.sectionCount} sections. The revisions since added the exactness back —
-        exact copy per screen, the mocks, the specification checklist — and the document grew again to the{' '}
-        {kb(shown.bytes, 0)} KB on <a href={withBase('/sample/')}>the sample page</a>.
-      </p>
-      <p class="history-note">
-        The specificity Burke credits for the one-shot build was earned in revisions, not written in one sitting.
-        Click a revision number to read the exact text that changed.
+        The first draft was {kb(totals.firstBytes, 0)} KB across {totals.firstSections} sections. Revision {cut.n}{' '}
+        reduced it to {kb(cut.bytes, 0)} KB across {cut.sectionCount} sections; later revisions restored detailed
+        copy, mocks, and the specification checklist, bringing the current example to {kb(shown.bytes, 0)} KB. Open
+        a revision to read the exact change.
       </p>
     </header>
 

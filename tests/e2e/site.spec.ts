@@ -14,8 +14,8 @@ const NAV: { href: string; label: string; title?: string }[] = [
   { href: '/', label: 'Home' },
   { href: '/sample/', label: 'The sample PRD' },
   { href: '/guide/', label: 'The guide', title: 'How to write a PRD an agent can build from' },
-  { href: '/walkthrough/', label: 'The walkthrough', title: 'The sample PRD, section by section' },
-  { href: '/history/', label: 'How it evolved', title: 'How this PRD evolved' },
+  { href: '/walkthrough/', label: 'The walkthrough', title: 'Example PRD, section by section' },
+  { href: '/history/', label: 'How it evolved', title: 'Revision history' },
   { href: '/template/', label: 'The template', title: 'PRD template' },
 ];
 
@@ -679,9 +679,54 @@ test('the sample PRD has a table of contents that resolves', async ({ page }) =>
   await expectTocResolves(page, '/sample/', 10);
 });
 
-test('the walkthrough has at least eighteen sections and a table of contents that resolves', async ({ page }) => {
+test('the walkthrough preserves its sections and excerpts with neutral, bounded framing', async ({ page }) => {
   test.skip(!present(CONTENT.walkthrough), 'content not merged yet');
-  await expectTocResolves(page, '/walkthrough/', 18);
+  const { headings } = await expectTocResolves(page, '/walkthrough/', 18);
+  expect(headings).toBe(18);
+  await expect(page.locator('h1')).toHaveText('Example PRD, section by section');
+  await expect(page.locator('meta[name="description"]')).toHaveAttribute(
+    'content',
+    'How each section removes a decision, with an excerpt and a rule you can reuse.',
+  );
+  await expect(page.locator('.doc__body blockquote')).toHaveCount(17);
+
+  const opening = page.locator('.doc__body > p').first();
+  expect((await opening.innerText()).split(/\s+/).filter(Boolean).length, 'opening words').toBeLessThanOrEqual(45);
+  await expect(opening.locator('a')).toHaveText(['Example PRD', 'Template']);
+  expect(await opening.locator('a').evaluateAll((links) => links.map((link) => link.getAttribute('href')))).toEqual([
+    to('/sample/'),
+    to('/template/'),
+  ]);
+
+  const useLabels = page.locator('.doc__body strong').filter({ hasText: /^Use this$/ });
+  await expect(useLabels).toHaveCount(10);
+  await expect(page.locator('.doc__body')).not.toContainText(/Steal this/i);
+  await expect(page.locator(`.doc__body a[href^="${to('/guide/')}"]`)).toHaveCount(0);
+
+  for (const label of ['What it does', 'Why it works']) {
+    const paragraphs = page.locator('.doc__body p').filter({ hasText: new RegExp(`^${label}`) });
+    await expect(paragraphs).toHaveCount(10);
+    for (const text of await paragraphs.allInnerTexts()) {
+      expect(text.split(/\s+/).filter(Boolean).length, `${label} paragraph words`).toBeLessThanOrEqual(90);
+    }
+  }
+
+  const ending = await page.locator('.doc__body h2').last().evaluate((heading) => {
+    const text: string[] = [];
+    const hrefs: string[] = [];
+    for (let node = heading.nextElementSibling; node; node = node.nextElementSibling) {
+      text.push(node.textContent ?? '');
+      hrefs.push(...Array.from(node.querySelectorAll('a'), (link) => link.getAttribute('href') ?? ''));
+    }
+    return { text: text.join(' '), hrefs };
+  });
+  expect(ending.text.split(/\s+/).filter(Boolean).length, 'ending words').toBeLessThanOrEqual(100);
+  expect(ending.hrefs).toEqual([to('/sample/'), to('/template/')]);
+
+  const prose = (await page.locator('.doc__body').innerText()).toLowerCase();
+  for (const phrase of ['burke', 'one-shot', 'one shot', 'one pass', 'what to steal']) {
+    expect(prose, `"${phrase}" in walkthrough prose`).not.toContain(phrase);
+  }
 });
 
 test('every walkthrough link into the sample PRD lands on an existing heading', async ({ page }) => {
@@ -777,7 +822,7 @@ test('the history page lists every gist revision, badges the published one, and 
   const noCounts = history.revisions.filter((rev) => rev.additions + rev.deletions === 0 && rev.n !== 1).length;
 
   await page.goto(to('/history/'));
-  await expect(page.locator('h1')).toHaveText('How this PRD evolved');
+  await expect(page.locator('h1')).toHaveText('Revision history');
 
   const table = page.locator('table.history');
   await expect(table.locator('tbody tr')).toHaveCount(history.count);
@@ -823,17 +868,28 @@ test('the history page tells the story in numbers from the data and labels whose
 
   await page.goto(to('/history/'));
 
-  // The lede names the document and links it to the sample page, not to GitHub.
-  const lede = page.locator('.history-page__header p.lede');
-  await expect(lede.locator('a', { hasText: 'Build The Urlist' })).toHaveAttribute('href', to('/sample/'));
-  await expect(lede).toContainText(`went through ${history.count} revisions`);
+  await expect(page.locator('h1')).toHaveText('Revision history');
+  await expect(page.locator('meta[name="description"]')).toHaveAttribute(
+    'content',
+    /^\d+ revisions over \d+ days, showing what changed and when\.$/,
+  );
+  await expect(page.locator('.history-page__header > p')).toHaveCount(2);
 
-  // Three sentences: first-draft size, the revision-3 cut, the size on the sample page today — all from history.json.
+  // The factual lede links the example, and the story uses values from history.json.
+  const lede = page.locator('.history-page__header p.lede');
+  await expect(lede.locator('a', { hasText: 'Example PRD' })).toHaveAttribute('href', to('/sample/'));
+  await expect(lede).toContainText(`has ${history.count} revisions`);
+
   const story = page.locator('.history-page__header .history-page__story');
-  await expect(story).toContainText(`The first draft was ${wholeKb(first.bytes)} KB and 32 sections.`);
-  await expect(story).toContainText(`Revision 3 cut it to ${wholeKb(third.bytes)} KB and 13 sections.`);
-  await expect(story).toContainText(`grew again to the ${wholeKb(shown.bytes)} KB on the sample page.`);
-  await expect(story.locator('a', { hasText: 'the sample page' })).toHaveAttribute('href', to('/sample/'));
+  await expect(story).toContainText(`The first draft was ${wholeKb(first.bytes)} KB across 32 sections.`);
+  await expect(story).toContainText(`Revision 3 reduced it to ${wholeKb(third.bytes)} KB across 13 sections;`);
+  await expect(story).toContainText(`bringing the current example to ${wholeKb(shown.bytes)} KB.`);
+  await expect(story).toContainText('Open a revision to read the exact change.');
+
+  const prose = (await page.locator('article.history-page').innerText()).toLowerCase();
+  for (const phrase of ['burke', 'one-shot', 'one shot', 'one pass', 'what to steal']) {
+    expect(prose, `"${phrase}" in history prose`).not.toContain(phrase);
+  }
 
   // The + and − columns are GitHub's counts; the caption says so too, and the outro names the guide by its nav name.
   const headers = page.locator('table.history thead th');
