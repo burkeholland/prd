@@ -324,7 +324,7 @@ test('revision 3 leads with its hand-written note without adding history to the 
   await expect(page.locator('.revision__header > :nth-child(2)')).toHaveClass(/\blede\b/);
   await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', note!);
 
-  await expect(page.locator('nav.site-nav a')).toHaveText(['Good PRD', 'Example', 'Template']);
+  await expect(page.locator('nav.site-nav a')).toHaveText(['Create', 'Example', 'Downloads']);
   await expect(page.locator('nav.site-nav a[aria-current="page"]')).toHaveCount(0);
 });
 

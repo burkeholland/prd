@@ -10,8 +10,11 @@ interface Props {
 const normalize = (path: string) => path.replace(/\/+$/, '') || '/';
 const current = normalize(Astro.props.current);
 const items = NAV.map((item) => ({ ...item, href: withBase(item.href) }));
+const root = normalize(withBase('/'));
 const isCurrent = (href: string) => {
+  if (href.includes('#')) return false;
   const target = normalize(href);
+  if (target === root) return current === root;
   return current === target || current.startsWith(`${target}/`);
 };
 ---

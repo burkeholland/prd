@@ -1,43 +1,11 @@
 ---
+import PrdEditor from '../components/PrdEditor.astro';
 import Base from '../layouts/Base.astro';
 import { SITE } from '../lib/site';
-import { withBase } from '../lib/base';
 
-const cards = [
-  {
-    href: withBase('/guide/'),
-    title: 'What makes a good PRD',
-    text: 'Seven practical rules for writing requirements that are specific, testable, and complete.',
-  },
-  {
-    href: withBase('/sample/'),
-    title: 'Example PRD',
-    text: 'A complete PRD for a small application, with mocks, routes, constraints, and completion checks.',
-  },
-  {
-    href: withBase('/template/'),
-    title: 'PRD template',
-    text: 'A section-by-section starting point you can copy and adapt.',
-  },
-];
+const title = `Create a product requirements document · ${SITE.name}`;
 ---
 
-<Base title={`Write a good PRD. · ${SITE.name}`}>
-  <section class="hero">
-    <h1>Write a good PRD.</h1>
-    <p class="lede">{SITE.tagline}</p>
-  </section>
-
-  <ul class="cards">
-    {
-      cards.map((card) => (
-        <li>
-          <a class="card" href={card.href}>
-            <h2 class="card__title">{card.title}</h2>
-            <p>{card.text}</p>
-          </a>
-        </li>
-      ))
-    }
-  </ul>
+<Base title={title}>
+  <PrdEditor />
 </Base>

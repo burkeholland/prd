@@ -31,7 +31,7 @@ describe('canonicalUrl', () => {
 describe('OG_IMAGE', () => {
   it('describes the 1200×630 preview image under the site root', () => {
     expect(OG_IMAGE).toMatchObject({ path: '/og.png', width: 1200, height: 630 });
-    expect(OG_IMAGE.alt).toContain('PRD Guide');
+    expect(OG_IMAGE.alt).toContain('PRD Template');
   });
 });
 
@@ -44,19 +44,19 @@ describe('SOCIAL_CARDS', () => {
   });
 
   it('uses the site-wide image and alt for the home page and a distinct file per other page', () => {
-    expect(SOCIAL_CARDS['/']).toMatchObject({ file: OG_IMAGE.path, title: 'PRD Guide', alt: OG_IMAGE.alt });
+    expect(SOCIAL_CARDS['/']).toMatchObject({ file: OG_IMAGE.path, title: 'PRD Template', alt: OG_IMAGE.alt });
     const files = cards.map((card) => card.file);
     expect(new Set(files).size).toBe(files.length);
     for (const [route, card] of Object.entries(SOCIAL_CARDS)) {
       if (route === '/') continue;
       expect(card.file, `${route} file`).toMatch(/^\/og\/[a-z-]+\.png$/);
-      expect(card.alt, `${route} alt`).toBe(`${card.title} — PRD Guide`);
+      expect(card.alt, `${route} alt`).toBe(`${card.title} — PRD Template`);
     }
   });
 
   it('uses generic descriptions for the home and example cards', () => {
     expect(SOCIAL_CARDS['/'].subtitle).toBe(
-      'A good PRD tells the builder what to make, which decisions are fixed, and how to know when the work is done.',
+      'Use this template as a starting point. Add, remove, or change sections to fit your project.',
     );
     expect(SOCIAL_CARDS['/sample/']).toMatchObject({
       title: 'Example PRD',

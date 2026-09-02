@@ -172,6 +172,31 @@ test('/sample/ prints content only with its seven screenshots', async ({ page })
   }
 });
 
+test('/ prints the editable document without site chrome or supporting controls', async ({ page }) => {
+  await page.setViewportSize(A4);
+  await page.emulateMedia({ media: 'print' });
+  await page.goto(to('/'));
+
+  for (const selector of [
+    '.site-header',
+    '.site-footer',
+    '.editor-status',
+    '.editor-tools',
+    '.editor-outline',
+  ]) {
+    await expect(page.locator(selector), selector).toBeHidden();
+  }
+  await expect(page.locator('h1')).toHaveText('Create a product requirements document');
+  await expect(page.locator('#prd-editor-form')).toBeVisible();
+  await expect(page.locator('.editor-section textarea')).toHaveCount(12);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(A4.width);
+  const palette = await page.locator('body').evaluate((body) => {
+    const style = getComputedStyle(body);
+    return { color: style.color, background: style.backgroundColor };
+  });
+  expect(palette).toEqual({ color: 'rgb(0, 0, 0)', background: 'rgb(255, 255, 255)' });
+});
+
 // Last on purpose: saves the sample PRD as an A4 PDF under test-results/ (ignored, never committed) and
 // reports its page count and size as evidence. `page.pdf()` exists in Chromium headless only, so the
 // CSS assertions above run in every engine and only this half skips elsewhere.

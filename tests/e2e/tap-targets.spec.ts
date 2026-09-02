@@ -14,7 +14,6 @@ const sidebarGeometry = (aside: Locator) =>
   aside.evaluate((node) => {
     const links = node.querySelectorAll<HTMLAnchorElement>('.toc__list a');
     const last = links[links.length - 1];
-    const fade = getComputedStyle(node, '::after');
     return {
       scrollHeight: node.scrollHeight,
       clientHeight: node.clientHeight,
@@ -22,7 +21,6 @@ const sidebarGeometry = (aside: Locator) =>
       asideBottom: node.getBoundingClientRect().bottom,
       lastLinkBottom: last.getBoundingClientRect().bottom,
       links: links.length,
-      fade: { position: fade.position, height: parseFloat(fade.height), backgroundImage: fade.backgroundImage },
     };
   });
 
@@ -31,7 +29,7 @@ const scrollAsideToEnd = (aside: Locator) => aside.evaluate((node) => node.scrol
 const noSidewaysScroll = (page: Page) =>
   page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, viewport: window.innerWidth }));
 
-test('1024×768: the sidebar TOC fades out at its end while links hide below it, and clears the last link once scrolled', async ({
+test('1024×768: the sidebar TOC scrolls to its final link without decorative effects', async ({
   page,
 }) => {
   await page.setViewportSize(TABLET_LANDSCAPE);
@@ -43,38 +41,28 @@ test('1024×768: the sidebar TOC fades out at its end while links hide below it,
   expect(resting.links, 'sample TOC links').toBe(20);
   expect(resting.scrollHeight, 'the list is taller than the aside').toBeGreaterThan(resting.clientHeight);
   expect(resting.scrollTop, 'the aside starts unscrolled').toBe(0);
-  // The end fade is the aside's own last child, stuck to the bottom edge of its scrollport: no script.
-  expect(resting.fade.position, '::after position').toBe('sticky');
-  expect(resting.fade.backgroundImage, '::after paints a gradient').toContain('linear-gradient');
-  expect(resting.fade.height, '::after height (2rem)').toBeGreaterThanOrEqual(MIN_TAP);
-  // At rest the last link ("Completion") is below the aside's bottom edge, i.e. hidden under the fade.
+  // At rest the last link ("Completion") is below the aside's bottom edge.
   expect(resting.lastLinkBottom, 'last link is hidden at rest').toBeGreaterThan(resting.asideBottom);
 
-  // Scrolled to the end the fade sits under the last link over the page background: the link is readable.
+  // Scrolled to the end the final link is fully inside the scrollport.
   await scrollAsideToEnd(aside);
   const scrolled = await sidebarGeometry(aside);
   expect(scrolled.scrollTop, 'the aside scrolled').toBeGreaterThan(0);
-  expect(scrolled.lastLinkBottom, 'last link clear of the 2rem fade at the end').toBeLessThanOrEqual(
-    scrolled.asideBottom - MIN_TAP,
-  );
+  expect(scrolled.lastLinkBottom, 'last link is visible at the end').toBeLessThanOrEqual(scrolled.asideBottom + 1);
 
-  // /guide/ has 10 links (three sections plus seven rules). At either tested height, the fade must
-  // sit below its final link whether the system font makes the sidebar scroll or fit exactly.
+  // /guide/ has 10 links (three sections plus seven rules). Its last link remains reachable too.
   await page.goto(to('/guide/'));
   const guide = await sidebarGeometry(aside);
   expect(guide.links, 'guide TOC links').toBe(10);
-  expect(guide.fade.position, 'guide ::after position').toBe('sticky');
   await scrollAsideToEnd(aside);
   const guideEnd = await sidebarGeometry(aside);
-  expect(guideEnd.lastLinkBottom, 'guide last link clear of the fade').toBeLessThanOrEqual(guideEnd.asideBottom - MIN_TAP);
+  expect(guideEnd.lastLinkBottom, 'guide last link is visible').toBeLessThanOrEqual(guideEnd.asideBottom + 1);
 
   await page.setViewportSize({ width: 1024, height: 900 });
   await page.goto(to('/guide/'));
   const fits = await sidebarGeometry(aside);
-  expect(fits.scrollHeight, 'the fade adds no scrolling where the list fits').toBe(fits.clientHeight);
-  expect(fits.lastLinkBottom, 'the fade sits below the last link, over nothing').toBeLessThanOrEqual(
-    fits.asideBottom - MIN_TAP,
-  );
+  expect(fits.scrollHeight, 'the list does not scroll where it fits').toBe(fits.clientHeight);
+  expect(fits.lastLinkBottom, 'the final link fits').toBeLessThanOrEqual(fits.asideBottom + 1);
 });
 
 test('768×1024: the "On this page" summary is thumb-sized without growing the closed box, and its links stay ≥ 32 px', async ({
@@ -177,9 +165,7 @@ function badgeGeometry() {
     return plain(range.getBoundingClientRect());
   };
   const row = document.querySelector('tr.is-current')!;
-  // `instant`, not the site's `html { scroll-behavior: smooth }`: the rects and elementFromPoint are read
-  // synchronously below, and CI's Linux Chromium animates a smooth scroll (this box's headless Chromium
-  // applies it at once, so a local pass would not prove the row was in view).
+  // The rects and elementFromPoint are read synchronously below.
   row.scrollIntoView({ block: 'center', behavior: 'instant' });
   const marks = document.querySelectorAll('mark.history__badge');
   const mark = marks[0]!;

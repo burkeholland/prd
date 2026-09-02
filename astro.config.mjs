@@ -25,9 +25,12 @@ export default defineConfig({
   build: { inlineStylesheets: 'always' },
   // Emits dist/sitemap-index.xml + sitemap-0.xml with the content pages in their canonical
   // (trailing-slash) form; the 404 page is a status page and never listed, and the per-revision
-  // diff pages (/history/<n>/) are noindex and not listed either. <head> links to it.
+  // diff pages (/history/<n>/) and the noindex compatibility editor (/create/) are not listed.
   integrations: [
-    sitemap({ filter: (page) => !/\/(404|500)\/?$/.test(page) && !/\/history\/\d+\/?$/.test(page) }),
+    sitemap({
+      filter: (page) =>
+        !/\/(404|500|create)\/?$/.test(page) && !/\/history\/\d+\/?$/.test(page),
+    }),
   ],
   markdown: {
     shikiConfig: {

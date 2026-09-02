@@ -1,5 +1,5 @@
-/* PRD Field Guide — print stylesheet. Loaded after global.css by src/layouts/Base.astro.
-   A PRD is a document people print or save as PDF: the four content pages print as plain
+/* PRD Template print stylesheet. Loaded after global.css by src/layouts/Base.astro.
+   A PRD is a document people print or save as PDF: document pages print as plain
    black-on-white text — no site chrome, no sidebar, wrapped code, external links followed
    by their URL. Screen rendering is untouched: everything here is inside @media print. */
 
@@ -29,7 +29,10 @@
   .site-footer,
   .toc,
   .doc__actions,
-  .source-card__links {
+  .source-card__links,
+  .editor-status,
+  .editor-tools,
+  .editor-outline {
     display: none !important;
   }
 
@@ -53,7 +56,10 @@
   .doc,
   .doc__header,
   .doc__body,
-  .prose {
+  .prose,
+  .editor-page,
+  .editor-shell,
+  .editor-form {
     display: block;
     width: auto;
     max-width: none;
@@ -65,6 +71,28 @@
     margin-bottom: 1.5rem;
     padding-bottom: 0.75rem;
     border-bottom: 1px solid #999;
+  }
+
+  .editor-header {
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+  }
+
+  .editor-form {
+    display: grid;
+    gap: 1.25rem;
+  }
+
+  .editor-section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .editor-title-field input,
+  .editor-section textarea {
+    color: #000;
+    background: #fff;
+    border-color: #999;
   }
 
   .doc__header > * + * {
@@ -103,7 +131,6 @@
     max-width: 100%;
     height: auto;
     border-radius: 0;
-    box-shadow: none;
   }
 
   .prose blockquote {

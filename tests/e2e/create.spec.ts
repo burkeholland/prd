@@ -5,7 +5,7 @@ import {
 } from '../../src/lib/prd-editor-state';
 import { PRD_TEMPLATE_SECTIONS } from '../../src/lib/prd-template';
 
-const CREATE_PATH = '/prd/create/';
+const CREATE_PATH = '/prd/';
 
 const sectionField = (page: Page, index: number) =>
   page.locator('textarea').nth(index);
@@ -16,13 +16,24 @@ test.beforeEach(async ({ page }) => {
   await page.reload();
 });
 
-test('renders one labeled title, 12 labeled canonical sections, prompts, and polite status regions', async ({
+test('renders one editor with the canonical heading, 12 optional section fields, six downloads, and status regions', async ({
   page,
 }) => {
+  await expect(page.locator('h1')).toHaveCount(1);
+  await expect(page.locator('h1')).toHaveText('Create a product requirements document');
+  await expect(page.locator('[data-prd-editor]')).toHaveCount(1);
+  await expect(page.locator('.editor-lead')).toHaveText(
+    'Use this template as a starting point. Add, remove, or change sections to fit your project.',
+  );
+  await expect(page.locator('.editor-privacy')).toHaveText(
+    'Your draft stays in this browser unless you download it.',
+  );
+
   const title = page.locator('input#document-title');
   await expect(page.locator('input')).toHaveCount(1);
   await expect(title).toHaveCount(1);
-  await expect(page.locator('label[for="document-title"]')).toHaveText('Document title');
+  await expect(page.locator('label[for="document-title"] > span').first()).toHaveText('Document title');
+  await expect(page.locator('label[for="document-title"] .field-state')).toHaveText('Optional');
 
   const textareas = page.locator('textarea');
   await expect(textareas).toHaveCount(12);
@@ -40,7 +51,16 @@ test('renders one labeled title, 12 labeled canonical sections, prompts, and pol
       'aria-describedby',
       `section-prompt-${section.id} section-questions-${section.id}`,
     );
+    await expect(
+      page.locator(`label[for="section-input-${section.id}"] .field-state`),
+    ).toHaveText('Optional');
   }
+
+  await expect(page.locator('[data-export-format]')).toHaveCount(3);
+  await expect(page.locator('.editor-downloads .editor-blank-links a[download]')).toHaveCount(3);
+  await expect(page.locator('#download-heading')).toHaveText('Download your PRD');
+  await expect(page.locator('.editor-downloads h3')).toHaveText('Or start with a blank file');
+  await expect(page.locator('.hero, .cards, a.card')).toHaveCount(0);
 
   const liveRegions = page.locator('[aria-live="polite"]');
   await expect(liveRegions).toHaveCount(2);
@@ -194,6 +214,7 @@ test('Start over requires confirmation; cancel preserves content and confirm cle
 
 test('keyboard flow reaches every field and action, and outline links focus their section fields', async ({
   page,
+  browserName,
 }) => {
   const firstOutlineLink = page.locator('.editor-outline a').first();
   await firstOutlineLink.focus();
@@ -207,6 +228,9 @@ test('keyboard flow reaches every field and action, and outline links focus thei
     'download-md',
     'download-docx',
     'download-pdf',
+    ...(browserName === 'webkit'
+      ? []
+      : ['blank-download-md', 'blank-download-docx', 'blank-download-pdf']),
     'save-draft',
     'start-over',
   ];
@@ -248,6 +272,69 @@ test('at 320px the page does not overflow and every outline link and button is a
     nodes.map((node) => node.getBoundingClientRect().height),
   );
   for (const height of heights) expect(height).toBeGreaterThanOrEqual(32);
+});
+
+test('the workbench keeps the editor primary on desktop and remains linear and unobstructed on phones', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.reload();
+  const desktop = await page.evaluate(() => {
+    const width = (selector: string) =>
+      document.querySelector(selector)?.getBoundingClientRect().width ?? 0;
+    return {
+      h1: parseFloat(getComputedStyle(document.querySelector('h1')!).fontSize),
+      editor: width('.editor-form'),
+      outline: width('.editor-outline'),
+      tools: width('.editor-tools'),
+      columns: getComputedStyle(document.querySelector('.editor-shell')!).gridTemplateColumns,
+    };
+  });
+  expect(desktop.h1).toBeLessThanOrEqual(36);
+  expect(desktop.editor).toBeGreaterThan(desktop.outline);
+  expect(desktop.editor).toBeGreaterThan(desktop.tools);
+  expect(desktop.columns.split(' ')).toHaveLength(3);
+
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 320, height: 780 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.reload();
+    const phone = await page.evaluate(() => {
+      const targets = Array.from(
+        document.querySelectorAll<HTMLElement>(
+          'main a[href], main button, main input, main textarea',
+        ),
+      ).filter((target) => target.getClientRects().length > 0);
+      return {
+        scrollWidth: document.documentElement.scrollWidth,
+        viewport: window.innerWidth,
+        h1: parseFloat(getComputedStyle(document.querySelector('h1')!).fontSize),
+        columns: getComputedStyle(document.querySelector('.editor-shell')!).gridTemplateColumns,
+        sticky: targets.filter((target) => getComputedStyle(target).position === 'sticky').length,
+        undersized: targets
+          .map((target) => ({
+            id: target.id || target.textContent?.trim() || target.tagName,
+            height: target.getBoundingClientRect().height,
+          }))
+          .filter((target) => target.height < 32),
+        outside: targets
+          .map((target) => ({
+            id: target.id || target.textContent?.trim() || target.tagName,
+            left: target.getBoundingClientRect().left,
+            right: target.getBoundingClientRect().right,
+          }))
+          .filter((target) => target.left < 0 || target.right > window.innerWidth + 0.5),
+      };
+    });
+    expect(phone.scrollWidth).toBe(phone.viewport);
+    expect(phone.h1).toBeLessThanOrEqual(30);
+    expect(phone.columns.split(' ')).toHaveLength(1);
+    expect(phone.sticky).toBe(0);
+    expect(phone.undersized).toEqual([]);
+    expect(phone.outside).toEqual([]);
+  }
 });
 
 test('without JavaScript the editor is replaced by all three blank template downloads', async ({

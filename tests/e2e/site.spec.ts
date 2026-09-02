@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
+import { PRD_TEMPLATE_SECTIONS } from '../../src/lib/prd-template';
 
 // The site is published under this base path (astro.config.mjs). Playwright resolves
 // `page.goto('/sample/')` against the origin only, so every path goes through `to()`.
@@ -9,9 +10,9 @@ const to = (path: string) => `${BASE}${path}`;
 
 // The brand is the Home link. The nav contains only the site's three primary jobs.
 const NAV: { href: string; label: string; title?: string }[] = [
-  { href: '/guide/', label: 'Good PRD', title: 'What makes a good PRD' },
+  { href: '/', label: 'Create', title: 'Create a product requirements document' },
   { href: '/sample/', label: 'Example', title: 'Example PRD' },
-  { href: '/template/', label: 'Template', title: 'PRD template' },
+  { href: '/#downloads', label: 'Downloads' },
 ];
 
 // Doc pages and the repo-root content file each one renders. Files that other tasks may not
@@ -29,7 +30,7 @@ const CONTENT = {
 };
 const present = (file: string) => existsSync(resolve(file));
 
-const BRAND = 'PRD Guide';
+const BRAND = 'PRD Template';
 const PLACEHOLDER = 'Content is on its way.';
 const MOCKS = to('/mocks/');
 
@@ -54,7 +55,7 @@ async function expectTocResolves(page: Page, path: string, minHeadings: number) 
   return { headings: h2s, links: hrefs.length };
 }
 
-test('home has one heading, one sentence, and exactly three linked choices', async ({ page }) => {
+test('home is the editor, with canonical copy, 12 fields, and six download choices', async ({ page }) => {
   const origins = new Set<string>();
   page.on('request', (request) => origins.add(new URL(request.url()).origin));
 
@@ -62,27 +63,24 @@ test('home has one heading, one sentence, and exactly three linked choices', asy
 
   const h1 = page.locator('h1');
   await expect(h1).toHaveCount(1);
-  await expect(h1).toHaveText('Write a good PRD.');
-  await expect(page.locator('p.lede')).toHaveText(
-    'A good PRD tells the builder what to make, which decisions are fixed, and how to know when the work is done.',
+  await expect(h1).toHaveText('Create a product requirements document');
+  await expect(page.locator('p.editor-lead')).toHaveText(
+    'Use this template as a starting point. Add, remove, or change sections to fit your project.',
   );
 
-  const cards = page.locator('a.card');
-  await expect(cards).toHaveCount(3);
-  expect(await cards.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('href')))).toEqual([
-    to('/guide/'),
-    to('/sample/'),
-    to('/template/'),
-  ]);
-  await expect(cards.locator('h2')).toHaveText(['What makes a good PRD', 'Example PRD', 'PRD template']);
-  await expect(cards.locator('p')).toHaveText([
-    'Seven practical rules for writing requirements that are specific, testable, and complete.',
-    'A complete PRD for a small application, with mocks, routes, constraints, and completion checks.',
-    'A section-by-section starting point you can copy and adapt.',
-  ]);
+  await expect(page.locator('[data-prd-editor]')).toHaveCount(1);
+  await expect(page.locator('.editor-section textarea')).toHaveCount(PRD_TEMPLATE_SECTIONS.length);
+  await expect(page.locator('[data-export-format]')).toHaveCount(3);
+  await expect(page.locator('.editor-downloads .editor-blank-links a[download]')).toHaveCount(3);
+  await expect(page.locator('.hero, .cards, a.card')).toHaveCount(0);
 
   await expect(page.locator('nav.site-nav a')).toHaveCount(3);
   await expect(page.locator('nav.site-nav a')).toHaveText(NAV.map((item) => item.label));
+  expect(
+    await page.locator('nav.site-nav a').evaluateAll((links) =>
+      links.map((link) => link.getAttribute('href')),
+    ),
+  ).toEqual([to('/'), to('/sample/'), `${to('/')}#downloads`]);
   await expect(page.locator('a.brand')).toHaveText(BRAND);
   await expect(page.locator('a.brand')).toHaveAttribute('href', to('/'));
 
@@ -90,21 +88,21 @@ test('home has one heading, one sentence, and exactly three linked choices', asy
   expect([...origins]).toEqual([own]);
 });
 
-test('home has no extra sections or personal and performance framing', async ({ page }) => {
+test('home does not promote secondary routes or make prescriptive claims', async ({ page }) => {
   await page.goto(to('/'));
 
-  await expect(page.locator('main > *')).toHaveCount(2);
-  await expect(page.locator('.strip, .ready, .different')).toHaveCount(0);
-  expect(await page.locator('main').innerText()).not.toMatch(
-    /Burke|Microsoft|one[- ]?(?:shot|pass)|proof|showcase|origin story/i,
-  );
+  for (const path of ['/guide/', '/walkthrough/', '/history/', '/template/']) {
+    await expect(page.locator(`main a[href="${to(path)}"]`), path).toHaveCount(0);
+  }
+  const copy = await page.locator('main').innerText();
+  expect(copy).not.toMatch(/Burke Holland|only way|right way|best way|guarantee/i);
 });
 
 test('the three-link nav fits at 320px without scrolling or hiding a target', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 780 });
-  const paths = ['/', ...NAV.map((item) => item.href), '/walkthrough/', '/history/', '/history/3/'];
+  const paths = ['/', '/sample/', '/guide/', '/template/', '/walkthrough/', '/history/', '/history/3/'];
   for (const path of paths) {
     const response = await page.goto(to(path));
     expect(response?.status(), `${path} status`).toBe(200);
@@ -129,7 +127,7 @@ test('the three-link nav fits at 320px without scrolling or hiding a target', as
 });
 
 test('public HTML never names the example author', async ({ request }) => {
-  for (const path of ['/', ...NAV.map((item) => item.href), '/walkthrough/', '/history/', '/history/3/']) {
+  for (const path of ['/', '/sample/', '/guide/', '/template/', '/walkthrough/', '/history/', '/history/3/']) {
     const response = await request.get(to(path));
     expect(response.status(), `${path} status`).toBe(200);
     expect((await response.text()).match(/Burke Holland/g) ?? [], `${path} exact author-name occurrences`).toEqual(
@@ -138,21 +136,13 @@ test('public HTML never names the example author', async ({ request }) => {
   }
 });
 
-test('every primary route responds 200 with a title that starts with its public content label', async ({ page }) => {
+test('the two primary routes respond 200 with direct titles', async ({ page }) => {
   await page.goto(to('/'));
-  expect(await page.title()).toBe('Write a good PRD. · PRD Guide');
+  expect(await page.title()).toBe('Create a product requirements document · PRD Template');
 
-  for (const item of NAV) {
-    const response = await page.goto(to(item.href));
-    expect(response?.status(), `${item.href} status`).toBe(200);
-
-    const title = await page.title();
-    const prefix = item.title ?? item.label;
-    expect(
-      title.startsWith(prefix),
-      `${item.href} title "${title}" should start with ${prefix}`,
-    ).toBe(true);
-  }
+  const response = await page.goto(to('/sample/'));
+  expect(response?.status(), '/sample/ status').toBe(200);
+  expect(await page.title()).toBe('Example PRD · PRD Template');
 });
 
 test('no page whose content exists says it is on its way', async ({ page }) => {
@@ -496,9 +486,9 @@ test('pressing Tab once on / focuses the skip link', async ({ page, browserName 
   await expect(skipLink).toHaveAttribute('href', '#main');
 });
 
-test('every route emits only base-prefixed URLs and marks exactly one nav item current', async ({ page }) => {
-  for (const item of NAV) {
-    await page.goto(to(item.href));
+test('every route emits only base-prefixed URLs and only core pages mark a nav item current', async ({ page }) => {
+  for (const path of ['/', '/sample/', '/guide/', '/template/', '/walkthrough/', '/history/', '/history/3/']) {
+    await page.goto(to(path));
 
     // Root-relative URLs that skip the base would 404 on GitHub Pages. Protocol-relative
     // `//host/...` values are a different thing and are ignored.
@@ -508,11 +498,14 @@ test('every route emits only base-prefixed URLs and marks exactly one nav item c
         (el) => el.getAttribute('href') ?? el.getAttribute('src') ?? '',
       ).filter((value) => !value.startsWith('//')),
     );
-    expect(urls.length, `${item.href} has internal URLs to check`).toBeGreaterThan(0);
+    expect(urls.length, `${path} has internal URLs to check`).toBeGreaterThan(0);
     const unbased = urls.filter((value) => !value.startsWith(`${BASE}/`));
-    expect(unbased, `${item.href} un-based URLs`).toEqual([]);
+    expect(unbased, `${path} un-based URLs`).toEqual([]);
 
-    await expect(page.locator('nav.site-nav a[aria-current="page"]'), `${item.href} current nav item`).toHaveCount(1);
+    const expectedCurrent = path === '/' || path === '/sample/' ? 1 : 0;
+    await expect(page.locator('nav.site-nav a[aria-current="page"]'), `${path} current nav item`).toHaveCount(
+      expectedCurrent,
+    );
   }
 });
 

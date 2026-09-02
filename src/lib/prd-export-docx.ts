@@ -101,8 +101,8 @@ const coreProperties = (title: string): string =>
   `xmlns:dcmitype="http://purl.org/dc/dcmitype/" ` +
   `xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">` +
   `<dc:title>${escapeXml(title)}</dc:title>` +
-  `<dc:creator>PRD Guide</dc:creator>` +
-  `<cp:lastModifiedBy>PRD Guide</cp:lastModifiedBy>` +
+  `<dc:creator>PRD Template</dc:creator>` +
+  `<cp:lastModifiedBy>PRD Template</cp:lastModifiedBy>` +
   `<cp:revision>1</cp:revision>` +
   `<dcterms:created xsi:type="dcterms:W3CDTF">${FIXED_CORE_TIMESTAMP}</dcterms:created>` +
   `<dcterms:modified xsi:type="dcterms:W3CDTF">${FIXED_CORE_TIMESTAMP}</dcterms:modified>` +
@@ -173,8 +173,8 @@ export const exportPrdDocx = async (
 
   const file = new Document({
     title: document.title,
-    creator: 'PRD Guide',
-    lastModifiedBy: 'PRD Guide',
+    creator: 'PRD Template',
+    lastModifiedBy: 'PRD Template',
     revision: 1,
     sections: [
       {

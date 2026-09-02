@@ -1,9 +1,8 @@
-# PRD Field Guide
+# PRD Template
 
-A showcase site for Burke Holland's PRD gist — *Build The Urlist* — that shows a
-sample PRD, explains how to write one an AI agent can build from, walks the
-gist section by section as the worked example, shows how the gist evolved
-revision by revision, and offers a reusable template.
+A browser-based editor for drafting a product requirements document and
+downloading it as Markdown, Word, or PDF. The site also preserves a completed
+example and supporting guide, walkthrough, template, and revision history.
 
 Source gist: https://gist.github.com/burkeholland/f71d1156812fd91e4369308358892817
 
@@ -31,7 +30,7 @@ scripts/              Node scripts + their node:test tests (each one documented 
   lib/                pure helpers (gist, gist-git, history, content) + their *.test.mjs
 src/                  Astro site
   layouts/            Base.astro (head, nav, footer) and Doc.astro (a markdown document + its table of contents)
-  components/         Nav, Footer, Toc
+  components/         PrdEditor, Nav, Footer, Toc
   pages/              one .astro per route: index, create, sample, guide, walkthrough, history, template, 404
   pages/downloads/    prerendered Markdown, DOCX, and PDF blank-template files -> /downloads/prd-template.*
   pages/history/[n].astro  one text-diff page per gist revision       -> /history/<n>
@@ -56,7 +55,8 @@ The defaults are **4410** (dev) and **4411** (preview / Playwright); set
 Astro 5, static output, strict TypeScript, npm. No UI or CSS framework, no web
 fonts, and no external requests at runtime. JavaScript is page-scoped: copy actions
 on `/template/` and `/sample/`, plus the local draft editor and in-browser downloads
-on `/create/`. Markdown is loaded from the repo-root
+on `/`. `/create/` renders the same editor as a noindex compatibility route.
+Markdown is loaded from the repo-root
 `content/` folder through content collections (`src/content.config.ts`); when a
 file is missing the matching page renders "Content is on its way." instead of
 failing the build.
@@ -81,11 +81,11 @@ npx playwright test tests/e2e/a11y.spec.ts   axe-core (WCAG 2.1 AA) on every pag
 npx playwright test tests/e2e/links.spec.ts   every in-site link answers 200 and every #anchor exists on its page
 npx playwright test tests/e2e/template.spec.ts   copy buttons on /template (clipboard, keyboard, other pages have none)
 npx playwright test tests/e2e/sample.spec.ts   "Copy the PRD" on /sample (clipboard, keyboard, failure path)
-npx playwright test tests/e2e/site.spec.ts   every route: titles, nav, base-prefixed URLs, the sample's screenshots and download, the history table
+npx playwright test tests/e2e/site.spec.ts   editor-first home, titles, nav, base-prefixed URLs, the sample's screenshots and download, the history table
 npx playwright test tests/e2e/anchors.spec.ts   every h2–h4 links to its own id (hover #, keyboard, TOC ids, print)
 npx playwright test tests/e2e/meta.spec.ts   canonical URL + Open Graph/Twitter tags per page, the og PNGs (1200×630, < 200 KB), the sitemap
 npx playwright test tests/e2e/diffs.spec.ts   /history/<n>: first draft as preview, diff tables, line-ending note, noindex, no script
-npx playwright test tests/e2e/print.spec.ts   the document pages print content only, black on white; /sample saves as an A4 PDF
+npx playwright test tests/e2e/print.spec.ts   the editor and document pages print cleanly; /sample saves as an A4 PDF
 ```
 
 `build` and `dev` pass `--force` so a change to a remark/rehype plugin is never served from
@@ -107,8 +107,9 @@ root `.gitattributes` marks `content/gist/**` and `public/raw/**` `-text` so the
 gist snapshot stays byte-exact on every checkout.
 
 Styles live in `src/styles/global.css` (screen) and `src/styles/print.css` (`@media print`
-only: the document pages print / save as PDF as content only, black on white, code wrapped,
-external links followed by their URL; covered by `tests/e2e/print.spec.ts`).
+only: the editor prints without supporting controls, and document pages print as content
+only, black on white, with code wrapped and external URLs shown; covered by
+`tests/e2e/print.spec.ts`).
 
 Performance (Lighthouse; nothing to install, it reuses Playwright's Chromium; run against `npm run preview`):
 `$env:CHROME_PATH = (node -e "console.log(require('playwright').chromium.executablePath())"); npx --yes lighthouse@latest http://localhost:4411/prd/ --chrome-flags="--headless=new" --output=json --output-path=lh.json --only-categories=performance,accessibility,best-practices,seo`
