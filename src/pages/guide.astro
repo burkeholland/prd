@@ -9,7 +9,7 @@ const entry = await getEntry(route.collection, route.id);
 
 <Doc
   label={route.label}
-  title={entry?.data.title ?? route.label}
+  title={route.label}
   description={entry?.data.description}
   entry={entry}
 />

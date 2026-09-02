@@ -23,7 +23,7 @@ export const OG_IMAGE = {
   path: '/og.png',
   width: 1200,
   height: 630,
-  alt: 'PRD Field Guide — write a PRD an agent can build',
+  alt: 'PRD Guide — practical guidance for writing a good PRD',
 } as const;
 
 /** One social preview card: the PNG under public/ (base-less path) and the copy drawn on it. */
@@ -49,18 +49,18 @@ export const SOCIAL_CARDS = {
   '/': { file: OG_IMAGE.path, title: SITE.name, subtitle: SITE.tagline, alt: OG_IMAGE.alt },
   '/sample/': pageCard(
     '/og/sample.png',
-    'The sample PRD',
-    'Build The Urlist — the complete instruction Burke Holland handed to a coding agent: mocks, stack, routes, exact copy, tests, and a definition of done.',
+    'Example PRD',
+    'A complete PRD for a link-sharing app, with mocks, routes, data rules, tests, and completion checks.',
   ),
   '/guide/': pageCard(
     '/og/guide.png',
-    'How to write one',
-    'Seven habits that separate a PRD an agent can execute from one it has to guess at.',
+    'What makes a good PRD',
+    'Seven practical rules for writing requirements that are specific, testable, and complete.',
   ),
   '/walkthrough/': pageCard(
     '/og/walkthrough.png',
     'Worked example',
-    'The sample PRD, section by section: what each part does, why it works, and what to steal.',
+    'The example PRD, section by section: what each part does and why it works.',
   ),
   '/history/': pageCard(
     '/og/history.png',
@@ -69,8 +69,8 @@ export const SOCIAL_CARDS = {
   ),
   '/template/': pageCard(
     '/og/template.png',
-    'Template',
-    'The skeleton of a PRD an agent can build from — copy it, keep the order, fill every section.',
+    'PRD template',
+    'A section-by-section starting point you can copy and adapt.',
   ),
 } as const satisfies Record<string, SocialCard>;
 

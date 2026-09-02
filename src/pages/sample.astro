@@ -11,16 +11,12 @@ import history from '../../content/gist/history.json';
 const route = DOC_ROUTES['/sample'];
 const entry = await getEntry(route.collection, route.id);
 
-// The card's intro. Its first sentence alone is the page's <meta name="description">.
 const intro = {
-  lead: 'Burke Holland\u2019s real PRD for The Urlist, word for word from his GitHub gist \u2014 the exact text he handed to the agent.',
-  rest: 'Only the screenshots have been copied locally. The document points at an app it calls \u201Cthe reference\u201D for behaviour and copy, so the seven screenshots below show that reference \u2014 the target, not what the agent built.',
+  lead: 'A complete PRD for a link-sharing app, shown exactly as written. It includes mocks, stack choices, routes, data rules, exact interface copy, tests, and completion checks.',
+  rest: 'The screenshots show the reference product described by the document.',
 };
 const description = intro.lead;
 
-// The gist carries its own h1 (`# Build The Urlist`), so the card's heading is an h1 only
-// while the content is absent and the placeholder shows.
-const Heading = entry ? 'p' : 'h1';
 const gistUrl = meta.html_url || SITE.gistUrl;
 const revision = meta.revision || undefined;
 const shortRevision = revision?.slice(0, 7);
@@ -36,12 +32,13 @@ const revisionLabel = current ? `Gist revision ${current.n} of ${history.count}`
 
 <Doc label={route.label} title={route.label} description={description} entry={entry}>
   <div slot="header" class="source-card">
-    <Heading class="source-card__title">{route.label}</Heading>
-    <p>{intro.lead} {intro.rest}</p>
+    <h1 class="source-card__title">{route.label}</h1>
+    <p>{intro.lead}</p>
+    <p>{intro.rest}</p>
     <ul class="source-card__links">
-      <li><a href={gistUrl}>View on GitHub</a></li>
+      <li><a href={gistUrl}>View original</a></li>
       <li><a href={withBase('/raw/build-the-urlist.md')} download>Download .md</a></li>
-      <li><a href={withBase('/history/')}>How it evolved</a></li>
+      <li><a href={withBase('/history/')}>Revision history</a></li>
     </ul>
     {
       (mirroredLabel || revision) && (
@@ -157,7 +154,7 @@ const revisionLabel = current ? `Gist revision ${current.n} of ${history.count}`
   }
 
   /* Reserves the width of the resting label in whatever system font is rendering it, so the
-     shorter "Copied" does not narrow the button and shove "How it evolved" sideways. Zero height
+     shorter "Copied" does not narrow the button and shove "Revision history" sideways. Zero height
      and hidden: never painted, never read out. The failure label is longer and may grow the button. */
   .copy-prd::after {
     content: 'Copy the PRD';

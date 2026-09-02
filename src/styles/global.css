@@ -1,4 +1,4 @@
-/* PRD Field Guide — global styles. No frameworks, no web fonts, no external requests. */
+/* PRD Guide — global styles. No frameworks, no web fonts, no external requests. */
 
 :root {
   color-scheme: light dark;
@@ -224,132 +224,6 @@ samp {
     align-items: flex-start;
     padding-block: 0.75rem;
   }
-
-  /* Phones and landscape phones (up to 767 px, task #1475: at 640–740 the wrapped list took two
-     rows and the header 145 px — 40 % of a 360 px-tall screen): one swipeable row of nav items
-     instead of two or three wrapped ones. Where the six labels already fit the row, the `ul` simply
-     does not overflow and this is a plain nav row: the right fade sits over the list's end padding
-     with nothing under it and the left fade stays at opacity 0. Both edges fade: the right-edge
-     fade says "more" and the list's end padding keeps the last item clear of it once scrolled to
-     the end; the left-edge fade keeps a pre-scrolled or swiped row from cutting its first visible
-     item mid-word (task #1436). The row bleeds through the page gutter to the viewport edge (start
-     padding = the gutter, matching negative margin) so Home still lines up with the brand at
-     scrollLeft 0 while the left fade sits on pixels that are actually on screen; scroll-padding
-     lands a snapped or `scroll-initial-target` item clear of that fade.
-     The scrollbar is hidden: on a phone it is an overlay anyway, and a classic one would add its own
-     height to the header. Block padding with a matching negative margin gives the focus ring room
-     inside the scroll container without adding to the header's height. */
-  .site-nav {
-    position: relative;
-    width: 100%;
-  }
-
-  .site-nav ul {
-    flex-wrap: nowrap;
-    gap: 1rem;
-    overflow-x: auto;
-    scrollbar-width: none;
-    overscroll-behavior-x: contain;
-    scroll-snap-type: x proximity;
-    scroll-padding-inline-start: 2.5rem;
-    padding: 0.4rem 2.5rem 0.4rem var(--gutter);
-    margin: -0.4rem 0 -0.4rem calc(-1 * var(--gutter));
-  }
-
-  .site-nav ul::-webkit-scrollbar {
-    display: none;
-  }
-
-  .site-nav li {
-    flex: 0 0 auto;
-    scroll-snap-align: start;
-  }
-
-  /* Chromium 133+ starts the row scrolled so the current page's item is in view (task #1404); Safari
-     and Firefox ignore this, so the inline script in Nav.astro lands them on the same item (task #1508). */
-  .site-nav li:has(a[aria-current="page"]) {
-    scroll-initial-target: nearest;
-  }
-
-  .site-nav a {
-    white-space: nowrap;
-  }
-
-  .site-nav::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: 2.5rem;
-    background: linear-gradient(to right, transparent, var(--bg));
-    pointer-events: none;
-  }
-
-  /* Left fade, always on. It covers only the gutter the row bleeds through: at scrollLeft 0 that
-     strip is the list's start padding, so Home is never under it, in any browser. */
-  .site-nav::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: calc(-1 * var(--gutter));
-    width: var(--gutter);
-    background: linear-gradient(to right, var(--bg), transparent);
-    pointer-events: none;
-  }
-
-  /* Firefox has no scroll-driven animations, and WebKit 26 never attaches the hoisted `--nav` timeline
-     below: its animation runs as a finished zero-length one whose `to` keyframe paints the wide fade over
-     Home at rest, and a fill beats any base declaration. So where the nav has no fade animation with a live
-     timeline, the inline script in Nav.astro owns the fade: `data-scrolled` on the nav cancels the animation
-     and hides the fade at rest (Home stays clear of it), and its value is `true` while `scrollLeft > 0`,
-     painting the full 2.5rem the `@supports` block uses over the item the row's left edge cuts (task #1508).
-     Without the script (or JavaScript) Firefox keeps the narrow always-on fade above. */
-  .site-nav[data-scrolled]::before {
-    width: 2.5rem;
-    opacity: 0;
-    animation: none;
-  }
-
-  .site-nav[data-scrolled="true"]::before {
-    opacity: 1;
-  }
-
-  /* Where scroll-driven animations exist (Chromium 116+), the left fade widens to match the right
-     one and is painted only once the row has scrolled: opacity 0 at scrollLeft 0, 1 from 2.5rem on.
-     The `ul` cannot animate its own sibling pseudo-element, so the timeline is named and hoisted.
-     Reduced motion disables every animation (see the reset above), which would leave the wide fade
-     on top of Home, so those users keep the narrow always-on one — the script's `data-scrolled` above
-     then paints and widens it once scrolled, as in Firefox. */
-  @supports (animation-timeline: scroll()) and (timeline-scope: --nav) {
-    @media (prefers-reduced-motion: no-preference) {
-      .site-nav {
-        timeline-scope: --nav;
-      }
-
-      .site-nav ul {
-        scroll-timeline: --nav inline;
-      }
-
-      .site-nav::before {
-        width: 2.5rem;
-        animation: nav-fade-in linear both;
-        animation-timeline: --nav;
-        animation-range: 0 2.5rem;
-      }
-
-      @keyframes nav-fade-in {
-        from {
-          opacity: 0;
-        }
-
-        to {
-          opacity: 1;
-        }
-      }
-    }
-  }
 }
 
 main {
@@ -429,47 +303,6 @@ main:focus {
 .card p {
   margin-top: 0.6rem;
   color: var(--text-muted);
-}
-
-.strip {
-  margin-top: 2rem;
-  padding: 1.25rem 1.5rem;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.35rem 1rem;
-  background: var(--accent-soft);
-  border-left: 4px solid var(--accent);
-  border-radius: 0 var(--radius) var(--radius) 0;
-}
-
-.strip__label {
-  font-size: 0.85rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--accent);
-}
-
-.strip a {
-  color: var(--text);
-  font-weight: 650;
-}
-
-.strip__text {
-  color: var(--text-muted);
-}
-
-.different {
-  margin-top: 4rem;
-  max-width: var(--measure);
-}
-
-.different ul {
-  margin: 1rem 0 0;
-  padding-left: 1.25rem;
-  display: grid;
-  gap: 0.6rem;
 }
 
 /* Doc pages ------------------------------------------------------------ */

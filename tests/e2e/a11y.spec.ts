@@ -140,7 +140,7 @@ test('keyboard: Tab shows the skip link, Enter lands in main, every nav link is 
   const navHrefs = await page.locator('nav.site-nav a').evaluateAll((nodes) =>
     nodes.map((node) => node.getAttribute('href') ?? ''),
   );
-  expect(navHrefs.length, 'site nav links').toBeGreaterThanOrEqual(5);
+  expect(navHrefs, 'site nav links').toHaveLength(3);
 
   const sequence: NonNullable<Awaited<ReturnType<typeof focused>>>[] = [];
   for (let i = 0; i < 15; i++) {
