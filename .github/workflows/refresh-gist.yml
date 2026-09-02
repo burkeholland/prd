@@ -12,10 +12,11 @@ name: Refresh the sample PRD snapshot
 
 on:
   schedule:
-    # Off the top of the hour on purpose: GitHub drops or delays scheduled runs under load, and
-    # :00 is the busiest minute — the 13:00 slot never fired on 2026-09-01. If a day is skipped
-    # anyway: gh workflow run refresh-gist.yml --ref main
-    - cron: '23 13 * * *' # daily, 13:23 UTC
+    # Both schedules deliberately avoid :00, when GitHub may delay or drop scheduled runs under load.
+    - cron: '23 13 * * *' # Primary: daily at 13:23 UTC
+    # Backup: check again because the primary was absent on 2026-09-02 despite the workflow being active.
+    - cron: '47 15 * * *' # Backup: daily at 15:47 UTC
+    # If both checks are skipped: gh workflow run refresh-gist.yml --ref main
   workflow_dispatch:
     inputs:
       dry_run:
