@@ -7,6 +7,7 @@ import {
 
 export const PRD_EDITOR_STORAGE_KEY = 'prd-guide:editor-draft';
 export const PRD_EDITOR_PAYLOAD_VERSION = 1 as const;
+export const PRD_EDITOR_BACKUP_MAX_BYTES = 5 * 1024 * 1024;
 
 export type PrdEditorState = PrdTemplateState;
 
@@ -24,8 +25,13 @@ export interface PrdEditorStorage {
 
 export type ParsedPrdEditorDraft =
   | { readonly status: 'valid'; readonly payload: PrdEditorDraftPayload }
-  | { readonly status: 'corrupt' }
+  | { readonly status: 'corrupt'; readonly reason: 'json' | 'payload' | 'fields' }
   | { readonly status: 'unsupported-version'; readonly version: number };
+
+export type ReadPrdEditorBackup =
+  | ParsedPrdEditorDraft
+  | { readonly status: 'too-large' }
+  | { readonly status: 'unreadable' };
 
 export type LoadedPrdEditorDraft =
   | ParsedPrdEditorDraft
@@ -66,10 +72,10 @@ export const parsePrdEditorDraft = (raw: string): ParsedPrdEditorDraft => {
   try {
     value = JSON.parse(raw);
   } catch {
-    return { status: 'corrupt' };
+    return { status: 'corrupt', reason: 'json' };
   }
 
-  if (!isRecord(value)) return { status: 'corrupt' };
+  if (!isRecord(value)) return { status: 'corrupt', reason: 'payload' };
   if (
     typeof value.version === 'number' &&
     Number.isInteger(value.version) &&
@@ -80,17 +86,21 @@ export const parsePrdEditorDraft = (raw: string): ParsedPrdEditorDraft => {
   if (
     value.version !== PRD_EDITOR_PAYLOAD_VERSION ||
     !isIsoTimestamp(value.savedAt) ||
-    !isRecord(value.state) ||
+    !isRecord(value.state)
+  ) {
+    return { status: 'corrupt', reason: 'payload' };
+  }
+  if (
     typeof value.state.title !== 'string' ||
     !isRecord(value.state.values)
   ) {
-    return { status: 'corrupt' };
+    return { status: 'corrupt', reason: 'fields' };
   }
 
   const sectionValues: Partial<Record<PrdTemplateSectionId, string>> = {};
   for (const section of PRD_TEMPLATE_SECTIONS) {
     const sectionValue = value.state.values[section.id];
-    if (typeof sectionValue !== 'string') return { status: 'corrupt' };
+    if (typeof sectionValue !== 'string') return { status: 'corrupt', reason: 'fields' };
     sectionValues[section.id] = sectionValue;
   }
 
@@ -105,6 +115,20 @@ export const parsePrdEditorDraft = (raw: string): ParsedPrdEditorDraft => {
       },
     },
   };
+};
+
+export const readPrdEditorBackup = async (
+  file: Pick<File, 'size' | 'text'>,
+): Promise<ReadPrdEditorBackup> => {
+  if (file.size > PRD_EDITOR_BACKUP_MAX_BYTES) return { status: 'too-large' };
+
+  let raw: string;
+  try {
+    raw = await file.text();
+  } catch {
+    return { status: 'unreadable' };
+  }
+  return parsePrdEditorDraft(raw);
 };
 
 export const loadPrdEditorDraft = (

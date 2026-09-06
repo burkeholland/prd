@@ -152,6 +152,19 @@ const blankDownloads = [
           </button>
           <button id="start-over" class="editor-button" type="button">Start over</button>
         </div>
+        <p id="backup-help" class="editor-backup-help">
+          A JSON backup reopens your editable draft, here or in another browser.
+          Downloads and imports stay on your device. Import limit: 5 MiB.
+        </p>
+        <div class="editor-actions editor-backup-actions">
+          <button id="download-backup" class="editor-button" type="button" aria-describedby="backup-help">
+            Download draft backup
+          </button>
+          <button id="import-backup" class="editor-button" type="button" aria-describedby="backup-help">
+            Import draft backup
+          </button>
+        </div>
+        <input id="backup-file" type="file" accept=".json,application/json" hidden />
       </section>
     </aside>
 
@@ -180,7 +193,9 @@ const blankDownloads = [
   import {
     clearPrdEditorDraft,
     createBlankPrdEditorState,
+    createPrdEditorDraftPayload,
     loadPrdEditorDraft,
+    readPrdEditorBackup,
     savePrdEditorDraft,
     type PrdEditorState,
     type PrdEditorStorage,
@@ -190,6 +205,7 @@ const blankDownloads = [
     prdBytesResponseBody,
     prdExportFilename,
     PRD_EXPORT_MIME_TYPES,
+    sanitizePrdFilename,
     type PrdExportFormat,
   } from '../lib/prd-export';
   import { PRD_TEMPLATE } from '../lib/prd-template';
@@ -201,6 +217,9 @@ const blankDownloads = [
   const status = document.querySelector('#save-status');
   const saveButton = document.querySelector('#save-draft');
   const startOverButton = document.querySelector('#start-over');
+  const downloadBackupButton = document.querySelector('#download-backup');
+  const importBackupButton = document.querySelector('#import-backup');
+  const backupFileInput = document.querySelector('#backup-file');
   const downloadStatus = document.querySelector('#download-status');
   const downloadButtons = Array.from(
     document.querySelectorAll<HTMLButtonElement>('[data-export-format]'),
@@ -214,6 +233,9 @@ const blankDownloads = [
     !(status instanceof HTMLParagraphElement) ||
     !(saveButton instanceof HTMLButtonElement) ||
     !(startOverButton instanceof HTMLButtonElement) ||
+    !(downloadBackupButton instanceof HTMLButtonElement) ||
+    !(importBackupButton instanceof HTMLButtonElement) ||
+    !(backupFileInput instanceof HTMLInputElement) ||
     !(downloadStatus instanceof HTMLParagraphElement) ||
     downloadButtons.length !== 3
   ) {
@@ -247,20 +269,39 @@ const blankDownloads = [
   const formatSavedAt = (savedAt: string) =>
     dateFormatter.format(new Date(savedAt));
 
+  // Preserve imported line endings even when native form controls normalize them.
+  const originalValues = new Map<
+    HTMLInputElement | HTMLTextAreaElement,
+    { original: string; rendered: string }
+  >();
+  const readField = (input: HTMLInputElement | HTMLTextAreaElement) => {
+    const previous = originalValues.get(input);
+    return previous && input.value === previous.rendered ? previous.original : input.value;
+  };
+  const applyField = (input: HTMLInputElement | HTMLTextAreaElement, value: string) => {
+    input.value = value;
+    if (input.value !== value) {
+      originalValues.set(input, { original: value, rendered: input.value });
+    } else {
+      originalValues.delete(input);
+    }
+  };
+
   const readState = (): PrdEditorState => {
     const blank = createBlankPrdEditorState();
     const values = { ...blank.values };
     for (const section of PRD_TEMPLATE.sections) {
-      values[section.id] = sectionInputs.get(section.id)?.value ?? '';
+      const input = sectionInputs.get(section.id);
+      values[section.id] = input ? readField(input) : '';
     }
-    return { title: titleInput.value, values };
+    return { title: readField(titleInput), values };
   };
 
   const applyState = (state: PrdEditorState) => {
-    titleInput.value = state.title;
+    applyField(titleInput, state.title);
     for (const section of PRD_TEMPLATE.sections) {
       const input = sectionInputs.get(section.id);
-      if (input) input.value = state.values[section.id];
+      if (input) applyField(input, state.values[section.id]);
     }
   };
 
@@ -281,10 +322,13 @@ const blankDownloads = [
     );
   }
 
-  const persistDraft = (mode: 'automatic' | 'explicit') => {
+  const persistDraft = (mode: 'automatic' | 'explicit' | 'import') => {
+    const failureMessage = mode === 'import'
+      ? 'Draft backup imported into the editor, but not saved in this browser. You can keep editing; download a draft backup before leaving.'
+      : 'Draft could not be saved in this browser. You can still edit, but copy your work before leaving.';
     if (!storage) {
       showStatus(
-        'Draft could not be saved in this browser. You can still edit, but copy your work before leaving.',
+        failureMessage,
         'error',
       );
       return;
@@ -293,13 +337,15 @@ const blankDownloads = [
     const result = savePrdEditorDraft(storage, readState());
     if (result.status === 'storage-error') {
       showStatus(
-        'Draft could not be saved in this browser. You can still edit, but copy your work before leaving.',
+        failureMessage,
         'error',
       );
       return;
     }
 
-    const lead = mode === 'automatic' ? 'Draft saved automatically' : 'Draft saved';
+    const lead = mode === 'import'
+      ? 'Draft backup imported and saved'
+      : mode === 'automatic' ? 'Draft saved automatically' : 'Draft saved';
     showStatus(
       `${lead} in this browser at ${formatSavedAt(result.payload.savedAt)}.`,
       'saved',
@@ -344,7 +390,10 @@ const blankDownloads = [
   editor.hidden = false;
 
   let autoSaveTimer: number | undefined;
-  form.addEventListener('input', () => {
+  form.addEventListener('input', (event) => {
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+      originalValues.delete(event.target);
+    }
     updateCompletion();
     if (autoSaveTimer !== undefined) window.clearTimeout(autoSaveTimer);
     showStatus('Unsaved changes. Saving in this browser.', 'pending');
@@ -405,13 +454,9 @@ const blankDownloads = [
   };
 
   const startDownload = (
-    bytes: Uint8Array,
-    format: PrdExportFormat,
+    blob: Blob,
     filename: string,
   ) => {
-    const blob = new Blob([prdBytesResponseBody(bytes)], {
-      type: PRD_EXPORT_MIME_TYPES[format],
-    });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -436,7 +481,9 @@ const blankDownloads = [
       showDownloadStatus(`Generating ${filename}.`, 'pending');
       try {
         const bytes = await generateDownload(format, state);
-        startDownload(bytes, format, filename);
+        startDownload(new Blob([prdBytesResponseBody(bytes)], {
+          type: PRD_EXPORT_MIME_TYPES[format],
+        }), filename);
         showDownloadStatus(`Downloaded ${filename}.`, 'downloaded');
       } catch (error) {
         console.error(`Could not generate ${format} download.`, error);
@@ -451,6 +498,89 @@ const blankDownloads = [
     });
   }
 
+  downloadBackupButton.addEventListener('click', () => {
+    const state = readState();
+    const filename = `${sanitizePrdFilename(state.title)}.prd.json`;
+    try {
+      const blob = new Blob([JSON.stringify(createPrdEditorDraftPayload(state))], {
+        type: 'application/json;charset=utf-8',
+      });
+      startDownload(blob, filename);
+      showDownloadStatus(`Downloaded ${filename}. Use Import draft backup to reopen it.`, 'downloaded');
+    } catch {
+      showDownloadStatus('Draft backup download failed. Your draft is unchanged.', 'error');
+    }
+  });
+
+  let importInProgress = false;
+  importBackupButton.addEventListener('click', () => {
+    backupFileInput.value = '';
+    backupFileInput.click();
+  });
+
+  backupFileInput.addEventListener('change', async () => {
+    const file = backupFileInput.files?.[0];
+    if (!file || importInProgress) return;
+    importInProgress = true;
+    importBackupButton.disabled = true;
+    backupFileInput.disabled = true;
+    importBackupButton.setAttribute('aria-busy', 'true');
+    try {
+      const result = await readPrdEditorBackup(file);
+      if (result.status !== 'valid') {
+        let message: string;
+        switch (result.status) {
+          case 'too-large':
+            message = 'This file is too large. Choose a draft backup of 5 MiB or less.';
+            break;
+          case 'unreadable':
+            message = 'This file could not be read. Choose it again or try another copy.';
+            break;
+          case 'unsupported-version':
+            message = `This backup uses unsupported version ${result.version}. This editor supports version 1.`;
+            break;
+          case 'corrupt':
+            message = result.reason === 'json'
+              ? 'This file is not valid JSON. Choose a .prd.json draft backup.'
+              : result.reason === 'fields'
+                ? 'This backup must include a text title and all 12 sections as text. A field is missing or is not text.'
+                : 'This file is not a valid draft backup. Its version, saved timestamp, or draft structure is missing or damaged.';
+            break;
+        }
+        showDownloadStatus(`${message} Your draft is unchanged.`, 'error');
+        return;
+      }
+
+      // Read after the asynchronous file read so confirmation covers the latest edits.
+      const current = readState();
+      const hasContent = [current.title, ...Object.values(current.values)].some(
+        (value) => value.length > 0,
+      );
+      if (hasContent && !window.confirm(
+        'Replace the current draft with this backup? This replaces all fields and the draft saved in this browser. Download a backup first if you want to keep both.',
+      )) {
+        showDownloadStatus('Import canceled. Your draft is unchanged.', 'canceled');
+        return;
+      }
+
+      if (autoSaveTimer !== undefined) {
+        window.clearTimeout(autoSaveTimer);
+        autoSaveTimer = undefined;
+      }
+      applyState(result.payload.state);
+      updateCompletion();
+      showDownloadStatus('', 'idle');
+      persistDraft('import');
+      titleInput.focus();
+    } finally {
+      backupFileInput.value = '';
+      backupFileInput.disabled = false;
+      importBackupButton.disabled = false;
+      importBackupButton.removeAttribute('aria-busy');
+      importInProgress = false;
+    }
+  });
+
   startOverButton.addEventListener('click', () => {
     const confirmed = window.confirm(
       'Start over? This removes the local draft from this browser and clears all fields.',
@@ -461,6 +591,7 @@ const blankDownloads = [
       window.clearTimeout(autoSaveTimer);
       autoSaveTimer = undefined;
     }
+    originalValues.clear();
     form.reset();
     updateCompletion();
 
@@ -770,7 +901,8 @@ const blankDownloads = [
     display: grid;
   }
 
-  .editor-download-status {
+  .editor-download-status,
+  .editor-backup-help {
     color: var(--text-muted);
     font-size: 0.92rem;
   }
@@ -799,6 +931,13 @@ const blankDownloads = [
 
   .editor-button:hover {
     border-color: var(--text-muted);
+  }
+
+  .editor-backup-actions .editor-button {
+    padding: 0.35rem 0.6rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    background: transparent;
   }
 
   .editor-button--primary {
