@@ -1,103 +1,220 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+import { PRD_TEMPLATE, serializeBlankPrdMarkdown } from '../../src/lib/prd-template';
+import { PRD_TEMPLATE_ALIASES } from '../../src/lib/prd-template-compat';
 
-// The site is published under this base path (astro.config.mjs). Playwright resolves
-// `page.goto('/sample/')` against the origin only, so every path goes through `to()`.
 const BASE = '/prd';
 const to = (path: string) => `${BASE}${path}`;
+const sections = PRD_TEMPLATE.sections;
+const blankMarkdown = serializeBlankPrdMarkdown();
+const blankSections = blankMarkdown.split(/(?=^## )/m).slice(1).map((text) => text.trimEnd());
 
-// One skeleton code block per PRD section in content/template.md; the first sits under
-// "## Mission and stop condition", the page's first h2.
-const BLOCKS = 14;
-const FIRST_SECTION = 'Mission and stop condition';
-
-// Clipboard permissions are granted per project (playwright.config.ts, chromium only): WebKit rejects
-// `clipboard-write` and Firefox `clipboard-read`, so the tests that read the clipboard skip there.
-const clipboardOnlyInChromium = (browserName: string) =>
-  test.skip(browserName !== 'chromium', 'clipboard permissions are Chromium-only in Playwright');
-
-/** The clipboard text with LF line endings: the Windows clipboard stores text as CRLF. */
+/** Native clipboard reads are Chromium-only; exercise the UI with a stub on every engine too. */
 const readClipboard = async (page: Page) =>
   (await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g, '\n');
 
-/** What the button should copy: the block's code text with one trailing newline stripped. */
-const skeletonText = (pre: Locator) =>
-  pre.evaluate((el) => (el.querySelector('code') ?? el).textContent?.replace(/\n$/, '') ?? '');
+const stubClipboard = async (page: Page) => {
+  await page.addInitScript(() => {
+    let copied = '';
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: async (text: string) => { copied = text; },
+        readText: async () => copied,
+      },
+    });
+  });
+};
 
-test('/template/ gives each of the 14 skeleton blocks a Copy button named after its section', async ({ page }) => {
-  await page.goto(to('/template/'));
-
-  await expect(page.locator('main .prose pre')).toHaveCount(BLOCKS);
-  const buttons = page.locator('button.copy-button');
-  await expect(buttons).toHaveCount(BLOCKS);
-
-  const labels = await buttons.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label') ?? ''));
-  for (const label of labels) expect(label).toMatch(/^Copy the .+ skeleton$/);
-  expect(labels[0]).toBe(`Copy the ${FIRST_SECTION} skeleton`);
-  expect(new Set(labels).size, 'every button names a different section').toBe(BLOCKS);
-
-  // Keyboard order: the button comes right before the code it copies, inside one wrapper.
-  const order = await page.locator('.code-block').evaluateAll((nodes) =>
-    nodes.map((node) => Array.from(node.children, (child) => child.tagName).join('>')),
+test('/template/ renders canonical headings, prompts, helper questions, and copyable sections in order', async ({ page }) => {
+  const response = await page.goto(to('/template/'));
+  expect(response?.status()).toBe(200);
+  await expect(page.locator('h1')).toHaveCount(1);
+  await expect(page.locator('main .doc__body')).toHaveCount(1);
+  await expect(page.locator('main h2')).toHaveText(sections.map(({ title }) => title));
+  expect(await page.locator('main h2').evaluateAll((nodes) => nodes.map((node) => node.id))).toEqual(
+    sections.map(({ id }) => id),
   );
-  expect(order).toEqual(Array(BLOCKS).fill('BUTTON>PRE'));
-  await expect(buttons.first()).toHaveText('Copy');
-  await expect(buttons.first()).toHaveAttribute('type', 'button');
+  await expect(page.locator('.template-prompt')).toHaveText(sections.map(({ prompt }) => prompt));
+  await expect(page.locator('.template-section li')).toHaveText(sections.flatMap(({ helperQuestions }) => [...helperQuestions]));
+  expect(await page.locator('main .prose pre code').allTextContents()).toEqual(blankSections);
+  const buttons = page.locator('button.copy-button');
+  await expect(buttons).toHaveCount(sections.length);
+  expect(await buttons.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label')))).toEqual(
+    sections.map(({ title }) => `Copy the ${title} section`),
+  );
+  expect(await page.locator('.code-block').evaluateAll((nodes) =>
+    nodes.map((node) => Array.from(node.children, (child) => child.tagName).join('>')),
+  )).toEqual(sections.map(() => 'BUTTON>PRE'));
+  expect(await page.locator('aside .toc__list a').evaluateAll((nodes) =>
+    nodes.map((node) => node.getAttribute('href')),
+  )).toEqual(sections.map(({ id }) => `#${id}`));
+  await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /editor's adaptable PRD template/);
 });
 
-test('clicking Copy puts the block text on the clipboard, says Copied, then resets', async ({ page, browserName }) => {
-  clipboardOnlyInChromium(browserName);
+test('old and canonical Markdown URLs return identical UTF-8 files from the model', async ({ request }) => {
+  const canonical = await request.get(to('/downloads/prd-template.md'));
+  const legacy = await request.get(to('/prd-template.md'));
+  for (const response of [canonical, legacy]) {
+    expect(response.status()).toBe(200);
+    expect(response.headers()['content-type']).toContain('text/markdown');
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(await response.body());
+    expect(text).toBe(blankMarkdown);
+    expect(Array.from(text.matchAll(/^# (.+)$/gm), (match) => match[1])).toEqual([PRD_TEMPLATE.defaultTitle]);
+    expect(Array.from(text.matchAll(/^## (.+)$/gm), (match) => match[1])).toEqual(sections.map(({ title }) => title));
+  }
+  expect(await legacy.body()).toEqual(await canonical.body());
+});
+
+test('clicking Copy uses the native clipboard, announces success, then resets', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Native clipboard permissions are Chromium-only in Playwright');
   await page.goto(to('/template/'));
-
   const button = page.locator('button.copy-button').first();
-  const expected = await skeletonText(page.locator('main .prose pre').first());
-  expect(expected.startsWith('Build the complete {Product Name} application'), 'first skeleton text').toBe(true);
-
   await button.click();
-  await expect(button).toHaveText('Copied', { timeout: 500 });
+  await expect(button).toHaveText('Copied');
   await expect(button).toHaveAttribute('data-state', 'copied');
-  await expect(button).toHaveAttribute('aria-label', `Copy the ${FIRST_SECTION} skeleton`);
-
-  const clipboard = await readClipboard(page);
-  expect(clipboard).toBe(expected);
-  expect(clipboard.endsWith('\n'), 'trailing newline stripped').toBe(false);
-
+  expect(await readClipboard(page)).toBe(blankSections[0]);
   const status = page.locator('main .copy-status[role="status"]');
   await expect(status).toHaveCount(1);
   await expect(status).toHaveAttribute('aria-live', 'polite');
-  await expect(status).toHaveText(`Copied the ${FIRST_SECTION} skeleton`);
-
-  await expect(button).toHaveText('Copy', { timeout: 2000 });
+  await expect(status).toHaveText(`Copied the ${sections[0].title} section`);
+  await expect(button).toHaveText('Copy', { timeout: 3000 });
   await expect(button).not.toHaveAttribute('data-state');
 });
 
-test('Copy works from the keyboard: focus, Enter', async ({ page, browserName }) => {
-  clipboardOnlyInChromium(browserName);
+test('keyboard navigation reaches Copy and every button copies its canonical section', async ({ page }) => {
+  await stubClipboard(page);
   await page.goto(to('/template/'));
-
-  const button = page.locator('button.copy-button').first();
-  await button.focus();
-  await expect(button).toBeFocused();
+  const firstHeading = page.locator('.template-section .heading-link').first();
+  await firstHeading.focus();
   await page.keyboard.press('Enter');
-  await expect(button).toHaveText('Copied', { timeout: 500 });
-  expect(await readClipboard(page)).toMatch(/^Build the complete \{Product Name\}/);
+  await expect(page).toHaveURL(new RegExp(`#${sections[0].id}$`));
+  await firstHeading.focus();
+  await page.keyboard.press('Tab');
+  const buttons = page.locator('button.copy-button');
+  await expect(buttons.first()).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(buttons.first()).toHaveText('Copied');
+  expect(await readClipboard(page)).toBe(blankSections[0]);
+
+  for (const [index, section] of sections.entries()) {
+    if (index === 0) continue;
+    await buttons.nth(index).click();
+    await expect(buttons.nth(index)).toHaveText('Copied');
+    expect(await readClipboard(page)).toBe(blankSections[index]);
+    await expect(page.locator('.copy-status')).toHaveText(`Copied the ${section.title} section`);
+  }
 });
 
-test('every block copies its own text (the last one is the multi-line Completion skeleton)', async ({ page, browserName }) => {
-  clipboardOnlyInChromium(browserName);
+for (const failure of ['unavailable', 'denied'] as const) {
+  test(`clipboard ${failure} selects the canonical text and announces the manual copy fallback`, async ({ page }) => {
+    await page.addInitScript((mode) => {
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: mode === 'unavailable' ? undefined : {
+          writeText: async () => { throw new DOMException('Not allowed', 'NotAllowedError'); },
+        },
+      });
+    }, failure);
+    await page.setViewportSize({ width: 320, height: 780 });
+    await page.goto(to('/template/'));
+    const button = page.locator('button.copy-button').first();
+    await button.click();
+    await expect(button).toHaveText('Copy failed');
+    await expect(button).not.toHaveAttribute('data-state');
+    expect(await page.evaluate(() => getSelection()?.toString())).toBe(blankSections[0]);
+    await expect(page.locator('.copy-status')).toHaveText(
+      'Copy failed — text selected. Press Ctrl+C or Command+C to copy.',
+    );
+    const separated = await page.locator('.code-block').first().evaluate((block) => {
+      const button = block.querySelector('button')!.getBoundingClientRect();
+      const code = block.querySelector('code')!.getBoundingClientRect();
+      return button.bottom <= code.top;
+    });
+    expect(separated, 'failure label stays above the code').toBe(true);
+  });
+}
+
+test('all legacy fragments land beside their canonical heading with no duplicate IDs', async ({ page }) => {
   await page.goto(to('/template/'));
-
-  const last = page.locator('button.copy-button').last();
-  await expect(last).toHaveAttribute('aria-label', 'Copy the Completion skeleton');
-  const expected = await skeletonText(page.locator('main .prose pre').last());
-  expect(expected.split('\n').length, 'the Completion skeleton spans several lines').toBeGreaterThan(5);
-
-  await last.click();
-  await expect(last).toHaveText('Copied', { timeout: 500 });
-  expect(await readClipboard(page)).toBe(expected);
-  await expect(page.locator('main .copy-status')).toHaveText('Copied the Completion skeleton');
+  const ids = await page.locator('[id]').evaluateAll((nodes) => nodes.map((node) => node.id));
+  expect(new Set(ids).size).toBe(ids.length);
+  for (const [alias, target] of Object.entries(PRD_TEMPLATE_ALIASES)) {
+    await page.goto(to(`/template/#${alias}`));
+    const destination = page.locator(`[id="${alias}"]`);
+    await expect(destination).toHaveCount(1);
+    expect(await destination.evaluate((node) => node.tagName)).toBe('SPAN');
+    expect(await destination.evaluate((node) => node.closest('section')?.getAttribute('aria-labelledby'))).toBe(target);
+    // Instant scrolling and document coordinates also work on short pages and across engines.
+    const offset = await destination.evaluate((node, targetId) => {
+      window.scrollTo({ top: node.getBoundingClientRect().top + window.scrollY, behavior: 'instant' });
+      const heading = document.getElementById(targetId)!;
+      return Math.abs(heading.getBoundingClientRect().top - node.getBoundingClientRect().top);
+    }, target);
+    expect(offset, `${alias} points to its section, not the previous one`).toBeLessThanOrEqual(1);
+  }
 });
 
-test('the other pages ship no template Copy buttons and only interactive pages ship a script', async ({ page }) => {
+for (const width of [320, 390, 1280]) {
+  test(`/template/ fits ${width}px with usable actions and no copy/code overlap`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto(to('/template/'));
+    await expect(page.locator('button.copy-button')).toHaveCount(sections.length);
+    if (width < 960) await page.locator('.toc--inline summary').click();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    const actions = await page.locator('main a, main button, main summary').evaluateAll((nodes) =>
+      nodes.filter((node) => node.getClientRects().length > 0).map((node) => {
+        const { width, height } = node.getBoundingClientRect();
+        return { name: node.textContent, width, height };
+      }),
+    );
+    for (const action of actions) {
+      expect(action.height, `${action.name} height`).toBeGreaterThanOrEqual(32);
+      expect(action.width, `${action.name} width`).toBeGreaterThanOrEqual(32);
+    }
+    const overlaps = await page.locator('.code-block').evaluateAll((blocks) =>
+      blocks.map((block) => {
+        const button = block.querySelector('button')!.getBoundingClientRect();
+        const range = document.createRange();
+        range.selectNodeContents(block.querySelector('code')!);
+        return Array.from(range.getClientRects()).some((glyphs) =>
+          glyphs.width > 0 && glyphs.left < button.right && glyphs.right > button.left &&
+          glyphs.top < button.bottom && glyphs.bottom > button.top,
+        );
+      }),
+    );
+    expect(overlaps).toEqual(sections.map(() => false));
+  });
+}
+
+test.describe('without JavaScript', () => {
+  test.use({ javaScriptEnabled: false });
+
+  test('the full template, section links, and canonical files remain usable', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const response = await page.goto(to('/template/'));
+    expect(response?.status()).toBe(200);
+    await expect(page.locator('h1')).toHaveCount(1);
+    await expect(page.locator('main h2')).toHaveText(sections.map(({ title }) => title));
+    await expect(page.locator('.template-prompt')).toHaveText(sections.map(({ prompt }) => prompt));
+    expect(await page.locator('main pre code').allTextContents()).toEqual(blankSections);
+    await expect(page.locator('button.copy-button')).toHaveCount(0);
+    await expect(page.locator('.doc__header a.button')).toHaveAttribute('href', to('/'));
+    for (const format of ['md', 'docx', 'pdf']) {
+      const path = to(`/downloads/prd-template.${format}`);
+      await expect(page.locator(`.doc__header a[download][href="${path}"]`)).toBeVisible();
+      expect((await page.request.get(path)).status()).toBe(200);
+    }
+    await page.locator('.toc--inline summary').focus();
+    await page.keyboard.press('Enter');
+    const lastLink = page.locator('.toc--inline a').last();
+    await expect(lastLink).toHaveText(sections.at(-1)!.title);
+    await lastLink.focus();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(new RegExp(`#${sections.at(-1)!.id}$`));
+  });
+});
+
+test('other pages ship no template Copy buttons and static guides ship no script', async ({ page }) => {
   for (const path of ['/', '/sample/', '/guide/', '/walkthrough/']) {
     await page.goto(to(path));
     await expect(page.locator('button.copy-button'), `${path} copy buttons`).toHaveCount(0);
@@ -105,47 +222,4 @@ test('the other pages ship no template Copy buttons and only interactive pages s
       await expect(page.locator('script'), `${path} script elements`).toHaveCount(0);
     }
   }
-});
-
-test('the buttons do not widen /template/ at 320px', async ({ page }) => {
-  await page.setViewportSize({ width: 320, height: 640 });
-  await page.goto(to('/template/'));
-  await expect(page.locator('button.copy-button')).toHaveCount(BLOCKS);
-  const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
-  expect(scrollWidth).toBeLessThanOrEqual(320);
-});
-
-test('on a phone every Copy button is thumb-sized (>= 32 px tall) and stays clear of the code', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(to('/template/'));
-  const buttons = page.locator('button.copy-button');
-  await expect(buttons).toHaveCount(BLOCKS);
-
-  const rects = await buttons.evaluateAll((nodes) =>
-    nodes.map((node) => {
-      const { width, height } = node.getBoundingClientRect();
-      return { width, height };
-    }),
-  );
-  for (const [i, rect] of rects.entries()) {
-    expect(rect.height, `button ${i + 1} height`).toBeGreaterThanOrEqual(32);
-    expect(rect.width, `button ${i + 1} width`).toBeGreaterThanOrEqual(32);
-  }
-
-  // The first block's button sits in the pre's right padding, not over any glyph of its code.
-  const overlaps = await page.locator('.code-block').first().evaluate((block) => {
-    const button = block.querySelector('button')!.getBoundingClientRect();
-    const code = block.querySelector('pre code') ?? block.querySelector('pre')!;
-    const range = document.createRange();
-    range.selectNodeContents(code);
-    return Array.from(range.getClientRects()).some(
-      (glyphs) =>
-        glyphs.width > 0 &&
-        glyphs.left < button.right &&
-        glyphs.right > button.left &&
-        glyphs.top < button.bottom &&
-        glyphs.bottom > button.top,
-    );
-  });
-  expect(overlaps, 'first Copy button overlaps its code').toBe(false);
 });

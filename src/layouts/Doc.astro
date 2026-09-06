@@ -2,7 +2,7 @@
 import { render, type CollectionEntry } from 'astro:content';
 import Base from './Base.astro';
 import Toc from '../components/Toc.astro';
-import { buildToc } from '../lib/toc';
+import { buildToc, type Heading } from '../lib/toc';
 import { PLACEHOLDER, SITE } from '../lib/site';
 
 type DocEntry = CollectionEntry<'docs'> | CollectionEntry<'gist'>;
@@ -15,12 +15,14 @@ interface Props {
   description?: string;
   /** Missing on branches where `content/` has not merged yet — the page shows a placeholder. */
   entry?: DocEntry;
+  /** Headings supplied by a model-driven document body. */
+  headings?: readonly Heading[];
 }
 
-const { label, entry, title = label, description } = Astro.props;
+const { label, entry, title = label, description, headings } = Astro.props;
 const rendered = entry ? await render(entry) : undefined;
 const Content = rendered?.Content;
-const toc = buildToc(rendered?.headings ?? []);
+const toc = buildToc(headings ?? rendered?.headings ?? []);
 const hasToc = toc.length > 0;
 ---
 
@@ -44,6 +46,7 @@ const hasToc = toc.length > 0;
 
     <div class="doc__body prose">
       {Content ? <Content /> : <p class="placeholder">{PLACEHOLDER}</p>}
+      <slot />
     </div>
 
     {

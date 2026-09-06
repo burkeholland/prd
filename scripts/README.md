@@ -1,7 +1,7 @@
 # scripts/ — the Node (24+) scripts behind the site
 
-Five of the seven need nothing but Node 24+ (the three gist scripts also shell out to the `git` binary): `fetch-gist.mjs`,
-`fetch-gist-history.mjs`, `history-notes-missing.mjs`, `check-content.mjs` and `check-template.mjs` run on a bare clone —
+Four of the six need nothing but Node 24+ (the three gist scripts also shell out to the `git` binary): `fetch-gist.mjs`,
+`fetch-gist-history.mjs`, `history-notes-missing.mjs` and `check-content.mjs` run on a bare clone —
 `node scripts/fetch-gist.mjs` works before any `npm install`. The other two import devDependencies and stop with a
 module-not-found error until those are installed: `make-mocks.mjs` needs `sharp` (the same build Astro's image service uses) and
 `make-og.mjs` needs `@playwright/test` and its Chromium — `npm ci` first, plus `npx playwright install chromium` for make-og
@@ -80,20 +80,17 @@ with the output — the daily refresh PR stays red until every sha has its sente
 `node --test scripts/check-content.mjs` checks each top-level `content/*.md`: frontmatter (`title`, `description`, integer `order`),
 no `#` h1 in the body, every blockquote an exact excerpt of `public/raw/build-the-urlist.md` (whitespace-insensitive, split on
 `…`/`...`/`[…]`; opt out with `<!-- quote: not-gist -->` on the line above) and every `](/…)`/`](#…)` link a known route + heading slug.
-Failures list `file:line kind — message`. Another checkout: `CONTENT_ROOT=<dir>` or `node scripts/check-content.mjs --root <dir>`.
+Template fragment targets come from that checkout's canonical model and legacy alias map, rather than its introduction-only
+content entry. Failures list `file:line kind — message`. Another checkout: `CONTENT_ROOT=<dir>` or `node scripts/check-content.mjs --root <dir>`.
 Pure helpers: `scripts/lib/content.mjs` (unit tests in `content.test.mjs`, run by the `node --test` glob above).
 
-## check-template.mjs — the template page and its clean download describe the same skeleton
+## Template consistency checks
 
-`node --test scripts/check-template.mjs` (9 tests, also run by `npm test`) reads `content/template.md` (the annotated `/template`
-page) and `public/prd-template.md` (the clean download) and checks that both describe the same 14-section skeleton: the annotated
-page has exactly 14 section h2s before `## Before you hand it over`, each with `**Write here:**`, `**Example from the sample:**`
-and `**Skeleton:**` once and in that order, a blockquote under the example label and exactly one ```md block; the clean file has
-the same 14 h2s in the same order, each one `<!-- … -->` instruction comment plus that section's skeleton verbatim, starts with
-`# Build {Product Name}` (its only h1, no frontmatter), keeps the `- [ ] Requirement — Verify: method` checkbox format and a routes
-table with a `/{vanity}` row, is 120–220 lines long, and every `{placeholder}` in it appears on the annotated page. Line endings
-are normalised before comparing, so CRLF checkouts pass. No flags, no environment variables (both paths are fixed relative to the
-script); it writes nothing. Exit code: `node --test`'s — 0 when every test passes, 1 when any fails.
+The obsolete `check-template.mjs` compared two hand-maintained skeletons; both are retired. The canonical model now supplies
+the editor, annotated page, and blank files. `tests/unit/prd-template.test.ts`, `prd-template-compat.test.ts`, and
+`generated-downloads.test.ts` cover serialization, alias destinations, and byte-identical Markdown response factories in
+`npm test`. `tests/e2e/template.spec.ts` compares the served page, copy payloads, and both Markdown URLs directly with the
+model, including no-JS reading, old fragments, and narrow-screen/keyboard behavior.
 
 ## make-mocks.mjs — lighter WebP copies of the screenshots
 
