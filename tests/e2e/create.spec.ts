@@ -310,7 +310,7 @@ test('at 320px the page does not overflow and every outline link and button is a
   }));
   expect(dimensions).toEqual({ scrollWidth: 320, viewport: 320 });
 
-  const targets = page.locator('.editor-outline a, .editor-button');
+  const targets = page.locator('.editor-outline a:visible, .editor-button:visible');
   await expect(targets).toHaveCount(19);
   const heights = await targets.evaluateAll((nodes) =>
     nodes.map((node) => node.getBoundingClientRect().height),

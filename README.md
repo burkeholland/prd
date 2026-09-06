@@ -71,6 +71,14 @@ import is saved in the current browser; if browser storage is unavailable, the
 imported draft remains editable and the status tells you to download a backup
 before leaving.
 
+If another tab changes or removes the saved draft, saving and Start over pause
+without changing this tab's text. Download a draft backup to preserve this copy,
+then choose **Load saved draft** or confirm **Keep this draft** to replace the
+browser-saved copy. Editing, document downloads, backups, and printing remain
+available. The editor checks for observed and sequential cross-tab changes,
+including before saving; localStorage is not an atomic compare-and-swap database,
+so this is not perfect locking for simultaneous edits.
+
 Browser Print / Save as PDF on the editor prints the current title and all 12
 sections as wrapping, paginated text, including unsaved edits; canceling print
 preserves the draft, focus, and scroll position.

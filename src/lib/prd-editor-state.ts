@@ -34,16 +34,22 @@ export type ReadPrdEditorBackup =
   | { readonly status: 'unreadable' };
 
 export type LoadedPrdEditorDraft =
-  | ParsedPrdEditorDraft
-  | { readonly status: 'empty' }
+  | ((ParsedPrdEditorDraft | { readonly status: 'empty' }) & { readonly raw: string | null })
+  | { readonly status: 'storage-error'; readonly error: unknown };
+
+export type CheckedPrdEditorDraft =
+  | { readonly status: 'unchanged'; readonly raw: string | null }
+  | { readonly status: 'conflict'; readonly raw: string | null }
   | { readonly status: 'storage-error'; readonly error: unknown };
 
 export type SavedPrdEditorDraft =
-  | { readonly status: 'saved'; readonly payload: PrdEditorDraftPayload }
+  | { readonly status: 'saved'; readonly payload: PrdEditorDraftPayload; readonly raw: string }
+  | { readonly status: 'conflict'; readonly raw: string | null }
   | { readonly status: 'storage-error'; readonly error: unknown };
 
 export type ClearedPrdEditorDraft =
   | { readonly status: 'cleared' }
+  | { readonly status: 'conflict'; readonly raw: string | null }
   | { readonly status: 'storage-error'; readonly error: unknown };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -141,18 +147,36 @@ export const loadPrdEditorDraft = (
     return { status: 'storage-error', error };
   }
 
-  return raw === null ? { status: 'empty' } : parsePrdEditorDraft(raw);
+  return raw === null ? { status: 'empty', raw } : { ...parsePrdEditorDraft(raw), raw };
+};
+
+// Compare exact stored bytes, not timestamps or parsed fields. Undefined means
+// this tab has never successfully read storage, not that storage was empty.
+export const checkPrdEditorDraft = (
+  storage: PrdEditorStorage,
+  expectedRaw: string | null | undefined,
+): CheckedPrdEditorDraft => {
+  try {
+    const raw = storage.getItem(PRD_EDITOR_STORAGE_KEY);
+    return { status: raw === expectedRaw ? 'unchanged' : 'conflict', raw };
+  } catch (error) {
+    return { status: 'storage-error', error };
+  }
 };
 
 export const savePrdEditorDraft = (
   storage: PrdEditorStorage,
   state: PrdEditorState,
+  expectedRaw: string | null | undefined,
   now: Date = new Date(),
 ): SavedPrdEditorDraft => {
+  const checked = checkPrdEditorDraft(storage, expectedRaw);
+  if (checked.status !== 'unchanged') return checked;
   const payload = createPrdEditorDraftPayload(state, now);
+  const raw = JSON.stringify(payload);
   try {
-    storage.setItem(PRD_EDITOR_STORAGE_KEY, JSON.stringify(payload));
-    return { status: 'saved', payload };
+    storage.setItem(PRD_EDITOR_STORAGE_KEY, raw);
+    return { status: 'saved', payload, raw };
   } catch (error) {
     return { status: 'storage-error', error };
   }
@@ -160,7 +184,10 @@ export const savePrdEditorDraft = (
 
 export const clearPrdEditorDraft = (
   storage: PrdEditorStorage,
+  expectedRaw: string | null | undefined,
 ): ClearedPrdEditorDraft => {
+  const checked = checkPrdEditorDraft(storage, expectedRaw);
+  if (checked.status !== 'unchanged') return checked;
   try {
     storage.removeItem(PRD_EDITOR_STORAGE_KEY);
     return { status: 'cleared' };
