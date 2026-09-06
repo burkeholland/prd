@@ -1,0 +1,112 @@
+---
+import { PRD_TEMPLATE } from '../lib/prd-template';
+---
+
+<template data-prd-print-template>
+  <h1 data-prd-print-title>{PRD_TEMPLATE.defaultTitle}</h1>
+  {
+    PRD_TEMPLATE.sections.map((section) => (
+      <section class="prd-print__section">
+        <h2>{section.title}</h2>
+        <div class="prd-print__value" data-prd-print-value={section.id} />
+      </section>
+    ))
+  }
+</template>
+<article class="prd-print" data-prd-print></article>
+
+<script>
+  import { normalizePrdTitle, PRD_TEMPLATE } from '../lib/prd-template';
+
+  const template = document.querySelector('[data-prd-print-template]');
+  const output = document.querySelector('[data-prd-print]');
+  const titleInput = document.querySelector('#document-title');
+  if (
+    !(template instanceof HTMLTemplateElement) ||
+    !(output instanceof HTMLElement) ||
+    !(titleInput instanceof HTMLInputElement)
+  ) {
+    throw new Error('The PRD print markup is incomplete.');
+  }
+
+  const fields = PRD_TEMPLATE.sections.map(({ id }) => {
+    const input = document.getElementById(`section-input-${id}`);
+    if (!(input instanceof HTMLTextAreaElement)) {
+      throw new Error(`The PRD print source field "${id}" is missing.`);
+    }
+    return { id, input };
+  });
+
+  const snapshot = () => {
+    const content = template.content.cloneNode(true);
+    if (!(content instanceof DocumentFragment)) {
+      throw new Error('The PRD print template is invalid.');
+    }
+    const title = content.querySelector('[data-prd-print-title]');
+    if (!title) throw new Error('The PRD print title is missing.');
+    title.textContent = normalizePrdTitle(titleInput.value);
+    for (const { id, input } of fields) {
+      const value = content.querySelector(`[data-prd-print-value="${id}"]`);
+      if (!value) throw new Error(`The PRD print section "${id}" is missing.`);
+      value.textContent = input.value;
+    }
+    output.replaceChildren(content);
+  };
+
+  const printMedia = window.matchMedia('print');
+  let printing = false;
+  const readScreenContext = () => ({
+    focus: document.activeElement,
+    x: window.scrollX,
+    y: window.scrollY,
+  });
+  let screenContext = readScreenContext();
+  const rememberScreen = () => {
+    if (!printing && !printMedia.matches) screenContext = readScreenContext();
+  };
+  // A media-only entry can hide and blur fields before its change event arrives.
+  // Keep the last screen context as well as capturing it on native beforeprint.
+  document.addEventListener('focusin', rememberScreen);
+  document.addEventListener('focusout', () => queueMicrotask(rememberScreen));
+  window.addEventListener('scroll', rememberScreen, { passive: true });
+
+  const beginPrint = () => {
+    rememberScreen();
+    printing = true;
+    snapshot();
+  };
+  const endPrint = () => {
+    if (!printing) return;
+    output.replaceChildren();
+    if (screenContext.focus instanceof HTMLElement && screenContext.focus.isConnected) {
+      screenContext.focus.focus({ preventScroll: true });
+    }
+    window.scrollTo({ left: screenContext.x, top: screenContext.y, behavior: 'instant' });
+    printing = false;
+  };
+  window.addEventListener('beforeprint', beginPrint);
+  window.addEventListener('afterprint', () => {
+    if (!printMedia.matches) endPrint();
+  });
+  printMedia.addEventListener('change', ({ matches }) => {
+    if (matches) beginPrint();
+    else endPrint();
+  });
+
+  // Deferred editor scripts restore fields before DOMContentLoaded. Print media can
+  // already be active on navigation, with no new media-change event to observe.
+  const initialize = () => {
+    if (printMedia.matches) beginPrint();
+  };
+  if (document.readyState !== 'complete') {
+    document.addEventListener('DOMContentLoaded', initialize, { once: true });
+  } else {
+    initialize();
+  }
+</script>
+
+<style>
+  .prd-print {
+    display: none;
+  }
+</style>
