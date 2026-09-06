@@ -122,9 +122,12 @@ jobs:
           path: dist
       - uses: actions/upload-pages-artifact@v5
         with:
+          name: github-pages-${{ github.run_attempt }}
           path: dist
       - id: deployment
         uses: actions/deploy-pages@v5
+        with:
+          artifact_name: github-pages-${{ github.run_attempt }}
       # deploy-pages returning green does not mean the CDN serves the new build yet (on 2026-08-31
       # a green deploy left an older /sample/ live). Poll the build stamp (src/pages/build.json.ts)
       # until the live site serves this commit, up to 3 minutes, and fail the job if it never does.
