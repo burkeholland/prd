@@ -30,7 +30,8 @@ test('renders one editor with the canonical heading, 12 optional section fields,
   );
 
   const title = page.locator('input#document-title');
-  await expect(page.locator('input')).toHaveCount(1);
+  await expect(page.locator('input[type="text"]')).toHaveCount(1);
+  await expect(page.locator('#backup-file')).toBeHidden();
   await expect(title).toHaveCount(1);
   await expect(page.locator('label[for="document-title"] > span').first()).toHaveText('Document title');
   await expect(page.locator('label[for="document-title"] .field-state')).toHaveText('Optional');
@@ -60,6 +61,8 @@ test('renders one editor with the canonical heading, 12 optional section fields,
   await expect(page.locator('.editor-downloads .editor-blank-links a[download]')).toHaveCount(3);
   await expect(page.locator('#download-heading')).toHaveText('Download your PRD');
   await expect(page.locator('.editor-downloads h3')).toHaveText('Or start with a blank file');
+  await expect(page.getByRole('button', { name: 'Download draft backup' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Import draft backup' })).toBeVisible();
   await expect(page.locator('.hero, .cards, a.card')).toHaveCount(0);
 
   const liveRegions = page.locator('[aria-live="polite"]');
@@ -237,18 +240,22 @@ test('keyboard flow reaches every field and action, and outline links focus thei
     ...requiredBeforeBlankDownloads,
     'save-draft',
     'start-over',
+    'download-backup',
+    'import-backup',
   ];
   const withSequentialBlankDownloads = [
     ...requiredBeforeBlankDownloads,
     ...blankDownloads,
     'save-draft',
     'start-over',
+    'download-backup',
+    'import-backup',
   ];
   const reached = ['document-title'];
   const tabLimit = withSequentialBlankDownloads.length + 2;
   for (
     let tabs = 0;
-    tabs < tabLimit && reached.at(-1) !== 'start-over';
+    tabs < tabLimit && reached.at(-1) !== 'import-backup';
     tabs += 1
   ) {
     await page.keyboard.press('Tab');
@@ -256,8 +263,8 @@ test('keyboard flow reaches every field and action, and outline links focus thei
       await page.evaluate(() => (document.activeElement as HTMLElement | null)?.id ?? ''),
     );
   }
-  expect(reached.at(-1), `focus did not reach start-over within ${tabLimit} Tabs`).toBe(
-    'start-over',
+  expect(reached.at(-1), `focus did not reach import-backup within ${tabLimit} Tabs`).toBe(
+    'import-backup',
   );
   expect(reached).toEqual(
     reached.length === withSequentialBlankDownloads.length
@@ -265,7 +272,7 @@ test('keyboard flow reaches every field and action, and outline links focus thei
       : withoutSequentialBlankDownloads,
   );
 
-  for (const id of blankDownloads) {
+  for (const id of [...blankDownloads, 'download-backup', 'import-backup']) {
     const link = page.locator(`#${id}`);
     await link.focus();
     await expect(link).toBeFocused();
@@ -304,7 +311,7 @@ test('at 320px the page does not overflow and every outline link and button is a
   expect(dimensions).toEqual({ scrollWidth: 320, viewport: 320 });
 
   const targets = page.locator('.editor-outline a, .editor-button');
-  await expect(targets).toHaveCount(17);
+  await expect(targets).toHaveCount(19);
   const heights = await targets.evaluateAll((nodes) =>
     nodes.map((node) => node.getBoundingClientRect().height),
   );

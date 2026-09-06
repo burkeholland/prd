@@ -71,7 +71,7 @@ describe('PRD editor state', () => {
   });
 
   it('reports corrupt JSON and unsupported numeric versions without throwing', () => {
-    expect(parsePrdEditorDraft('{not json')).toEqual({ status: 'corrupt' });
+    expect(parsePrdEditorDraft('{not json')).toEqual({ status: 'corrupt', reason: 'json' });
     expect(
       parsePrdEditorDraft(
         JSON.stringify({
@@ -101,7 +101,7 @@ describe('PRD editor state', () => {
         },
       },
     ]) {
-      expect(parsePrdEditorDraft(JSON.stringify(invalid))).toEqual({
+      expect(parsePrdEditorDraft(JSON.stringify(invalid))).toMatchObject({
         status: 'corrupt',
       });
     }
