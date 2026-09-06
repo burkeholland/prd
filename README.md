@@ -62,11 +62,26 @@ Markdown is loaded from the repo-root
 file is missing the matching page renders "Content is on its way." instead of
 failing the build.
 
+Use **Download draft backup** under **Draft controls** to save a `.prd.json` copy
+of the editable draft. Unlike Markdown, Word, and PDF document downloads, this
+backup preserves the title and every section exactly and can be reopened with
+**Import draft backup** in this or another browser. Imports stay on your device,
+accept files up to 5 MiB, and ask before replacing existing work. A successful
+import is saved in the current browser; if browser storage is unavailable, the
+imported draft remains editable and the status tells you to download a backup
+before leaving.
+
+Browser Print / Save as PDF on the editor prints the current title and all 12
+sections as wrapping, paginated text, including unsaved edits; canceling print
+preserves the draft, focus, and scroll position.
+
 PRD exports use `docx` for valid Office Open XML packages and `pdf-lib` with
 `@pdf-lib/fontkit` for paginated PDFs with title and section bookmarks. The Latin Noto Sans files from
 `@fontsource/noto-sans` are embedded in PDFs for selectable Unicode text; they are
 not used as site fonts. `jszip` is a development-only parser for DOCX integrity
-tests. Astro prerenders the three blank files during every build.
+tests, and `pdfjs-dist` is a development-only parser for extracting text from
+actual browser-generated PDFs in print tests. Astro prerenders the three blank
+files during every build.
 
 The annotated `/template/` page renders the same sections, prompts, helper
 questions, and blank Markdown as the editor from `src/lib/prd-template.ts`.
