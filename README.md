@@ -217,6 +217,14 @@ Public URL: **https://burkeholland.github.io/prd/**
   `astro.config.mjs`, add `public/CNAME` with the domain, and create one DNS
   record (CNAME to `burkeholland.github.io`). Nothing else changes.
 
+After a transient publishing failure, retry only the failed `deploy` job while
+its one-day `dist` artifact is available. The retry reuses that tested build and
+uses a distinct `github-pages-<run_attempt>` wrapper per attempt, so Pages can
+select one package while the currently published site stays available. Older
+runs retain their original workflow YAML when retried; if duplicate Pages
+wrappers block a historical retry, deliberately remove only that run's
+identified duplicate Pages wrappers, never its `dist` artifact.
+
 ### When the gist changes
 
 - The primary `refresh-gist.yml` schedule runs at 13:23 UTC, and a backup checks
