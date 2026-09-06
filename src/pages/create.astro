@@ -1,5 +1,6 @@
 ---
 import PrdEditor from '../components/PrdEditor.astro';
+import PrdPrint from '../components/PrdPrint.astro';
 import Base from '../layouts/Base.astro';
 import { SITE } from '../lib/site';
 
@@ -8,4 +9,5 @@ const title = `Create a product requirements document · ${SITE.name}`;
 
 <Base title={title} noindex>
   <PrdEditor />
+  <PrdPrint />
 </Base>

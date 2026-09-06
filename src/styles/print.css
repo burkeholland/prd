@@ -1,7 +1,8 @@
 /* PRD Template print stylesheet. Loaded after global.css by src/layouts/Base.astro.
    A PRD is a document people print or save as PDF: document pages print as plain
    black-on-white text — no site chrome, no sidebar, wrapped code, external links followed
-   by their URL. Screen rendering is untouched: everything here is inside @media print. */
+   by their URL. Editors use a live text snapshot instead of form controls.
+   Screen rendering is untouched: everything here is inside @media print. */
 
 @media print {
   @page {
@@ -30,6 +31,9 @@
   .toc,
   .doc__actions,
   .source-card__links,
+  .editor-header,
+  .editor-nojs,
+  [data-prd-editor],
   .editor-status,
   .editor-tools,
   .editor-outline {
@@ -57,9 +61,7 @@
   .doc__header,
   .doc__body,
   .prose,
-  .editor-page,
-  .editor-shell,
-  .editor-form {
+  .prd-print {
     display: block;
     width: auto;
     max-width: none;
@@ -73,26 +75,31 @@
     border-bottom: 1px solid #999;
   }
 
-  .editor-header {
-    margin-bottom: 1rem;
-    padding-bottom: 0.75rem;
+  .prd-print {
+    display: block !important;
+    overflow-wrap: anywhere;
   }
 
-  .editor-form {
-    display: grid;
-    gap: 1.25rem;
+  .prd-print h1 {
+    margin: 0 0 1.5rem;
+    font-size: 22pt;
   }
 
-  .editor-section {
-    break-inside: avoid;
-    page-break-inside: avoid;
+  .prd-print h2 {
+    margin: 0 0 0.5rem;
+    font-size: 14pt;
   }
 
-  .editor-title-field input,
-  .editor-section textarea {
-    color: #000;
-    background: #fff;
-    border-color: #999;
+  .prd-print__section {
+    margin-bottom: 1.25rem;
+    break-inside: auto;
+  }
+
+  .prd-print__value {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    orphans: 3;
+    widows: 3;
   }
 
   .doc__header > * + * {

@@ -1,6 +1,8 @@
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { normalizePrdTitle, PRD_TEMPLATE } from '../../src/lib/prd-template';
 
 // The site is published under this base path (astro.config.mjs). Playwright resolves
 // `page.goto('/sample/')` against the origin only, so every path goes through `to()`.
@@ -11,13 +13,134 @@ const to = (path: string) => `${BASE}${path}`;
 // rules apply and the document has exactly one paper width to fit in.
 const A4 = { width: 794, height: 1123 };
 
+const LONG_TITLE = `  ${'A complete requirements document for a carefully planned product launch. '.repeat(5)}LONG-TITLE-END  `;
+const UNICODE_SENTENCE = 'Caf\u00e9 d\u00e9j\u00e0 vu: l\u2019\u00e9quipe pr\u00e9pare une cr\u00e8me br\u00fbl\u00e9e \u00e0 Montr\u00e9al.';
+const LONG_URL = `https://example.invalid/${'a'.repeat(300)}LONG-URL-END`;
+const ANSWER_LINES = Array.from(
+  { length: 80 },
+  (_, index) => `ANSWER-${String(index + 1).padStart(3, '0')}: This complete line belongs in the printed requirements.`,
+);
+const PRINT_VALUES = PRD_TEMPLATE.sections.map((section, index) =>
+  index === 0
+    ? `${ANSWER_LINES.join('\n')}\n\n  Indented text with    readable spacing.\n${LONG_URL}\n${UNICODE_SENTENCE}`
+    : `Content for ${section.title}.\nSECTION-${index + 1}-FINAL`,
+);
+
+async function populatePrintFixture(page: Page) {
+  await expect(page.locator('[data-prd-editor]')).toBeVisible();
+  await page.locator('#document-title').fill(LONG_TITLE);
+  await page.locator('#save-draft').click();
+  // Change only the live fields, without input events or a save: printing must not use stored state.
+  await page.locator('.editor-section textarea').evaluateAll((nodes, values) => {
+    nodes.forEach((node, index) => {
+      if (!(node instanceof HTMLTextAreaElement)) throw new Error('Expected an editor textarea');
+      node.value = values[index];
+      node.scrollTop = 0;
+    });
+  }, PRINT_VALUES);
+}
+
+async function readPrintedPdf(bytes: Buffer) {
+  const loading = getDocument({ data: new Uint8Array(bytes), useSystemFonts: true });
+  const document = await loading.promise;
+  try {
+    const pages: string[] = [];
+    for (let index = 1; index <= document.numPages; index += 1) {
+      const page = await document.getPage(index);
+      const content = await page.getTextContent();
+      pages.push(content.items.map((item) => 'str' in item ? item.str : '').join(' '));
+    }
+    return { pages: document.numPages, text: pages.join('\n') };
+  } finally {
+    await loading.destroy();
+  }
+}
+
+const compact = (text: string) => text.replace(/\s+/gu, '');
+
+async function editorScreenState(page: Page) {
+  return page.evaluate(() => ({
+    fields: Array.from(document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+      '#prd-editor-form input, #prd-editor-form textarea',
+    ), (field) => ({
+      id: field.id,
+      value: field.value,
+      disabled: field.disabled,
+      readOnly: field.readOnly,
+      tabIndex: field.tabIndex,
+      selectionStart: field.selectionStart,
+      selectionEnd: field.selectionEnd,
+      scrollTop: field.scrollTop,
+    })),
+    storage: Object.entries(localStorage).sort(),
+    actions: Array.from(document.querySelectorAll<HTMLButtonElement | HTMLAnchorElement>(
+      '.editor-tools button, .editor-tools a',
+    ), (action) => ({ text: action.textContent, id: action.id, tabIndex: action.tabIndex })),
+    navigation: Array.from(document.querySelectorAll<HTMLAnchorElement>('.site-nav a, .editor-outline a'),
+      (link) => ({ text: link.textContent, href: link.href })),
+    statuses: Array.from(document.querySelectorAll('.editor-status, #download-status'),
+      (node) => node.textContent),
+    activeId: document.activeElement?.id,
+    scrollX: window.scrollX,
+    scrollY: window.scrollY,
+  }));
+}
+
+async function expectPrintDocument(page: Page, title: string, values: readonly string[]) {
+  await expect(page.locator('h1:visible')).toHaveText(normalizePrdTitle(title));
+  await expect(page.locator('h1:visible')).toHaveCount(1);
+  await expect(page.locator('h2:visible')).toHaveText(PRD_TEMPLATE.sections.map(({ title }) => title));
+  await expect(page.locator('input:visible, textarea:visible, button:visible, nav:visible')).toHaveCount(0);
+  for (const selector of [
+    '.site-header', '.site-footer', '.skip-link', '.editor-header', '[data-prd-editor]',
+    '.editor-status', '.editor-tools', '.editor-outline', '.field-state',
+    '.editor-prompt', '.editor-questions',
+  ]) {
+    await expect(page.locator(`${selector}:visible`), selector).toHaveCount(0);
+  }
+  const printedValues = page.locator('[data-prd-print-value]');
+  expect(await printedValues.allTextContents()).toEqual(values);
+  await expect(page.locator('.prd-print :is(input, textarea, button, a, label, [id])')).toHaveCount(0);
+  const geometry = await page.locator('.prd-print h1, .prd-print__value').evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const style = getComputedStyle(node);
+      return {
+        width: node.getBoundingClientRect().width,
+        scrollWidth: node.scrollWidth,
+        height: node.getBoundingClientRect().height,
+        scrollHeight: node.scrollHeight,
+        overflow: style.overflow,
+        wrap: style.overflowWrap,
+        whiteSpace: style.whiteSpace,
+        maxHeight: style.maxHeight,
+        lineHeight: parseFloat(style.lineHeight),
+      };
+    }),
+  );
+  for (const [index, node] of geometry.entries()) {
+    expect(node.scrollWidth).toBeLessThanOrEqual(Math.ceil(node.width) + 1);
+    // Font ink can extend beyond a line box (notably Firefox headings), but must not be clipped.
+    expect(node.scrollHeight).toBeLessThanOrEqual(Math.ceil(node.height + node.lineHeight));
+    expect(node.overflow).toBe('visible');
+    expect(node.wrap).toBe('anywhere');
+    expect(node.maxHeight).toBe('none');
+    if (index > 0) expect(node.whiteSpace).toBe('pre-wrap');
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(A4.width);
+  const palette = await page.locator('body').evaluate((body) => {
+    const style = getComputedStyle(body);
+    return { color: style.color, background: style.backgroundColor };
+  });
+  expect(palette).toEqual({ color: 'rgb(0, 0, 0)', background: 'rgb(255, 255, 255)' });
+}
+
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** Scrolls every lazy image into view and waits until it has loaded (or failed). */
 async function loadImages(page: Page) {
   await page.locator('.doc__body img').evaluateAll(async (nodes) => {
     for (const img of nodes as HTMLImageElement[]) {
-      img.scrollIntoView();
+      img.scrollIntoView({ behavior: 'instant' });
       if (!img.complete) {
         await new Promise((done) => {
           img.addEventListener('load', done, { once: true });
@@ -26,7 +149,7 @@ async function loadImages(page: Page) {
       }
     }
   });
-  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
 }
 
 /** The print-media assertions shared by the four document pages, then a screen-media guard. */
@@ -49,6 +172,7 @@ async function expectPrintsCleanly(page: Page, path: string) {
   await expect(page.locator('main'), `${path} main`).toBeVisible();
   await expect(page.locator('.doc__body'), `${path} body`).toBeVisible();
   await expect(page.locator('h1'), `${path} h1`).toHaveCount(path === '/sample/' ? 2 : 1);
+  await expect(page.locator('[data-prd-print], [data-prd-print-template]')).toHaveCount(0);
 
   // Black on white, 11pt.
   const body = await page.locator('body').evaluate((el) => {
@@ -172,30 +296,129 @@ test('/sample/ prints content only with its seven screenshots', async ({ page })
   }
 });
 
-test('/ prints the editable document without site chrome or supporting controls', async ({ page }) => {
-  await page.setViewportSize(A4);
-  await page.emulateMedia({ media: 'print' });
-  await page.goto(to('/'));
-
-  for (const selector of [
-    '.site-header',
-    '.site-footer',
-    '.editor-status',
-    '.editor-tools',
-    '.editor-outline',
-  ]) {
-    await expect(page.locator(selector), selector).toBeHidden();
-  }
-  await expect(page.locator('h1')).toHaveText('Create a product requirements document');
-  await expect(page.locator('#prd-editor-form')).toBeVisible();
-  await expect(page.locator('.editor-section textarea')).toHaveCount(12);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(A4.width);
-  const palette = await page.locator('body').evaluate((body) => {
-    const style = getComputedStyle(body);
-    return { color: style.color, background: style.backgroundColor };
+for (const path of ['/', '/create/']) {
+  test(`${path} prints wrapping live text and returns to the unchanged screen editor`, async ({ page }) => {
+    await page.setViewportSize(A4);
+    await page.goto(to(path));
+    await populatePrintFixture(page);
+    await expect(page.locator('[data-prd-print]')).toBeHidden();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Create a product requirements document');
+    const first = page.locator('.editor-section textarea').first();
+    await first.evaluate((node: HTMLTextAreaElement) => {
+      node.scrollIntoView({ block: 'center', behavior: 'instant' });
+      node.focus({ preventScroll: true });
+      node.setSelectionRange(15, 35);
+    });
+    const before = await editorScreenState(page);
+    const requests: string[] = [];
+    page.on('request', (request) => requests.push(request.url()));
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await page.emulateMedia({ media: 'print' });
+      await expectPrintDocument(page, LONG_TITLE, PRINT_VALUES);
+      await page.emulateMedia({ media: 'screen' });
+      await expect(page.locator('[data-prd-print]')).toBeHidden();
+      // Firefox may apply screen CSS before delivering the media-change event.
+      await expect(page.locator('h1')).toHaveCount(1);
+      await expect(first).toBeFocused();
+      expect(await editorScreenState(page)).toEqual(before);
+      await expect(first).toBeEditable();
+    }
+    expect(requests, 'printing does not transmit draft data or fetch resources').toEqual([]);
+    await page.keyboard.press('Tab');
+    await expect(page.locator('.editor-section textarea').nth(1)).toBeFocused();
+    await page.locator('.editor-outline a').last().click();
+    await expect(page.locator('.editor-section textarea').last()).toBeFocused();
   });
-  expect(palette).toEqual({ color: 'rgb(0, 0, 0)', background: 'rgb(255, 255, 255)' });
-});
+
+  test(`${path} reprints unsaved edits, restores on print-first navigation, and clears stale text`, async ({ page }) => {
+    await page.setViewportSize(A4);
+    await page.goto(to(path));
+    await populatePrintFixture(page);
+    await page.locator('#save-draft').click();
+    await page.emulateMedia({ media: 'print' });
+    await expectPrintDocument(page, LONG_TITLE, PRINT_VALUES);
+    await page.emulateMedia({ media: 'screen' });
+
+    const newestTitle = 'Newest unsaved title';
+    const newestValue = 'Newest unsaved answer\n<em>Literal text, not markup</em>\nLATEST-ANSWER-END';
+    await page.locator('#document-title').evaluate((node: HTMLInputElement, value) => { node.value = value; }, newestTitle);
+    await page.locator('.editor-section textarea').first().evaluate(
+      (node: HTMLTextAreaElement, value) => { node.value = value; }, newestValue,
+    );
+    // beforeprint is independent of matchMedia; Chromium's native PDF path also exercises it below.
+    await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
+    expect(await page.locator('[data-prd-print-title]').textContent()).toBe(newestTitle);
+    expect(await page.locator('[data-prd-print-value]').first().textContent()).toBe(newestValue);
+    await expect(page.locator('.prd-print em')).toHaveCount(0);
+    await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+    await expect(page.locator('.prd-print h1')).toHaveCount(0);
+    await page.emulateMedia({ media: 'print' });
+    await expectPrintDocument(page, newestTitle, [newestValue, ...PRINT_VALUES.slice(1)]);
+
+    await page.reload();
+    await expect(page.locator('#save-status')).toContainText('Draft restored');
+    await expectPrintDocument(page, LONG_TITLE, PRINT_VALUES);
+    await page.emulateMedia({ media: 'screen' });
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.locator('#start-over').click();
+    await page.emulateMedia({ media: 'print' });
+    await expectPrintDocument(page, '', PRD_TEMPLATE.sections.map(() => ''));
+    await page.emulateMedia({ media: 'screen' });
+    await page.locator('#document-title').fill('   ');
+    await page.emulateMedia({ media: 'print' });
+    await expectPrintDocument(page, '   ', PRD_TEMPLATE.sections.map(() => ''));
+    await page.emulateMedia({ media: 'screen' });
+    await expect(page.locator('#document-title')).toHaveValue('   ');
+  });
+
+  test(`${path} prints a complete populated browser PDF`, async ({ page, browserName }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'page.pdf() is Chromium-only in Playwright');
+    await page.setViewportSize(A4);
+    await page.goto(to(path));
+    await populatePrintFixture(page);
+    await page.locator('.editor-section textarea').first().focus();
+    const before = await editorScreenState(page);
+    const pdf = await page.pdf({ path: testInfo.outputPath('complete-prd.pdf'), format: 'A4' });
+    expect(await editorScreenState(page)).toEqual(before);
+    const rendered = await readPrintedPdf(pdf);
+    const text = compact(rendered.text);
+    const markers = [
+      normalizePrdTitle(LONG_TITLE),
+      ...ANSWER_LINES,
+      LONG_URL,
+      UNICODE_SENTENCE,
+      ...PRD_TEMPLATE.sections.slice(1).map((_, index) => `SECTION-${index + 2}-FINAL`),
+    ];
+    console.log(`${path} browser PDF: ${rendered.pages} pages; answer markers present: ${
+      ANSWER_LINES.filter((line) => text.includes(compact(line))).length
+    }/80; full title: ${text.includes(compact(normalizePrdTitle(LONG_TITLE)))}; Unicode: ${
+      text.includes(compact(UNICODE_SENTENCE))
+    }; final section: ${text.includes('SECTION-12-FINAL')}`);
+    expect(rendered.pages).toBeGreaterThanOrEqual(2);
+    let previous = -1;
+    for (const marker of markers) {
+      const position = text.indexOf(compact(marker));
+      expect(position, `rendered PDF contains ${marker}`).toBeGreaterThan(previous);
+      previous = position;
+    }
+    for (const label of [
+      'Optional', 'Create a product requirements document', 'Download your PRD',
+      'Document outline', 'Your draft stays in this browser', ...PRD_TEMPLATE.sections.map(({ prompt }) => prompt),
+    ]) {
+      expect(text).not.toContain(compact(label));
+    }
+
+    await page.locator('#document-title').evaluate((node: HTMLInputElement) => { node.value = 'Reprinted unsaved title'; });
+    await page.locator('.editor-section textarea').first().evaluate((node: HTMLTextAreaElement) => {
+      node.value = 'A new unsaved answer.\nREPRINT-FINAL';
+    });
+    const reprinted = await readPrintedPdf(await page.pdf({ format: 'A4' }));
+    expect(compact(reprinted.text)).toContain('Reprintedunsavedtitle');
+    expect(compact(reprinted.text)).toContain('REPRINT-FINAL');
+    expect(compact(reprinted.text)).not.toContain('ANSWER-080');
+    expect(compact(reprinted.text)).not.toContain('LONG-TITLE-END');
+  });
+}
 
 // Last on purpose: saves the sample PRD as an A4 PDF under test-results/ (ignored, never committed) and
 // reports its page count and size as evidence. `page.pdf()` exists in Chromium headless only, so the
