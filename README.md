@@ -12,18 +12,18 @@ Source gist: https://gist.github.com/burkeholland/f71d1156812fd91e43693083588928
 content/              authored markdown rendered by the site
   guide.md            How to write a PRD an agent can build from   -> /guide
   walkthrough.md      The sample PRD, section by section            -> /walkthrough
-  template.md         Reusable PRD template (annotated)             -> /template
+  template.md         Template metadata and introduction only      -> /template
   gist/               snapshot of the gist: build-the-urlist.md + meta.json  -> /sample
   gist/history/       every revision of the gist (NN-<sha>.md; gist/history.json indexes them) -> /history
   gist/history-notes.json  one hand-written sentence per revision, keyed by sha (the refresh never touches it)
-public/               static files served as-is (favicon.svg, prd-template.md = the clean template download)
+public/               static files served as-is (favicon.svg, screenshots, example download)
   raw/                the gist file byte-for-byte verbatim (the "Download .md" on /sample)
   mocks/              the gist's screenshots, byte-verbatim (never optimise them in place)
   mocks/derived/      WebP copies derived by scripts/make-mocks.mjs before every build and dev run (gitignored)
   og.png, og/         social preview cards, home + one per page, rendered by scripts/make-og.mjs (committed)
 scripts/              Node scripts + their node:test tests (each one documented in scripts/README.md)
   fetch-gist*.mjs     snapshot the gist and every revision of it (git clone, no token; the daily refresh runs both)
-  check-*.mjs         node:test checks: content quotes verbatim and links resolvable; template.md = prd-template.md
+  check-*.mjs         node:test checks: content quotes verbatim and links resolvable
   make-mocks.mjs      WebP copies of the screenshots (sharp), run as prebuild/predev
   make-og.mjs, og.html  render the social preview cards with Playwright's Chromium
   preview.mjs           Astro preview with the standard DOCX MIME type added
@@ -33,6 +33,7 @@ src/                  Astro site
   components/         PrdEditor, Nav, Footer, Toc
   pages/              one .astro per route: index, create, sample, guide, walkthrough, history, template, 404
   pages/downloads/    prerendered Markdown, DOCX, and PDF blank-template files -> /downloads/prd-template.*
+  pages/prd-template.md.ts  compatibility endpoint, identical to /downloads/prd-template.md
   pages/history/[n].astro  one text-diff page per gist revision       -> /history/<n>
   lib/*.ts            base (withBase), site (SITE, NAV, routes), seo (canonical URL + social cards), toc, diff, history, history-notes
   lib/rehype-*.mjs    the three rehype plugins (base, figures, anchors) — see Develop
@@ -66,6 +67,26 @@ PRD exports use `docx` for valid Office Open XML packages and `pdf-lib` with
 `@fontsource/noto-sans` are embedded in PDFs for selectable Unicode text; they are
 not used as site fonts. `jszip` is a development-only parser for DOCX integrity
 tests. Astro prerenders the three blank files during every build.
+
+The annotated `/template/` page renders the same sections, prompts, helper
+questions, and blank Markdown as the editor from `src/lib/prd-template.ts`.
+`content/template.md` supplies only its metadata and introduction. The old
+`/prd-template.md` URL shares the canonical Markdown response factory, not a
+second public file. The completed example remains separate and unchanged.
+
+Old `/template/#...` bookmarks remain non-heading aliases, defined in
+`src/lib/prd-template-compat.ts`. All former section fragments have a destination:
+
+| Old fragment(s) | Current section ID |
+| --- | --- |
+| `mission-and-stop-condition` | `summary-outcome` |
+| `mocks`, `navigation`, `screens`, `theme-responsive-ui-and-accessibility` | `user-experience` |
+| `technical-specification-and-checklist`, `scripts-tests-and-documentation`, `completion` | `validation-done` |
+| `stack-and-design` | `constraints-decisions` |
+| `product` | `scope-non-goals` |
+| `routes` | `functional-requirements` |
+| `data-and-integrations` | `data-apis-integrations` |
+| `identity-and-ownership`, `storage-and-security` | `security-privacy-permissions` |
 
 ```
 npm install            install dependencies (Playwright: npx playwright install chromium)

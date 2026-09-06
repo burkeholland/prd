@@ -3,33 +3,57 @@ import { getEntry } from 'astro:content';
 import Doc from '../layouts/Doc.astro';
 import { DOC_ROUTES } from '../lib/site';
 import { withBase } from '../lib/base';
+import { PRD_TEMPLATE, serializeBlankPrdMarkdown } from '../lib/prd-template';
+import { PRD_TEMPLATE_ALIASES } from '../lib/prd-template-compat';
 
 const route = DOC_ROUTES['/template'];
 const entry = await getEntry(route.collection, route.id);
 const title = entry?.data.title ?? route.label;
 const description = entry?.data.description;
+const headings = PRD_TEMPLATE.sections.map(({ id, title }) => ({
+  depth: 2,
+  slug: id,
+  text: title,
+}));
+// Copy the serializer's complete sections, including their Markdown headings.
+const blankSections = serializeBlankPrdMarkdown().split(/(?=^## )/m).slice(1).map((text) => text.trimEnd());
+const aliases = Object.entries(PRD_TEMPLATE_ALIASES);
 ---
 
-<Doc label={route.label} title={title} description={description} entry={entry}>
+<Doc label={route.label} title={title} description={description} entry={entry} headings={headings}>
   <Fragment slot="header">
     <h1>{title}</h1>
     {description && <p class="doc__description">{description}</p>}
-    {
-      entry && (
-        <p class="doc__actions">
-          <a class="button" href={withBase('/prd-template.md')} download>
-            Download the clean template
-          </a>
-          <span class="doc__actions-note">Markdown, no annotations — the skeleton to fill in.</span>
-        </p>
-      )
-    }
+    <p class="doc__actions">
+      <a class="button" href={withBase('/')}>Open the editor</a>
+    </p>
+    <p class="doc__actions">
+      <span class="doc__actions-note">Download a blank file:</span>
+      <a class="template-download" href={withBase('/downloads/prd-template.md')} download>Markdown</a>
+      <a class="template-download" href={withBase('/downloads/prd-template.docx')} download>Word (.docx)</a>
+      <a class="template-download" href={withBase('/downloads/prd-template.pdf')} download>PDF</a>
+    </p>
   </Fragment>
+  <p>{PRD_TEMPLATE.guidance} Replace the placeholders you keep with your own decisions.</p>
+  {
+    PRD_TEMPLATE.sections.map((section, index) => (
+      <section class="template-section" aria-labelledby={section.id}>
+        <h2 id={section.id}><a class="heading-link" href={`#${section.id}`}>{section.title}</a></h2>
+        {aliases.filter(([, target]) => target === section.id).map(([alias]) => (
+          <span id={alias} class="template-alias" aria-hidden="true" />
+        ))}
+        <p class="template-prompt">{section.prompt}</p>
+        <ul>
+          {section.helperQuestions.map((question) => <li>{question}</li>)}
+        </ul>
+        <pre data-section-title={section.title}><code>{blankSections[index]}</code></pre>
+      </section>
+    ))
+  }
 </Doc>
 
 <!--
-  Progressive enhancement, this page only: a Copy button on each skeleton code block. Astro
-  bundles the script as a module; without JavaScript the page is exactly the rendered markdown.
+  Copy is a progressive enhancement; the annotated sections and files work without JavaScript.
 -->
 <script>
   const RESET = 'Copy';
@@ -49,24 +73,20 @@ const description = entry?.data.description;
     status.textContent = message;
   };
 
-  for (const pre of document.querySelectorAll<HTMLPreElement>('main .prose pre')) {
+  for (const pre of document.querySelectorAll<HTMLPreElement>('main .prose pre[data-section-title]')) {
     const code = pre.querySelector('code') ?? pre;
     const block = document.createElement('div');
     block.className = 'code-block';
     pre.replaceWith(block);
     block.append(pre);
 
-    // The block is named after the nearest preceding h2 in the document.
-    let heading = block.previousElementSibling;
-    while (heading && heading.tagName !== 'H2') heading = heading.previousElementSibling;
-    const name = heading?.textContent?.trim();
-    const skeleton = name ? `the ${name} skeleton` : 'this skeleton';
+    const section = `the ${pre.dataset.sectionTitle} section`;
 
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'copy-button';
     button.textContent = RESET;
-    button.setAttribute('aria-label', `Copy ${skeleton}`);
+    button.setAttribute('aria-label', `Copy ${section}`);
     block.prepend(button);
 
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -87,11 +107,11 @@ const description = entry?.data.description;
         if (!navigator.clipboard) throw new Error('Clipboard API unavailable');
         await navigator.clipboard.writeText(text);
         show('Copied', true, 1500);
-        announce(`Copied ${skeleton}`);
+        announce(`Copied ${section}`);
       } catch {
         getSelection()?.selectAllChildren(code);
-        show('Select all → Ctrl+C', false, 3000);
-        announce('Copy failed — text selected');
+        show('Copy failed', false, 3000);
+        announce('Copy failed — text selected. Press Ctrl+C or Command+C to copy.');
       }
     });
   }
@@ -99,6 +119,39 @@ const description = entry?.data.description;
 
 <!-- Global: the buttons and wrappers are created at runtime, so scoped styles would not reach them. -->
 <style is:global>
+  .template-section {
+    position: relative;
+  }
+
+  .prose .template-section {
+    margin-top: 3.48rem;
+  }
+
+  .template-section > h2 {
+    margin-top: 0;
+  }
+
+  .template-section > :is(p, ul, pre, .code-block) {
+    margin-top: 1.1em;
+  }
+
+  .template-alias {
+    position: absolute;
+    top: 0;
+  }
+
+  .template-download,
+  .template-section .heading-link,
+  .doc__body > p a {
+    display: inline-block;
+    min-height: 32px;
+    min-width: 32px;
+  }
+
+  .template-download {
+    padding-block: 0.2rem;
+  }
+
   .code-block {
     position: relative;
   }
@@ -109,6 +162,8 @@ const description = entry?.data.description;
     top: 0.5rem;
     right: 0.5rem;
     padding: 0.45rem 0.6rem;
+    min-height: 32px;
+    min-width: 32px;
     font: inherit;
     font-size: 0.85rem;
     line-height: 1.2;
@@ -127,16 +182,14 @@ const description = entry?.data.description;
     color: var(--accent);
   }
 
-  /* Screen only: room for the button so it never covers code. Print keeps its own padding. */
+  /* Reserve a row for both success and failure labels without narrowing the code. */
   @media screen {
     .prose .code-block pre {
-      padding-right: 4.5rem;
+      padding-top: 3rem;
     }
   }
 
-  /* Skeleton blocks wrap on narrow screens instead of scrolling sideways (task #1376). This page's
-     styles are emitted for /template/ only, so the sample's code blocks keep scrolling. Copy reads
-     the code's textContent, which wrapping does not change. */
+  /* Keep long section titles readable without sideways scrolling; copying still uses textContent. */
   .prose pre {
     white-space: pre-wrap;
     overflow-wrap: anywhere;

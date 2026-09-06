@@ -4,7 +4,7 @@ description: "Seven practical rules for writing requirements that are specific, 
 order: 2
 ---
 
-A useful PRD lets the builder act without guessing and prove the result is done. The [template](/template) is a starting point: adapt or skip its sections to fit the product. Settle the decisions that shape the product, describe what people will see and do, and turn completion into evidence.
+A useful PRD lets the builder act without guessing and prove the result is done. Start a draft in the [editor](/), or read its [annotated template](/template). Adapt or skip sections to fit the product. Settle the decisions that shape the product, describe what people will see and do, and turn completion into evidence.
 
 ## Seven rules
 
@@ -124,4 +124,4 @@ Specific requirements name a number, state, mechanism, or result. Each right-han
 - [ ] Does every requirement have a check that can pass or fail?
 - [ ] Does the definition of done include exact commands and complete user journeys?
 
-[Read the example PRD](/sample) · [Use the PRD template](/template)
+[Read the example PRD](/sample) · [Start a PRD in the editor](/)

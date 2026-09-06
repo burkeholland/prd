@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { PRD_TEMPLATE_SECTIONS } from '../../src/lib/prd-template';
 
 // The site is published under this base path (astro.config.mjs). Playwright resolves
 // `page.goto('/sample/')` against the origin only, so every path goes through `to()`.
@@ -146,7 +147,7 @@ test('/template/ copy buttons are still named from the heading text alone', asyn
   await page.goto(to('/template/'));
 
   const first = page.locator('button.copy-button').first();
-  await expect(first).toHaveAttribute('aria-label', 'Copy the Mission and stop condition skeleton');
+  await expect(first).toHaveAttribute('aria-label', `Copy the ${PRD_TEMPLATE_SECTIONS[0].title} section`);
 
   const labels = await page
     .locator('button.copy-button')

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { PRD_TEMPLATE_SECTIONS } from '../../src/lib/prd-template';
+import { PRD_TEMPLATE_SECTIONS, serializeBlankPrdMarkdown } from '../../src/lib/prd-template';
 
 // The site is published under this base path (astro.config.mjs). Playwright resolves
 // `page.goto('/sample/')` against the origin only, so every path goes through `to()`.
@@ -25,7 +25,6 @@ const CONTENT = {
   template: 'content/template.md',
   gistMeta: 'content/gist/meta.json',
   rawGist: 'public/raw/build-the-urlist.md',
-  cleanTemplate: 'public/prd-template.md',
   history: 'content/gist/history.json',
 };
 const present = (file: string) => existsSync(resolve(file));
@@ -345,32 +344,36 @@ test('the sample source card has the generic intro, actions, and gist metadata',
   }
 });
 
-test('the guide keeps secondary pages out and ends with only the Example and Template links', async ({ page }) => {
+test('the guide links the annotated template and ends with the Example and editor links', async ({ page }) => {
   await page.goto(to('/guide/'));
 
   await expect(page.locator(`.doc__body a[href="${to('/history/')}"]`)).toHaveCount(0);
   await expect(page.locator(`.doc__body a[href="${to('/walkthrough/')}"]`)).toHaveCount(0);
 
   const finalParagraph = page.locator('.doc__body > p').last();
-  await expect(finalParagraph.locator('a')).toHaveText(['Read the example PRD', 'Use the PRD template']);
+  await expect(page.locator(`.doc__body a[href="${to('/template/')}"]`)).toHaveText('annotated template');
+  await expect(finalParagraph.locator('a')).toHaveText(['Read the example PRD', 'Start a PRD in the editor']);
   expect(await finalParagraph.locator('a').evaluateAll((links) => links.map((link) => link.getAttribute('href')))).toEqual([
     to('/sample/'),
-    to('/template/'),
+    to('/'),
   ]);
 });
 
-test('the template page has a download button for the clean template', async ({ page }) => {
+test('the template page links the home editor and canonical blank files', async ({ page }) => {
   test.skip(!present(CONTENT.template), 'content not merged yet');
   await page.goto(to('/template/'));
 
-  const href = to('/prd-template.md');
-  const button = page.locator(`.doc__header a[download][href="${href}"]`);
-  await expect(button).toHaveCount(1);
-  await expect(button).toHaveText('Download the clean template');
-
-  const response = await page.request.get(href);
+  await expect(page.locator('.doc__header a.button')).toHaveText('Open the editor');
+  await expect(page.locator('.doc__header a.button')).toHaveAttribute('href', to('/'));
+  await expect(page.locator('.doc__header a[download]')).toHaveText(['Markdown', 'Word (.docx)', 'PDF']);
+  for (const format of ['md', 'docx', 'pdf']) {
+    const href = to(`/downloads/prd-template.${format}`);
+    await expect(page.locator(`.doc__header a[download][href="${href}"]`)).toHaveCount(1);
+    expect((await page.request.get(href)).status()).toBe(200);
+  }
+  const response = await page.request.get(to('/prd-template.md'));
   expect(response.status()).toBe(200);
-  expect(await response.text()).toMatch(/^# Build \{Product Name\}/);
+  expect(await response.text()).toBe(serializeBlankPrdMarkdown());
 });
 
 test('the guide has three sections, seven numbered rules and checks, and ten resolving TOC links', async ({ page }) => {

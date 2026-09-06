@@ -11,7 +11,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { checkFile, extractBlockquotes, extractHeadings, extractInternalLinks, parseFrontmatter, quoteFragments } from './lib/content.mjs';
 
 const PAGE_ROUTES = ['/', '/sample', '/guide', '/walkthrough', '/history', '/template'];
@@ -66,6 +66,13 @@ const texts = new Map(contentFiles.map((f) => [f, readFileSync(f, 'utf8')]));
 const pages = Object.fromEntries(
   [...texts].map(([f, text]) => [`/${path.basename(f, '.md')}`, extractHeadings(parseFrontmatter(text).body)]),
 );
+// The template's headings are generated, not authored in content/template.md.
+const { PRD_TEMPLATE_SECTIONS } = await import(pathToFileURL(path.join(ROOT, 'src', 'lib', 'prd-template.ts')).href);
+const { PRD_TEMPLATE_ALIASES } = await import(pathToFileURL(path.join(ROOT, 'src', 'lib', 'prd-template-compat.ts')).href);
+pages['/template'] = [
+  ...PRD_TEMPLATE_SECTIONS.map(({ id }) => id),
+  ...Object.keys(PRD_TEMPLATE_ALIASES),
+];
 
 /** `guide.md: 12 quotes / 15 fragments / 24 links` — the numbers the report asks for. */
 function stats(text) {
