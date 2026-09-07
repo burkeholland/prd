@@ -50,10 +50,10 @@ test('1024×768: the sidebar TOC scrolls to its final link without decorative ef
   expect(scrolled.scrollTop, 'the aside scrolled').toBeGreaterThan(0);
   expect(scrolled.lastLinkBottom, 'last link is visible at the end').toBeLessThanOrEqual(scrolled.asideBottom + 1);
 
-  // /guide/ has 10 links (three sections plus seven rules). Its last link remains reachable too.
+  // /guide/ has 11 links (four sections plus seven rules). Its last link remains reachable too.
   await page.goto(to('/guide/'));
   const guide = await sidebarGeometry(aside);
-  expect(guide.links, 'guide TOC links').toBe(10);
+  expect(guide.links, 'guide TOC links').toBe(11);
   await scrollAsideToEnd(aside);
   const guideEnd = await sidebarGeometry(aside);
   expect(guideEnd.lastLinkBottom, 'guide last link is visible').toBeLessThanOrEqual(guideEnd.asideBottom + 1);
@@ -106,7 +106,7 @@ test('768×1024: the "On this page" summary is thumb-sized without growing the c
   ).toBeLessThanOrEqual(0.05);
 
   for (const [path, count] of [
-    ['/guide/', 10],
+    ['/guide/', 11],
     ['/walkthrough/', 19],
   ] as const) {
     await page.goto(to(path));
