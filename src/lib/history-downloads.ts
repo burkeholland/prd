@@ -1,8 +1,10 @@
 import type { HistoryDocument, HistoryRevision } from './history';
+import { SITE } from './site';
 
 export const HISTORY_MARKDOWN_MIME = 'text/markdown;charset=utf-8';
 
 type DownloadRevision = Pick<HistoryRevision, 'n' | 'short'>;
+type LinkedRevision = Pick<HistoryRevision, 'n' | 'version' | 'url'>;
 type Snapshot = string | Uint8Array;
 
 export function historyDownloadStem(revision: DownloadRevision): string {
@@ -15,6 +17,70 @@ export function historyDownloadPath(revision: DownloadRevision): string {
 
 export function historyDownloadFilename(revision: DownloadRevision): string {
   return `build-the-urlist-${historyDownloadStem(revision)}.md`;
+}
+
+function stablePublicUrl(path: string): string {
+  let origin: URL;
+  try {
+    origin = new URL(SITE.publicUrl);
+  } catch {
+    throw new Error('Revision history: the stable public origin is invalid.');
+  }
+  if (
+    origin.protocol !== 'https:' ||
+    origin.hostname !== 'burkeholland.github.io' ||
+    origin.username !== '' ||
+    origin.password !== '' ||
+    origin.pathname !== '/prd/' ||
+    origin.search !== '' ||
+    origin.hash !== '' ||
+    origin.href !== SITE.publicUrl
+  ) {
+    throw new Error('Revision history: the stable public origin is invalid.');
+  }
+  const url = new URL(path.replace(/^\/+/, ''), origin);
+  if (
+    url.protocol !== 'https:' ||
+    url.origin !== origin.origin ||
+    url.username !== '' ||
+    url.password !== '' ||
+    url.search !== '' ||
+    url.hash !== ''
+  ) {
+    throw new Error(`Revision history: unsafe public path "${path}".`);
+  }
+  return url.href;
+}
+
+export function historyRevisionPublicUrl(revision: Pick<HistoryRevision, 'n'>): string {
+  return stablePublicUrl(`history/${revision.n}/`);
+}
+
+export function historyRevisionGithubUrl(revision: LinkedRevision): string {
+  let url: URL;
+  try {
+    url = new URL(revision.url);
+  } catch {
+    throw new Error(`Revision history: revision ${revision.n} has an invalid external URL.`);
+  }
+  const expected = `${SITE.gistUrl}/${revision.version}`;
+  if (
+    url.protocol !== 'https:' ||
+    url.origin !== 'https://gist.github.com' ||
+    url.username !== '' ||
+    url.password !== '' ||
+    url.search !== '' ||
+    url.hash !== '' ||
+    url.href !== revision.url ||
+    revision.url !== expected
+  ) {
+    throw new Error(`Revision history: revision ${revision.n} has an invalid external URL.`);
+  }
+  return revision.url;
+}
+
+export function historyRevisionMarkdownUrl(revision: DownloadRevision): string {
+  return stablePublicUrl(historyDownloadPath(revision));
 }
 
 const byteLength = (snapshot: Snapshot) =>

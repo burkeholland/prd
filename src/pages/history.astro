@@ -8,6 +8,7 @@ import {
   historyDownloadFilename,
   historyDownloadPath,
 } from '../lib/history-downloads';
+import { HISTORY_CSV_DOWNLOAD } from '../lib/history-csv-download';
 import { HISTORY_INDEX_DOWNLOAD } from '../lib/history-index-download';
 import { noteFor } from '../lib/history-notes';
 // Written by scripts/fetch-gist-history.mjs: one entry per gist revision, oldest → newest.
@@ -90,6 +91,13 @@ const baseline = (row: (typeof list)[number]) => list.indexOf(row) * ROW_HEIGHT 
           download={HISTORY_INDEX_DOWNLOAD.filename}
         >
           {HISTORY_INDEX_DOWNLOAD.label}
+        </a>
+        <a
+          class="history-csv-download"
+          href={withBase(HISTORY_CSV_DOWNLOAD.path)}
+          download={HISTORY_CSV_DOWNLOAD.filename}
+        >
+          {HISTORY_CSV_DOWNLOAD.label}
         </a>
       </div>
     </header>

@@ -1,7 +1,9 @@
 import type { HistoryDocument, HistoryRevision } from './history';
 import {
   assertHistorySnapshotCoverage,
-  historyDownloadPath,
+  historyRevisionGithubUrl,
+  historyRevisionMarkdownUrl,
+  historyRevisionPublicUrl,
 } from './history-downloads';
 import { SITE } from './site';
 
@@ -62,57 +64,6 @@ const utcTimestamp = (value: unknown, name: string): string => {
     throw new Error(`Revision history index: ${name} is not a valid UTC timestamp.`);
   }
   return timestamp;
-};
-
-const externalRevisionUrl = (
-  value: unknown,
-  revision: HistoryRevision,
-): string => {
-  const href = scalar(value, `revision ${revision.n} GitHub URL`);
-  let url: URL;
-  try {
-    url = new URL(href);
-  } catch {
-    throw new Error(`Revision history index: revision ${revision.n} has an invalid external URL.`);
-  }
-  const expected = `${SITE.gistUrl}/${revision.version}`;
-  if (
-    url.protocol !== 'https:' ||
-    url.origin !== 'https://gist.github.com' ||
-    url.username !== '' ||
-    url.password !== '' ||
-    url.search !== '' ||
-    url.hash !== '' ||
-    url.href !== href ||
-    href !== expected
-  ) {
-    throw new Error(`Revision history index: revision ${revision.n} has an invalid external URL.`);
-  }
-  return href;
-};
-
-const stablePublicUrl = (path: string): string => {
-  let origin: URL;
-  try {
-    origin = new URL(SITE.publicUrl);
-  } catch {
-    throw new Error('Revision history index: the stable public origin is invalid.');
-  }
-  if (
-    origin.protocol !== 'https:' ||
-    origin.hostname !== 'burkeholland.github.io' ||
-    origin.pathname !== '/prd/' ||
-    origin.search !== '' ||
-    origin.hash !== '' ||
-    origin.href !== SITE.publicUrl
-  ) {
-    throw new Error('Revision history index: the stable public origin is invalid.');
-  }
-  const url = new URL(path.replace(/^\/+/, ''), origin);
-  if (url.origin !== origin.origin || url.search !== '' || url.hash !== '') {
-    throw new Error(`Revision history index: unsafe public path "${path}".`);
-  }
-  return url.href;
 };
 
 const validateRevisionNumbers = (revisions: readonly HistoryRevision[]): void => {
@@ -219,7 +170,8 @@ const validateSource = (source: HistoryIndexSource) => {
       throw new Error(`Revision history index: ${label} has an invalid snapshot path.`);
     }
     const note = scalar(notes[version], `${label} note`);
-    const githubUrl = externalRevisionUrl(revision.url, revision);
+    scalar(revision.url, `revision ${revision.n} GitHub URL`);
+    const githubUrl = historyRevisionGithubUrl(revision);
     return {
       revision,
       version,
@@ -308,9 +260,9 @@ export const serializeHistoryIndex = (source: HistoryIndexSource): string => {
         `- Lines: ${lines}`,
         `- Additions: ${additions}`,
         `- Deletions: ${deletions}`,
-        `- Revision page: ${stablePublicUrl(`history/${revision.n}/`)}`,
+        `- Revision page: ${historyRevisionPublicUrl(revision)}`,
         `- GitHub revision: ${githubUrl}`,
-        `- Markdown snapshot: ${stablePublicUrl(historyDownloadPath(revision))}`,
+        `- Markdown snapshot: ${historyRevisionMarkdownUrl(revision)}`,
       ].join('\n'),
   );
 
