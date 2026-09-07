@@ -152,6 +152,104 @@ test('the 404 page links and the three-link primary nav are thumb-sized without 
   }
 });
 
+test('footer links wrap into non-overlapping 32 px targets at phone, tablet, and desktop widths', async ({
+  page,
+}) => {
+  const viewports = [
+    { width: 320, height: 780 },
+    { width: 390, height: 844 },
+    { width: 768, height: 1024 },
+    { width: 1280, height: 900 },
+  ];
+  const labels = ['Guide', 'Walkthrough', 'Template', 'History', 'Example source', 'Site source', 'Report a problem'];
+
+  for (const viewport of viewports) {
+    await page.setViewportSize(viewport);
+    await page.goto(to('/history/3/'));
+    await page.locator('footer').scrollIntoViewIfNeeded();
+    const geometry = await page.locator('footer a').evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const rect = node.getBoundingClientRect();
+        return {
+          label: node.textContent?.trim() ?? '',
+          top: rect.top,
+          right: rect.right,
+          bottom: rect.bottom,
+          left: rect.left,
+          width: rect.width,
+          height: rect.height,
+          clipped: node.scrollWidth > node.clientWidth || node.scrollHeight > node.clientHeight,
+        };
+      }),
+    );
+    expect(geometry.map((link) => link.label), `${viewport.width} footer link order`).toEqual(labels);
+    for (const link of geometry) {
+      expect(link.width, `${viewport.width} "${link.label}" width`).toBeGreaterThanOrEqual(MIN_TAP);
+      expect(link.height, `${viewport.width} "${link.label}" height`).toBeGreaterThanOrEqual(MIN_TAP);
+      expect(link.left, `${viewport.width} "${link.label}" left edge`).toBeGreaterThanOrEqual(0);
+      expect(link.right, `${viewport.width} "${link.label}" right edge`).toBeLessThanOrEqual(viewport.width);
+      expect(link.top, `${viewport.width} "${link.label}" top edge`).toBeGreaterThanOrEqual(0);
+      expect(link.bottom, `${viewport.width} "${link.label}" bottom edge`).toBeLessThanOrEqual(viewport.height);
+      expect(link.clipped, `${viewport.width} "${link.label}" label is not clipped`).toBe(false);
+    }
+    for (let a = 0; a < geometry.length; a += 1) {
+      for (let b = a + 1; b < geometry.length; b += 1) {
+        const first = geometry[a];
+        const second = geometry[b];
+        const overlap =
+          first.left < second.right &&
+          second.left < first.right &&
+          first.top < second.bottom &&
+          second.top < first.bottom;
+        expect(overlap, `${viewport.width} "${first.label}" and "${second.label}" targets overlap`).toBe(false);
+      }
+    }
+    expect(await noSidewaysScroll(page), `${viewport.width} footer page has no sideways scroll`).toMatchObject({
+      scrollWidth: viewport.width,
+      viewport: viewport.width,
+    });
+  }
+});
+
+test('keyboard traversal reaches all footer links in visual order with a focus ring', async ({ page, browserName }) => {
+  test.skip(browserName === 'webkit', "WebKit skips links in sequential focus navigation (Safari's Tab-to-links is off by default)");
+  await page.goto(to('/guide/'));
+
+  const footerLinks = page.locator('footer a');
+  const expected = await footerLinks.evaluateAll((nodes) =>
+    nodes.map((node) => ({ href: node.getAttribute('href'), label: node.textContent?.trim() ?? '' })),
+  );
+  await page.locator('main a[href]').last().focus();
+
+  const reached = [];
+  for (let index = 0; index < expected.length; index += 1) {
+    await page.keyboard.press('Tab');
+    reached.push(
+      await page.evaluate(() => {
+        const active = document.activeElement;
+        const style = active ? getComputedStyle(active) : null;
+        return {
+          inFooter: active?.matches('footer a') ?? false,
+          href: active?.getAttribute('href'),
+          label: active?.textContent?.trim() ?? '',
+          outlineStyle: style?.outlineStyle,
+          outlineWidth: style?.outlineWidth,
+        };
+      }),
+    );
+  }
+
+  expect(
+    reached.map(({ href, label }) => ({ href, label })),
+    'footer keyboard order',
+  ).toEqual(expected);
+  for (const link of reached) {
+    expect(link.inFooter, `"${link.label}" is a footer link`).toBe(true);
+    expect(link.outlineStyle, `"${link.label}" focus outline style`).not.toBe('none');
+    expect(link.outlineWidth, `"${link.label}" focus outline width`).not.toBe('0px');
+  }
+});
+
 // /history/'s current row as rects, for the badge hit-area test: the row, the pill (`mark`), its link's
 // box (the hit area) and glyphs (the Range rect of its text), every other link in the row the same way,
 // and whether three taps on the link's box — its centre, 2 px inside the top and 2 px inside the bottom,
