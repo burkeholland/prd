@@ -376,14 +376,43 @@ test('the template page links the home editor and canonical blank files', async 
   expect(await response.text()).toBe(serializeBlankPrdMarkdown());
 });
 
-test('the guide has three sections, seven numbered rules and checks, and ten resolving TOC links', async ({ page }) => {
-  const { headings, links } = await expectTocResolves(page, '/guide/', 3);
-  expect(headings, 'guide H2 headings').toBe(3);
-  expect(links, 'guide TOC links').toBe(10);
+test('the guide has a five-step first pass, four sections, seven numbered rules and checks, and resolving TOC links', async ({
+  page,
+}) => {
+  const { headings, links } = await expectTocResolves(page, '/guide/', 4);
+  expect(headings, 'guide H2 headings').toBe(4);
+  expect(links, 'guide TOC links').toBe(11);
 
   const h2s = page.locator('.doc__body h2');
-  await expect(h2s).toHaveText(['Seven rules', 'Vague vs. specific', 'Before you hand it off']);
+  await expect(h2s).toHaveText([
+    'A practical first pass',
+    'Seven rules',
+    'Vague vs. specific',
+    'Before you hand it off',
+  ]);
   for (const heading of await h2s.all()) await expect(heading).toBeVisible();
+
+  const expectedFirstPassSections = [
+    [PRD_TEMPLATE_SECTIONS[0], PRD_TEMPLATE_SECTIONS[1], PRD_TEMPLATE_SECTIONS[3]],
+    [PRD_TEMPLATE_SECTIONS[2], PRD_TEMPLATE_SECTIONS[4]],
+    [PRD_TEMPLATE_SECTIONS[5], PRD_TEMPLATE_SECTIONS[6]],
+    [PRD_TEMPLATE_SECTIONS[7], PRD_TEMPLATE_SECTIONS[8], PRD_TEMPLATE_SECTIONS[9]],
+    [PRD_TEMPLATE_SECTIONS[10], PRD_TEMPLATE_SECTIONS[11]],
+  ];
+  const firstPassLists = page.locator('.doc__body > ol');
+  await expect(firstPassLists).toHaveCount(1);
+  const firstPassSteps = firstPassLists.locator(':scope > li');
+  await expect(firstPassSteps).toHaveCount(5);
+  for (const [index, sections] of expectedFirstPassSections.entries()) {
+    const sectionLinks = firstPassSteps.nth(index).locator('a');
+    await expect(sectionLinks).toHaveText(sections.map((section) => section.title));
+    expect(await sectionLinks.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('href')))).toEqual(
+      sections.map((section) => to(`/template/#${section.id}`)),
+    );
+  }
+  const openEditor = page.locator('.doc__body a', { hasText: /^Open the editor$/ });
+  await expect(openEditor).toHaveCount(1);
+  await expect(openEditor).toHaveAttribute('href', to('/'));
 
   const rules = page.locator('.doc__body h3');
   await expect(rules).toHaveCount(7);

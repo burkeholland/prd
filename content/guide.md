@@ -6,6 +6,18 @@ order: 2
 
 A useful PRD lets the builder act without guessing and prove the result is done. Start a draft in the [editor](/), or read its [annotated template](/template). Adapt or skip sections to fit the product. Settle the decisions that shape the product, describe what people will see and do, and turn completion into evidence.
 
+## A practical first pass
+
+This order is a starting point; sections may be changed, skipped, or revisited as needed.
+
+1. In [Product summary and desired outcome](/template/#summary-outcome), [Context and problem](/template/#context-problem), and [Users and important use cases](/template/#users-use-cases), decide what result should exist, why it matters now, and whose important use cases must work.
+2. In [Goals and success measures](/template/#goals-success) and [Scope and non-goals](/template/#scope-non-goals), decide how success will be observed and what is included or excluded.
+3. In [User experience](/template/#user-experience) and [Functional requirements](/template/#functional-requirements), decide what people will see and do and which behaviors must be observable.
+4. In [Data, APIs, and external integrations](/template/#data-apis-integrations), [Constraints and fixed implementation decisions](/template/#constraints-decisions), and [Security, privacy, identity, and permissions](/template/#security-privacy-permissions), decide what data and systems are involved, which choices cannot drift, and who may access what.
+5. In [Acceptance criteria and failure recovery](/template/#acceptance-recovery) and [Validation plan and definition of done](/template/#validation-done), decide what must pass, how failures should recover, and what evidence marks the work complete.
+
+[Open the editor](/)
+
 ## Seven rules
 
 <span id="1-start-with-the-mission-and-the-stop-condition"></span>
