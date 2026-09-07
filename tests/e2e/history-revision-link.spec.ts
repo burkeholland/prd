@@ -18,7 +18,7 @@ const revisionShards = Array.from({ length: 4 }, (_, index) =>
   history.revisions.slice(index * 4, index * 4 + 4),
 );
 
-type ClipboardMode = 'resolve' | 'reject' | 'hold';
+type ClipboardMode = 'resolve' | 'reject' | 'reject-once' | 'hold';
 type InstrumentedWindow = typeof window & {
   __announcements: string[];
   __announcementObserver?: MutationObserver;
@@ -52,13 +52,15 @@ const installInstrumentation = (
     testWindow.__storageWrites = 0;
     testWindow.__printCalls = 0;
     let holding = clipboardMode === 'hold';
+    let rejectionsRemaining = clipboardMode === 'reject-once' ? 1 : 0;
 
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
       value: {
         writeText(text: string) {
           testWindow.__clipboardWrites.push(text);
-          if (clipboardMode === 'reject') {
+          if (clipboardMode === 'reject' || rejectionsRemaining > 0) {
+            rejectionsRemaining = Math.max(0, rejectionsRemaining - 1);
             return Promise.reject(
               new DOMException('Clipboard write rejected', 'NotAllowedError'),
             );
@@ -209,6 +211,50 @@ const copyInvariantState = (page: Page) =>
     };
   });
 
+const selectRevisionText = (
+  page: Page,
+  start: number,
+  end: number,
+  scrollY: number,
+) =>
+  page.evaluate(
+    ({ rangeStart, rangeEnd, targetScrollY }) => {
+      const targets = document.querySelectorAll(
+        '.revision__diff td:nth-child(4), .revision__first .preview',
+      );
+      let text: Text | undefined;
+      for (const target of targets) {
+        const walker = document.createTreeWalker(
+          target,
+          NodeFilter.SHOW_TEXT,
+        );
+        let candidate = walker.nextNode();
+        while (candidate) {
+          if (candidate instanceof Text && candidate.length >= rangeEnd) {
+            text = candidate;
+            break;
+          }
+          candidate = walker.nextNode();
+        }
+        if (text) break;
+      }
+      if (!text) throw new Error('Expected selectable revision text.');
+
+      const range = document.createRange();
+      range.setStart(text, rangeStart);
+      range.setEnd(text, rangeEnd);
+      const selection = getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      window.scrollTo(0, targetScrollY);
+      return {
+        scroll: { x: scrollX, y: scrollY },
+        selection: selection?.toString(),
+      };
+    },
+    { rangeStart: start, rangeEnd: end, targetScrollY: scrollY },
+  );
+
 expect(history.count).toBe(16);
 expect(history.revisions.map(({ n }) => n)).toEqual(
   Array.from({ length: 16 }, (_, index) => index + 1),
@@ -277,7 +323,7 @@ for (const revisions of revisionShards) {
   });
 }
 
-test('pointer, Enter, and Space each write and announce once', async ({
+test('initially unfocused pointer, Enter, and Space each write and announce once', async ({
   page,
 }) => {
   await installInstrumentation(page);
@@ -295,6 +341,8 @@ test('pointer, Enter, and Space each write and announce once', async ({
   page.on('download', (download) => downloads.push(download.url()));
   const representatives = [
     { activation: 'pointer', n: 1 },
+    { activation: 'pointer', n: 8 },
+    { activation: 'pointer', n: 16 },
     { activation: 'Enter', n: 8 },
     { activation: 'Space', n: 16 },
   ] as const;
@@ -308,6 +356,7 @@ test('pointer, Enter, and Space each write and announce once', async ({
     const button = copyButton(page, n);
     await watchAnnouncements(page);
     const before = await copyInvariantState(page);
+    if (activation === 'pointer') await expect(button).not.toBeFocused();
     trackRequests = true;
 
     if (activation === 'pointer') {
@@ -412,6 +461,37 @@ test('a pending write suppresses duplicate activations until settlement', async 
     .toEqual(['Revision 8 link copied.', 'Revision 8 link copied.']);
 });
 
+test('a detached copy action is not focused after a successful settlement', async ({
+  page,
+}) => {
+  await installInstrumentation(page, 'hold');
+  const diagnostics = diagnosticsFor(page);
+  await page.goto(to('/history/8/'));
+  const button = copyButton(page, 8);
+
+  await button.click();
+  await expect(button).toHaveAttribute('aria-busy', 'true');
+  const result = await page.evaluate(async () => {
+    const copyAction = document.querySelector('.revision__copy-link');
+    if (!(copyAction instanceof HTMLButtonElement)) {
+      throw new Error('Expected the revision copy action.');
+    }
+    copyAction.remove();
+    (window as InstrumentedWindow).__releaseClipboardWrite?.();
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+    return {
+      active: document.activeElement === copyAction,
+      connected: copyAction.isConnected,
+    };
+  });
+
+  expect(result).toEqual({ active: false, connected: false });
+  await expect(copyStatus(page)).toHaveText('Revision 8 link copied.');
+  expect(diagnostics).toEqual([]);
+});
+
 for (const activation of ['pointer', 'Enter', 'Space'] as const) {
   test(`rejected ${activation} activation restores selection, scroll, and action focus`, async ({
     page,
@@ -513,6 +593,73 @@ for (const activation of ['pointer', 'Enter', 'Space'] as const) {
     expect(diagnostics).toEqual([]);
   });
 }
+
+test('a rejected pointer activation can retry successfully without late restoration', async ({
+  page,
+}) => {
+  await installInstrumentation(page, 'reject-once');
+  const diagnostics = diagnosticsFor(page);
+
+  for (const n of [1, 8, 16]) {
+    await page.goto(to(`/history/${n}/?cache=pointer-retry#existing`));
+    await page.waitForLoadState('networkidle');
+    const button = copyButton(page, n);
+    await selectRevisionText(page, 2, 12, 60);
+    await watchAnnouncements(page);
+    const beforeRejection = await copyInvariantState(page);
+    expect(beforeRejection.scroll.y).toBeGreaterThan(0);
+    await expect(button).not.toBeFocused();
+
+    await button.click();
+
+    await expect(copyStatus(page)).toHaveText(
+      `Revision ${n} link could not be copied.`,
+    );
+    await expect(button).toBeFocused();
+    expect(await copyInvariantState(page)).toEqual(beforeRejection);
+
+    await button.click();
+
+    await expect(copyStatus(page)).toHaveText(`Revision ${n} link copied.`);
+    await expect(button).toBeFocused();
+    expect(
+      await page.evaluate(
+        () => (window as InstrumentedWindow).__clipboardWrites,
+      ),
+    ).toEqual([canonicalHref(n), canonicalHref(n)]);
+    expect(
+      await page.evaluate(
+        () => (window as InstrumentedWindow).__clipboardSuccesses,
+      ),
+    ).toBe(1);
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => (window as InstrumentedWindow).__announcements,
+        ),
+      )
+      .toEqual([
+        `Revision ${n} link could not be copied.`,
+        `Revision ${n} link copied.`,
+      ]);
+
+    const postRetryState = await selectRevisionText(page, 1, 6, 100);
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
+    expect(
+      await page.evaluate(() => ({
+        scroll: { x: scrollX, y: scrollY },
+        selection: getSelection()?.toString(),
+      })),
+    ).toEqual(postRetryState);
+  }
+
+  expect(diagnostics).toEqual([]);
+});
 
 test('clipboard-absent and JavaScript-disabled revisions retain all existing content', async ({
   browser,
