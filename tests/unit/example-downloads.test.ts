@@ -10,20 +10,47 @@ import {
   PDFString,
 } from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
-import {
-  canonicalizeExamplePrdMarkdown,
-  parseExamplePrdMarkdown,
-} from '../../src/lib/example-prd';
-import { parsePrdMarkdown } from '../../src/lib/prd-import-markdown';
+import { parseExamplePrdMarkdown } from '../../src/lib/example-prd';
 import { PRD_EXPORT_MIME_TYPES } from '../../src/lib/prd-export';
-import { createPrdTemplateDocument, PRD_TEMPLATE_SECTIONS } from '../../src/lib/prd-template';
+import {
+  parsePrdExportMarkdown,
+  scanMarkdownStructure,
+} from '../../src/lib/prd-export-document';
+import {
+  normalizePrdLineEndings,
+  normalizePrdSectionValue,
+  PRD_TEMPLATE_SECTIONS,
+} from '../../src/lib/prd-template';
 import { createBuildTheUrlistDocxResponse } from '../../src/pages/downloads/build-the-urlist.docx';
 import { createBuildTheUrlistPdfResponse } from '../../src/pages/downloads/build-the-urlist.pdf';
 
 const SOURCE_PATH = resolve('content/gist/build-the-urlist.md');
+const SOURCE_SECTION_TITLES = [
+  'Mocks',
+  'Technical specification and checklist',
+  'Stack and design',
+  'Product',
+  'Routes',
+  'Home page',
+  'Draft and editor',
+  'Live metadata',
+  'Aliases and publication',
+  'Login and ownership',
+  'My Lists',
+  'Delete',
+  'Public list',
+  'Theme, responsive UI, and accessibility',
+  'Storage and security',
+  'Scripts, tests, and documentation',
+  'Completion',
+] as const;
 const PLACEHOLDERS = PRD_TEMPLATE_SECTIONS.map(
   (section) => `{${section.title}}`,
 );
+const SOURCE_SECTION_TITLE_SET = new Set<string>(SOURCE_SECTION_TITLES);
+const FABRICATED_CANONICAL_TITLES = PRD_TEMPLATE_SECTIONS.map(
+  (section) => section.title,
+).filter((title) => !SOURCE_SECTION_TITLE_SET.has(title));
 
 const xmlText = (xml: string): string =>
   xml
@@ -45,6 +72,19 @@ const representativeText = (body: string): string => {
   if (!line) throw new Error('Expected every Example section to have body text.');
   return line.slice(0, 48);
 };
+
+const paragraphHeadings = (
+  documentXml: string,
+  style: 'Heading1' | 'Heading2',
+): string[] =>
+  Array.from(
+    documentXml.matchAll(/<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g),
+    (match) => match[0],
+  )
+    .filter((paragraph) =>
+      paragraph.includes(`w:pStyle w:val="${style}"`),
+    )
+    .map(xmlText);
 
 const pdfOutlineTitles = (pdf: PDFDocument): string[] => {
   const root = pdf.catalog.lookup(PDFName.of('Outlines'), PDFDict);
@@ -77,40 +117,90 @@ const pdfText = async (bytes: Uint8Array): Promise<string> => {
   }
 };
 
-describe('prerendered Example downloads', () => {
-  it('derives one title and all canonical section values through parsePrdMarkdown', async () => {
-    const source = await readFile(SOURCE_PATH, 'utf8');
-    const canonical = canonicalizeExamplePrdMarkdown(source);
-    const parsed = parsePrdMarkdown(canonical);
-    expect(parsed.status).toBe('valid');
-    if (parsed.status !== 'valid') throw new Error(parsed.reason);
+const expectedSourceBodies = (source: string): string[] => {
+  const lines = normalizePrdLineEndings(source).split('\n');
+  const headings = scanMarkdownStructure(lines).headings.filter(
+    (heading) => heading.level === 2,
+  );
+  return headings.map((heading, index) =>
+    normalizePrdSectionValue(
+      lines
+        .slice(heading.line + 1, headings[index + 1]?.line ?? lines.length)
+        .join('\n'),
+    ),
+  );
+};
 
-    const state = parseExamplePrdMarkdown(source);
-    const document = createPrdTemplateDocument(state);
+describe('worked Example Markdown document parsing', () => {
+  it('preserves the exact title, preamble, 17 source headings, and 17 normalized bodies', async () => {
+    const source = await readFile(SOURCE_PATH, 'utf8');
+    const document = parseExamplePrdMarkdown(source);
+
     expect(document.title).toBe('Build The Urlist');
+    expect(document.preamble).toBe(
+      'Build the complete application in this repository. Work autonomously from start to finish and stop only when the app is complete.',
+    );
     expect(document.sections.map(({ title }) => title)).toEqual(
-      PRD_TEMPLATE_SECTIONS.map(({ title }) => title),
+      SOURCE_SECTION_TITLES,
     );
     expect(document.sections.map(({ body }) => body)).toEqual(
-      PRD_TEMPLATE_SECTIONS.map(({ id }) => parsed.state.values[id]),
+      expectedSourceBodies(source),
     );
-    expect(document.sections.every(({ body }) => body.length > 0)).toBe(true);
+    expect(document.sections).toHaveLength(17);
+    for (const title of FABRICATED_CANONICAL_TITLES) {
+      expect(document.sections.map((section) => section.title)).not.toContain(
+        title,
+      );
+    }
   });
 
-  it('reports an explicit source parsing error instead of producing a partial document', async () => {
+  it('normalizes CRLF deliberately and ignores apparent headings inside fences', async () => {
     const source = await readFile(SOURCE_PATH, 'utf8');
-    expect(() =>
-      parseExamplePrdMarkdown(source.replace(/^# Build The Urlist$/m, '')),
-    ).toThrow(
-      'Example download generation failed: content/gist/build-the-urlist.md could not be parsed (missing-title).',
-    );
+    const normalized = normalizePrdLineEndings(source);
+    expect(
+      parseExamplePrdMarkdown(normalized.replace(/\n/g, '\r\n')),
+    ).toEqual(parseExamplePrdMarkdown(normalized));
+
+    const fenced = [
+      '# Real title',
+      '',
+      '```md',
+      '# Not another title',
+      '## Not a section',
+      '```',
+      '',
+      '## Real section',
+      '',
+      'Body',
+    ].join('\n');
+    expect(parsePrdExportMarkdown(fenced)).toEqual({
+      status: 'valid',
+      document: {
+        title: 'Real title',
+        preamble: '```md\n# Not another title\n## Not a section\n```',
+        sections: [{ title: 'Real section', body: 'Body' }],
+      },
+    });
   });
 
-  it('returns deterministic, parseable DOCX responses with exact attachment metadata and source content', async () => {
-    const source = await readFile(SOURCE_PATH, 'utf8');
-    const document = createPrdTemplateDocument(
-      parseExamplePrdMarkdown(source),
+  it.each([
+    ['missing-title', 'Body\n\n## Section\n\nText'],
+    ['multiple-titles', '# One\n\n# Two\n\n## Section\n\nText'],
+    ['content-before-title', 'Body\n\n# Title\n\n## Section\n\nText'],
+    ['missing-sections', '# Title\n\nBody'],
+    ['empty-section-title', '# Title\n\n## \n\nBody'],
+    ['unclosed-fence', '# Title\n\n## Section\n\n```md\nBody'],
+  ] as const)('reports an explicit %s source error', (reason, source) => {
+    expect(() => parseExamplePrdMarkdown(source)).toThrow(
+      `Example download generation failed: content/gist/build-the-urlist.md could not be parsed (${reason}).`,
     );
+  });
+});
+
+describe('prerendered Example downloads', () => {
+  it('returns deterministic, parseable DOCX responses with exact metadata and all source sections', async () => {
+    const source = await readFile(SOURCE_PATH, 'utf8');
+    const document = parseExamplePrdMarkdown(source);
     const first = await createBuildTheUrlistDocxResponse();
     const second = await createBuildTheUrlistDocxResponse();
     const bytes = new Uint8Array(await first.arrayBuffer());
@@ -138,29 +228,29 @@ describe('prerendered Example downloads', () => {
     }
     const documentXml = await zip.file('word/document.xml')!.async('text');
     const text = compact(xmlText(documentXml));
-    expect(documentXml.match(/w:pStyle w:val="Heading1"/g)).toHaveLength(1);
-    expect(documentXml.match(/w:pStyle w:val="Heading2"/g)).toHaveLength(12);
-
-    let previous = -1;
+    expect(paragraphHeadings(documentXml, 'Heading1')).toEqual([
+      document.title,
+    ]);
+    expect(paragraphHeadings(documentXml, 'Heading2')).toEqual(
+      SOURCE_SECTION_TITLES,
+    );
+    expect(text).toContain(compact(document.preamble ?? ''));
     for (const section of document.sections) {
-      const heading = text.indexOf(compact(section.title));
-      expect(heading, section.title).toBeGreaterThan(previous);
-      previous = heading;
       expect(text, section.title).toContain(
         compact(representativeText(section.body)),
       );
     }
-    expect(text).toContain(compact(document.title));
-    for (const placeholder of PLACEHOLDERS) {
-      expect(text).not.toContain(compact(placeholder));
+    for (const value of PLACEHOLDERS) {
+      expect(text).not.toContain(compact(value));
+    }
+    for (const value of FABRICATED_CANONICAL_TITLES) {
+      expect(paragraphHeadings(documentXml, 'Heading2')).not.toContain(value);
     }
   });
 
-  it('returns deterministic, parseable PDF responses with exact attachment metadata and source content', async () => {
+  it('returns deterministic, parseable PDF responses with exact metadata and all source sections', async () => {
     const source = await readFile(SOURCE_PATH, 'utf8');
-    const document = createPrdTemplateDocument(
-      parseExamplePrdMarkdown(source),
-    );
+    const document = parseExamplePrdMarkdown(source);
     const first = await createBuildTheUrlistPdfResponse();
     const second = await createBuildTheUrlistPdfResponse();
     const bytes = new Uint8Array(await first.arrayBuffer());
@@ -180,22 +270,21 @@ describe('prerendered Example downloads', () => {
     expect(parsed.getTitle()).toBe(document.title);
     expect(pdfOutlineTitles(parsed)).toEqual([
       document.title,
-      ...document.sections.map(({ title }) => title),
+      ...SOURCE_SECTION_TITLES,
     ]);
 
     const text = compact(await pdfText(bytes));
-    let previous = -1;
+    expect(text).toContain(compact(document.preamble ?? ''));
     for (const section of document.sections) {
-      const heading = text.indexOf(compact(section.title));
-      expect(heading, section.title).toBeGreaterThan(previous);
-      previous = heading;
       expect(text, section.title).toContain(
         compact(representativeText(section.body)),
       );
     }
-    expect(text).toContain(compact(document.title));
-    for (const placeholder of PLACEHOLDERS) {
-      expect(text).not.toContain(compact(placeholder));
+    for (const value of PLACEHOLDERS) {
+      expect(text).not.toContain(compact(value));
+    }
+    for (const value of FABRICATED_CANONICAL_TITLES) {
+      expect(pdfOutlineTitles(parsed)).not.toContain(value);
     }
   });
 });

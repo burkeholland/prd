@@ -1,12 +1,12 @@
 import type { APIRoute } from 'astro';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { loadExamplePrdState } from '../../lib/example-prd';
+import { loadExamplePrdDocument } from '../../lib/example-prd';
 import {
   prdBytesResponseBody,
   PRD_EXPORT_MIME_TYPES,
 } from '../../lib/prd-export';
-import { generatePrdPdf } from '../../lib/prd-export-pdf';
+import { generatePrdDocumentPdf } from '../../lib/prd-export-pdf';
 
 export const prerender = true;
 
@@ -19,12 +19,12 @@ const font = (weight: 'Regular' | 'Bold') =>
   );
 
 export const createBuildTheUrlistPdfResponse = async () => {
-  const [state, regular, bold] = await Promise.all([
-    loadExamplePrdState(),
+  const [document, regular, bold] = await Promise.all([
+    loadExamplePrdDocument(),
     font('Regular'),
     font('Bold'),
   ]);
-  const { bytes } = await generatePrdPdf(state, { regular, bold });
+  const { bytes } = await generatePrdDocumentPdf(document, { regular, bold });
   return new Response(prdBytesResponseBody(bytes), {
     headers: {
       'Content-Type': PRD_EXPORT_MIME_TYPES.pdf,

@@ -14,6 +14,7 @@ import {
   type PrdTemplateStateInput,
   type SerializePrdMarkdownOptions,
 } from './prd-template';
+import type { PrdExportDocument } from './prd-export-document';
 
 export interface PrdPdfFonts {
   readonly regular: Uint8Array;
@@ -159,12 +160,10 @@ const wrapText = (
   return lines;
 };
 
-export const generatePrdPdf = async (
-  state: PrdTemplateStateInput,
+export const generatePrdDocumentPdf = async (
+  document: PrdExportDocument,
   fonts: PrdPdfFonts,
-  options: SerializePrdMarkdownOptions = {},
 ): Promise<GeneratedPrdPdf> => {
-  const document = createPrdTemplateDocument(state, options);
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
   pdf.setTitle(document.title);
@@ -183,7 +182,10 @@ export const generatePrdPdf = async (
   );
   assertFontCoverage(
     regular,
-    document.sections.map((section) => section.body),
+    [
+      ...(document.preamble ? [document.preamble] : []),
+      ...document.sections.map((section) => section.body),
+    ],
     'body',
   );
   const layout: PrdPdfLayoutLine[] = [];
@@ -269,18 +271,8 @@ export const generatePrdPdf = async (
   });
   gap(16);
 
-  for (const section of document.sections) {
-    ensureSpace(42);
-    outline.push({ title: section.title, page });
-    drawWrapped(section.title, {
-      font: bold,
-      fontSize: 14,
-      lineHeight: 19,
-      role: 'section',
-    });
-    gap(7);
-
-    const lines = section.body.split('\n');
+  const drawBody = (body: string) => {
+    const lines = body.split('\n');
     for (const line of lines) {
       if (!line.trim()) {
         gap(8);
@@ -313,6 +305,25 @@ export const generatePrdPdf = async (
         });
       }
     }
+  };
+
+  if (document.preamble) {
+    drawBody(document.preamble);
+    gap(15);
+  }
+
+  for (const section of document.sections) {
+    ensureSpace(42);
+    outline.push({ title: section.title, page });
+    drawWrapped(section.title, {
+      font: bold,
+      fontSize: 14,
+      lineHeight: 19,
+      role: 'section',
+    });
+    gap(7);
+
+    drawBody(section.body);
     gap(15);
   }
 
@@ -322,3 +333,10 @@ export const generatePrdPdf = async (
     layout,
   };
 };
+
+export const generatePrdPdf = (
+  state: PrdTemplateStateInput,
+  fonts: PrdPdfFonts,
+  options: SerializePrdMarkdownOptions = {},
+): Promise<GeneratedPrdPdf> =>
+  generatePrdDocumentPdf(createPrdTemplateDocument(state, options), fonts);

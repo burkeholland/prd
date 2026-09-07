@@ -1,16 +1,18 @@
 import type { APIRoute } from 'astro';
-import { loadExamplePrdState } from '../../lib/example-prd';
+import { loadExamplePrdDocument } from '../../lib/example-prd';
 import {
   prdBytesResponseBody,
   PRD_EXPORT_MIME_TYPES,
 } from '../../lib/prd-export';
-import { exportPrdDocx } from '../../lib/prd-export-docx';
+import { exportPrdDocumentDocx } from '../../lib/prd-export-docx';
 
 export const prerender = true;
 
 export const createBuildTheUrlistDocxResponse = async () =>
   new Response(
-    prdBytesResponseBody(await exportPrdDocx(await loadExamplePrdState())),
+    prdBytesResponseBody(
+      await exportPrdDocumentDocx(await loadExamplePrdDocument()),
+    ),
     {
       headers: {
         'Content-Type': PRD_EXPORT_MIME_TYPES.docx,

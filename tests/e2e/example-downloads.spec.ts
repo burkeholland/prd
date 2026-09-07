@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import {
   expect,
   test,
@@ -7,7 +8,14 @@ import {
 } from '@playwright/test';
 import JSZip from 'jszip';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
-import { PDFDocument } from 'pdf-lib';
+import {
+  PDFDict,
+  PDFDocument,
+  PDFHexString,
+  PDFName,
+  PDFString,
+} from 'pdf-lib';
+import { parseExamplePrdMarkdown } from '../../src/lib/example-prd';
 import { PRD_EDITOR_STORAGE_KEY } from '../../src/lib/prd-editor-state';
 import { PRD_TEMPLATE_SECTIONS } from '../../src/lib/prd-template';
 
@@ -29,10 +37,24 @@ const DOWNLOADS = [
     signature: Buffer.from('%PDF-'),
   },
 ] as const;
-const REPRESENTATIVE_TEXT = [
-  'Build the complete application in this repository.',
-  'SQLite with direct parameterized SQL',
-  'Do not claim a check passed unless you ran it successfully.',
+const SOURCE_SECTION_TITLES = [
+  'Mocks',
+  'Technical specification and checklist',
+  'Stack and design',
+  'Product',
+  'Routes',
+  'Home page',
+  'Draft and editor',
+  'Live metadata',
+  'Aliases and publication',
+  'Login and ownership',
+  'My Lists',
+  'Delete',
+  'Public list',
+  'Theme, responsive UI, and accessibility',
+  'Storage and security',
+  'Scripts, tests, and documentation',
+  'Completion',
 ] as const;
 
 const downloadBytes = async (download: Download): Promise<Buffer> => {
@@ -61,6 +83,50 @@ const pdfText = async (bytes: Buffer): Promise<string> => {
     await loading.destroy();
   }
 };
+
+const xmlText = (xml: string): string =>
+  xml
+    .replace(/<w:br\/>/g, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
+
+const docxHeadings = (documentXml: string, style: 'Heading1' | 'Heading2') =>
+  Array.from(
+    documentXml.matchAll(/<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g),
+    (match) => match[0],
+  )
+    .filter((paragraph) =>
+      paragraph.includes(`w:pStyle w:val="${style}"`),
+    )
+    .map(xmlText);
+
+const pdfOutlineTitles = (pdf: PDFDocument): string[] => {
+  const root = pdf.catalog.lookup(PDFName.of('Outlines'), PDFDict);
+  const titles: string[] = [];
+  let item = root.lookupMaybe(PDFName.of('First'), PDFDict);
+  while (item) {
+    titles.push(
+      item.lookup(PDFName.of('Title'), PDFString, PDFHexString).decodeText(),
+    );
+    item = item.lookupMaybe(PDFName.of('Next'), PDFDict);
+  }
+  return titles;
+};
+
+const representativeText = (body: string): string => {
+  const line = body
+    .split('\n')
+    .map((value) => value.trim())
+    .find((value) => value && !value.startsWith('#'));
+  if (!line) throw new Error('Expected every Example section to have body text.');
+  return line.slice(0, 48);
+};
+
+const compact = (value: string): string => value.replace(/\s+/gu, '');
 
 const rectangles = (locator: Locator) =>
   locator.evaluateAll((nodes) =>
@@ -149,7 +215,7 @@ test('Example exposes exactly one same-origin Markdown, Word, and PDF link with 
   await context.close();
 });
 
-test('Example Word and PDF anchors perform private GET downloads without changing page state', async ({
+test('Example Word and PDF anchors perform native downloads without changing page state', async ({
   browserName,
   page,
 }) => {
@@ -185,6 +251,7 @@ test('Example Word and PDF anchors perform private GET downloads without changin
   const pageErrors: string[] = [];
   const consoleErrors: string[] = [];
   const failedRequests: string[] = [];
+  const runtimeRequests: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
   page.on('console', (message) => {
     if (message.type() === 'error') consoleErrors.push(message.text());
@@ -195,6 +262,16 @@ test('Example Word and PDF anchors perform private GET downloads without changin
   const originalUrl = page.url();
   const origin = new URL(originalUrl).origin;
   const originalHistoryLength = await page.evaluate(() => history.length);
+  page.on('request', (request) => runtimeRequests.push(request.url()));
+  const source = await readFile(
+    resolve('content/gist/build-the-urlist.md'),
+    'utf8',
+  );
+  const document = parseExamplePrdMarkdown(source);
+  expect(document.sections.map(({ title }) => title)).toEqual(
+    SOURCE_SECTION_TITLES,
+  );
+
   for (const file of DOWNLOADS) {
     const pending = page.waitForEvent('download');
     await page.getByRole('link', { name: file.label, exact: true }).click();
@@ -207,18 +284,34 @@ test('Example Word and PDF anchors perform private GET downloads without changin
     if (file.filename.endsWith('.docx')) {
       const zip = await JSZip.loadAsync(bytes);
       const xml = await zip.file('word/document.xml')!.async('text');
-      expect(xml.match(/w:pStyle w:val="Heading2"/g)).toHaveLength(12);
-      expect(xml).toContain('Build The Urlist');
-      for (const text of REPRESENTATIVE_TEXT) expect(xml).toContain(text);
+      expect(docxHeadings(xml, 'Heading1')).toEqual([document.title]);
+      expect(docxHeadings(xml, 'Heading2')).toEqual(SOURCE_SECTION_TITLES);
+      const text = compact(xmlText(xml));
+      expect(text).toContain(compact(document.preamble ?? ''));
+      for (const section of document.sections) {
+        expect(text, section.title).toContain(
+          compact(representativeText(section.body)),
+        );
+      }
     } else {
       const pdf = await PDFDocument.load(bytes);
       expect(pdf.getPageCount()).toBeGreaterThan(0);
-      expect(pdf.getTitle()).toBe('Build The Urlist');
-      const text = await pdfText(bytes);
-      for (const value of REPRESENTATIVE_TEXT) expect(text).toContain(value);
+      expect(pdf.getTitle()).toBe(document.title);
+      expect(pdfOutlineTitles(pdf)).toEqual([
+        document.title,
+        ...SOURCE_SECTION_TITLES,
+      ]);
+      const text = compact(await pdfText(bytes));
+      expect(text).toContain(compact(document.preamble ?? ''));
+      for (const section of document.sections) {
+        expect(text, section.title).toContain(
+          compact(representativeText(section.body)),
+        );
+      }
     }
   }
 
+  expect(runtimeRequests).toEqual([]);
   expect(
     await page.evaluate(
       (draftKey) => ({
