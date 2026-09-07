@@ -416,7 +416,7 @@ const blankDownloads = [
       scrollX: window.scrollX,
       scrollY: window.scrollY,
     });
-    const restoreCopyState = (
+    const restoreCopyFieldState = (
       snapshot: ReturnType<typeof captureCopyState>,
     ) => {
       for (const field of snapshot.fields) {
@@ -430,7 +430,6 @@ const blankDownloads = [
         field.field.scrollLeft = field.scrollLeft;
         field.field.scrollTop = field.scrollTop;
       }
-      window.scrollTo(snapshot.scrollX, snapshot.scrollY);
     };
     let copyPending = false;
     for (const section of PRD_TEMPLATE.sections) {
@@ -484,7 +483,11 @@ const blankDownloads = [
           await new Promise<void>((resolve) => {
             window.requestAnimationFrame(() => resolve());
           });
-          restoreCopyState(preservedState);
+          restoreCopyFieldState(preservedState);
+          if (button.isConnected) {
+            button.focus({ preventScroll: true });
+          }
+          window.scrollTo(preservedState.scrollX, preservedState.scrollY);
           copyStatus.textContent =
             `Could not copy ${section.title} section as Markdown. Your draft is unchanged.`;
           copyStatus.dataset.state = 'error';
