@@ -122,6 +122,52 @@ test('known conflict blocks Save, Start over and import without dialogs or live 
   await expectConflict(page);
 });
 
+test('Continue draft preserves an active conflict and follows the newly loaded saved values', async ({
+  page,
+  context,
+}) => {
+  const other = await openPair(page, context);
+  await page.clock.install();
+  await page.clock.pauseAt(new Date(Date.now() + 1000));
+  const localDestination = PRD_TEMPLATE_SECTIONS[2];
+  const savedDestination = PRD_TEMPLATE_SECTIONS[4];
+  await page.locator(`#section-input-${localDestination.id}`).fill('');
+  await other.locator(`#section-input-${savedDestination.id}`).fill(' \t ');
+  await other.locator('#save-draft').click();
+  await expectConflict(page);
+
+  const action = page.getByRole('button', { name: 'Continue draft', exact: true });
+  const before = {
+    fields: await fields(page),
+    raw: await stored(page),
+    status: await page.locator('#save-status').textContent(),
+    completion: await page.locator('#completion-count').textContent(),
+  };
+  await action.focus();
+  await page.keyboard.press('Enter');
+
+  await expect(page.locator(`#section-input-${localDestination.id}`)).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Load saved draft', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Keep this draft', exact: true })).toBeVisible();
+  await expect(page.locator('#save-draft')).toHaveAttribute('aria-disabled', 'true');
+  await expect(page.locator('#start-over')).toHaveAttribute('aria-disabled', 'true');
+  expect(await fields(page)).toEqual(before.fields);
+  expect(await stored(page)).toBe(before.raw);
+  await expect(page.locator('#save-status')).toHaveText(before.status ?? '');
+  await expect(page.locator('#save-status')).toHaveAttribute('data-state', 'conflict');
+  await expect(page.locator('#completion-count')).toHaveText(before.completion ?? '');
+
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.locator('#load-saved-draft').click();
+  await expect(page.locator('#draft-conflict')).toBeHidden();
+  await expect(page.locator('#completion-count')).toHaveText('11 of 12 sections completed');
+  expect(await stored(page)).toBe(before.raw);
+
+  await action.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator(`#section-input-${savedDestination.id}`)).toBeFocused();
+});
+
 for (const action of ['load-saved-draft', 'keep-this-draft']) {
   test(`${action} cancels safely, re-reads the latest copy, resolves losslessly and resumes autosave`, async ({ page, context }) => {
     const other = await openPair(page, context);
@@ -155,6 +201,7 @@ for (const action of ['load-saved-draft', 'keep-this-draft']) {
     if (action === 'load-saved-draft') expect(resolved).toBe(latestRaw);
     else expect(JSON.parse(resolved!).state).toEqual(chosen);
     await expect(page.locator('#completion-count')).toHaveText('12 of 12 sections completed');
+    await expect(page.getByRole('button', { name: 'Continue draft', exact: true })).toBeHidden();
     await expect(page.getByRole('button', { name: 'Load saved draft', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Keep this draft', exact: true })).toHaveCount(0);
     await page.clock.runFor(1000);
