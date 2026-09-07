@@ -163,7 +163,12 @@ test('Example exposes exactly one same-origin Markdown, Word, and PDF link with 
 }) => {
   await page.goto(SAMPLE_PATH);
   const formatLinks = page.locator('.source-card__links a[download]');
-  await expect(formatLinks).toHaveText(['Download .md', 'Word (.docx)', 'PDF']);
+  await expect(formatLinks).toHaveText([
+    'Download .md',
+    'Word (.docx)',
+    'PDF',
+    'Download case study (.zip)',
+  ]);
   expect(
     await formatLinks.evaluateAll((links) =>
       links.map((link) => ({
@@ -184,6 +189,10 @@ test('Example exposes exactly one same-origin Markdown, Word, and PDF link with 
       href: DOWNLOADS[1].path,
       download: DOWNLOADS[1].filename,
     },
+    {
+      href: `${BASE}/downloads/prd-example-case-study.zip`,
+      download: 'prd-example-case-study.zip',
+    },
   ]);
 
   for (const file of DOWNLOADS) {
@@ -203,9 +212,10 @@ test('Example exposes exactly one same-origin Markdown, Word, and PDF link with 
     'Download .md',
     'Word (.docx)',
     'PDF',
+    'Download case study (.zip)',
     'Revision history',
   ]);
-  await expect(noScriptPage.locator('.source-card__links a[download]')).toHaveCount(3);
+  await expect(noScriptPage.locator('.source-card__links a[download]')).toHaveCount(4);
   await expect(noScriptPage.getByRole('link', { name: 'View original' })).toHaveCount(1);
   await expect(noScriptPage.getByRole('link', { name: 'Revision history' })).toHaveAttribute(
     'href',
@@ -368,6 +378,7 @@ test('all Example source-card actions wrap as usable targets in every supported 
           'Copy the PRD',
           'Word (.docx)',
           'PDF',
+          'Download case study (.zip)',
           'Revision history',
         ]);
         for (const action of actions) {
