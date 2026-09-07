@@ -1047,8 +1047,10 @@ const blankDownloads = [
     if (replaced) return;
     restoreAuthorPositionFrame = window.requestAnimationFrame(() => {
       restoreAuthorPositionFrame = window.requestAnimationFrame(() => {
-        restoreAuthorPositionFrame = null;
-        if (!position.element.isConnected || !form.contains(position.element)) return;
+        if (!position.element.isConnected || !form.contains(position.element)) {
+          restoreAuthorPositionFrame = null;
+          return;
+        }
         position.element.focus({ preventScroll: true });
         if (position.selectionStart !== null && position.selectionEnd !== null) {
           position.element.setSelectionRange(
@@ -1057,9 +1059,12 @@ const blankDownloads = [
             position.selectionDirection ?? undefined,
           );
         }
-        position.element.scrollTop = position.elementScrollTop;
-        position.element.scrollLeft = position.elementScrollLeft;
-        window.scrollTo(position.windowScrollX, position.windowScrollY);
+        restoreAuthorPositionFrame = window.requestAnimationFrame(() => {
+          restoreAuthorPositionFrame = null;
+          position.element.scrollTop = position.elementScrollTop;
+          position.element.scrollLeft = position.elementScrollLeft;
+          window.scrollTo(position.windowScrollX, position.windowScrollY);
+        });
       });
     });
   };
