@@ -295,9 +295,10 @@ test('the invalid matrix reports one reason and changes no field or storage byte
   )).toBe(0);
 });
 
-test('canceling one replacement prompt preserves the complete editor state and permits the same file', async ({
+test('canceling one replacement prompt through the visible action preserves the complete editor state and permits the same file', async ({
   page,
 }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 2400 });
   const current = fixture([0, 3, 7], 'Current draft');
   current.values[PRD_TEMPLATE_SECTIONS[0]!.id] = Array(30).fill('Current line').join('\n');
   await fillState(page, current);
@@ -347,8 +348,8 @@ test('canceling one replacement prompt preserves the complete editor state and p
     await dialog.dismiss();
   });
 
-  await page.locator('#markdown-file').setInputFiles(path);
-  await expect(page.locator('#markdown-file')).toHaveValue('');
+  await chooseMarkdown(page, path);
+  await expect(focused).toBeFocused();
 
   const after = await page.evaluate((key) => {
     const active = document.activeElement as HTMLTextAreaElement;
@@ -377,10 +378,10 @@ test('canceling one replacement prompt preserves the complete editor state and p
   await expect(page.locator('#markdown-file')).toHaveValue('');
 
   page.once('dialog', (dialog) => dialog.accept());
-  await page.locator('#markdown-file').setInputFiles(path);
-  await expect(page.locator('#markdown-file')).toHaveValue('');
+  await chooseMarkdown(page, path);
   expect(await fields(page)).toEqual(expectedFields(imported));
   await expect(page.locator('#save-status')).toContainText('Markdown imported and saved');
+  await expect(page.locator('#document-title')).toBeFocused();
 });
 
 test('storage changes before selection and during confirmation never overwrite either copy', async ({
@@ -469,7 +470,7 @@ test('storage denial leaves imported fields editable, unsaved, and protected on 
   await expect(page.locator('#save-status')).toContainText(
     'Markdown imported into the editor, but not saved in this browser',
   );
-  await expect(page.locator('#document-title')).toBeEditable();
+  await expect(page.locator('#document-title')).toBeFocused();
   expect(await beforeUnloadPrevented(page)).toBe(true);
 });
 

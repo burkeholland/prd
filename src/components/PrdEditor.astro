@@ -981,6 +981,94 @@ const blankDownloads = [
     }
   });
 
+  type EditorField = HTMLInputElement | HTMLTextAreaElement;
+  type AuthorPosition = {
+    element: EditorField;
+    selectionStart: number | null;
+    selectionEnd: number | null;
+    selectionDirection: 'forward' | 'backward' | 'none' | null;
+    elementScrollTop: number;
+    elementScrollLeft: number;
+    windowScrollX: number;
+    windowScrollY: number;
+  };
+  const isEditorField = (value: EventTarget | null): value is EditorField =>
+    (value instanceof HTMLInputElement || value instanceof HTMLTextAreaElement) &&
+    form.contains(value);
+  const readAuthorPosition = (element: EditorField): AuthorPosition => ({
+    element,
+    selectionStart: element.selectionStart,
+    selectionEnd: element.selectionEnd,
+    selectionDirection: element.selectionDirection,
+    elementScrollTop: element.scrollTop,
+    elementScrollLeft: element.scrollLeft,
+    windowScrollX: window.scrollX,
+    windowScrollY: window.scrollY,
+  });
+  let lastAuthorPosition: AuthorPosition | null = null;
+  let importAuthorPosition: AuthorPosition | null = null;
+  let restoreAuthorPositionFrame: number | null = null;
+  const cancelAuthorPositionRestore = () => {
+    if (restoreAuthorPositionFrame === null) return;
+    window.cancelAnimationFrame(restoreAuthorPositionFrame);
+    restoreAuthorPositionFrame = null;
+  };
+  const rememberAuthorPosition = (element: EditorField) => {
+    lastAuthorPosition = readAuthorPosition(element);
+  };
+  let positionCapturedBeforeFocusOut: EditorField | null = null;
+  form.addEventListener('keydown', (event) => {
+    if (event.key !== 'Tab' || !isEditorField(event.target)) return;
+    rememberAuthorPosition(event.target);
+    positionCapturedBeforeFocusOut = event.target;
+    window.setTimeout(() => {
+      if (positionCapturedBeforeFocusOut === event.target) {
+        positionCapturedBeforeFocusOut = null;
+      }
+    }, 0);
+  });
+  const captureImportAuthorPosition = () => {
+    if (importAuthorPosition) return;
+    cancelAuthorPositionRestore();
+    if (isEditorField(document.activeElement)) {
+      rememberAuthorPosition(document.activeElement);
+    }
+    importAuthorPosition = lastAuthorPosition;
+  };
+  const completeImportAuthorPosition = (replaced: boolean) => {
+    const position = importAuthorPosition;
+    importAuthorPosition = null;
+    lastAuthorPosition = null;
+    if (!position) {
+      if (replaced) cancelAuthorPositionRestore();
+      return;
+    }
+    cancelAuthorPositionRestore();
+    if (replaced) return;
+    restoreAuthorPositionFrame = window.requestAnimationFrame(() => {
+      restoreAuthorPositionFrame = window.requestAnimationFrame(() => {
+        restoreAuthorPositionFrame = null;
+        if (!position.element.isConnected || !form.contains(position.element)) return;
+        position.element.focus({ preventScroll: true });
+        if (position.selectionStart !== null && position.selectionEnd !== null) {
+          position.element.setSelectionRange(
+            position.selectionStart,
+            position.selectionEnd,
+            position.selectionDirection ?? undefined,
+          );
+        }
+        position.element.scrollTop = position.elementScrollTop;
+        position.element.scrollLeft = position.elementScrollLeft;
+        window.scrollTo(position.windowScrollX, position.windowScrollY);
+      });
+    });
+  };
+  form.addEventListener('focusout', (event) => {
+    if (!isEditorField(event.target)) return;
+    if (positionCapturedBeforeFocusOut !== event.target) rememberAuthorPosition(event.target);
+    positionCapturedBeforeFocusOut = null;
+  });
+
   let importInProgress = false;
   const importButtons = [importBackupButton, importMarkdownButton];
   const importInputs = [backupFileInput, markdownFileInput];
@@ -1005,9 +1093,16 @@ const blankDownloads = [
   };
   const chooseImportFile = (input: HTMLInputElement) => {
     if (importInProgress) return;
+    captureImportAuthorPosition();
     input.value = '';
     input.click();
   };
+  for (const button of importButtons) {
+    button.addEventListener('pointerdown', captureImportAuthorPosition);
+    button.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') captureImportAuthorPosition();
+    });
+  }
   importBackupButton.addEventListener('click', () => {
     chooseImportFile(backupFileInput);
   });
@@ -1017,18 +1112,19 @@ const blankDownloads = [
   for (const input of importInputs) {
     input.addEventListener('cancel', () => {
       input.value = '';
+      completeImportAuthorPosition(false);
     });
   }
 
   const replaceWithImportedState = (
     importedState: PrdEditorState,
     mode: 'backup-import' | 'markdown-import',
-  ) => {
+  ): boolean => {
     const label = mode === 'backup-import' ? 'backup' : 'Markdown document';
     checkForChanges();
     if (conflict) {
       showDownloadStatus('Import paused because the saved draft changed in another tab. Your draft is unchanged. Resolve the saved draft choice, then import again.', 'error');
-      return;
+      return false;
     }
     // Read after the asynchronous file read so confirmation covers the latest edits.
     if (hasLocalContent() && !window.confirm(
@@ -1042,13 +1138,13 @@ const blankDownloads = [
           : `Import canceled. Your draft is unchanged; the ${label} was not imported.`,
         'canceled',
       );
-      return;
+      return false;
     }
 
     checkForChanges();
     if (conflict) {
       showDownloadStatus('Import paused because the saved draft changed during confirmation. Your draft is unchanged. Resolve the saved draft choice, then import again.', 'error');
-      return;
+      return false;
     }
     cancelAutoSave();
     applyState(importedState);
@@ -1058,15 +1154,18 @@ const blankDownloads = [
     showDownloadStatus('', 'idle');
     persistDraft(mode);
     titleInput.focus();
+    return true;
   };
 
   backupFileInput.addEventListener('change', async () => {
     const file = backupFileInput.files?.[0];
     if (!file) {
       backupFileInput.value = '';
+      completeImportAuthorPosition(false);
       return;
     }
     if (!beginImport(importBackupButton)) return;
+    let replaced = false;
     try {
       const result = await readPrdEditorBackup(file);
       if (result.status !== 'valid') {
@@ -1093,9 +1192,10 @@ const blankDownloads = [
         return;
       }
 
-      replaceWithImportedState(result.payload.state, 'backup-import');
+      replaced = replaceWithImportedState(result.payload.state, 'backup-import');
     } finally {
       finishImport();
+      completeImportAuthorPosition(replaced);
     }
   });
 
@@ -1103,9 +1203,11 @@ const blankDownloads = [
     const file = markdownFileInput.files?.[0];
     if (!file) {
       markdownFileInput.value = '';
+      completeImportAuthorPosition(false);
       return;
     }
     if (!beginImport(importMarkdownButton)) return;
+    let replaced = false;
     try {
       const result = await readPrdMarkdownFile(file);
       if (result.status !== 'valid') {
@@ -1159,9 +1261,10 @@ const blankDownloads = [
         return;
       }
 
-      replaceWithImportedState(result.state, 'markdown-import');
+      replaced = replaceWithImportedState(result.state, 'markdown-import');
     } finally {
       finishImport();
+      completeImportAuthorPosition(replaced);
     }
   });
 
