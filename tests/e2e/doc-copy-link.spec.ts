@@ -104,8 +104,11 @@ test('every reference route has one copy-link action and one print action in its
     await expect(copyButton(page), `${path} copy-link action`).toHaveCount(1);
     await expect(copyButton(page), `${path} copy-link name`).toHaveText('Copy page link');
     await expect(printButton(page), `${path} print action`).toHaveCount(1);
-    await expect(wrapper.locator('[role="status"]'), `${path} status region`).toHaveCount(1);
-    await expect(wrapper.locator('button')).toHaveCount(2);
+    const guideEnhancementCount = path === '/guide/' ? 1 : 0;
+    await expect(wrapper.locator('[role="status"]'), `${path} status region`).toHaveCount(
+      1 + guideEnhancementCount,
+    );
+    await expect(wrapper.locator('button')).toHaveCount(2 + guideEnhancementCount);
 
     const canonical = await page.locator('link[rel="canonical"]').getAttribute('href');
     expect(canonical, `${path} canonical URL`).not.toBeNull();
@@ -247,7 +250,9 @@ test('print media hides the complete page-action wrapper on every reference rout
 
   for (const path of ROUTES) {
     await page.goto(to(path));
-    await expect(page.locator('.doc__page-actions button')).toHaveCount(2);
+    await expect(page.locator('.doc__page-actions button')).toHaveCount(
+      path === '/guide/' ? 3 : 2,
+    );
     await expect(page.locator('.doc__page-actions')).toBeHidden();
     await expect(page.locator('.doc__page-actions button:visible')).toHaveCount(0);
   }
