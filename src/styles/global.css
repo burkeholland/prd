@@ -228,16 +228,56 @@ main:focus {
 }
 
 .site-footer__inner {
+  display: grid;
+  gap: 0.35rem;
   padding-block: 1.5rem;
   overflow-wrap: anywhere;
 }
 
+.site-footer__references {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+}
+
+.site-footer__label {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.site-footer__references ul,
+.site-footer__sources {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+}
+
+.site-footer__references ul {
+  min-width: 0;
+  flex: 1 1 20rem;
+}
+
 .site-footer a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 2rem;
+  min-inline-size: 2rem;
+  padding-inline: 0.25rem;
   color: inherit;
 }
 
 .site-footer a:hover {
   color: var(--accent);
+}
+
+.site-footer a[aria-current="page"] {
+  color: var(--text);
+  font-weight: 650;
+  text-decoration-thickness: 2px;
 }
 
 /* Doc pages ------------------------------------------------------------ */

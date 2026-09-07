@@ -14,6 +14,20 @@ const NAV: { href: string; label: string; title?: string }[] = [
   { href: '/sample/', label: 'Example', title: 'Example PRD' },
   { href: '/#downloads', label: 'Downloads' },
 ];
+const FOOTER_REFERENCES = [
+  { href: '/guide/', label: 'Guide' },
+  { href: '/walkthrough/', label: 'Walkthrough' },
+  { href: '/template/', label: 'Template' },
+  { href: '/history/', label: 'History' },
+] as const;
+const FOOTER_SOURCES = [
+  {
+    href: 'https://gist.github.com/burkeholland/f71d1156812fd91e4369308358892817',
+    label: 'Example source',
+  },
+  { href: 'https://github.com/burkeholland/prd', label: 'Site source' },
+  { href: 'https://github.com/burkeholland/prd/issues/new', label: 'Report a problem' },
+] as const;
 
 // Doc pages and the repo-root content file each one renders. Files that other tasks may not
 // have merged yet make their assertions conditional (`test.skip(!present, …)`); a page whose
@@ -158,19 +172,74 @@ test('no page whose content exists says it is on its way', async ({ page }) => {
   }
 });
 
-test('the footer has generic links to the example, site source, and issue form', async ({ page }) => {
-  await page.goto(to('/'));
-  const links = page.locator('footer a');
-  await expect(links).toHaveText(['Example source', 'Site source', 'Report a problem']);
-  await expect(links.nth(0)).toHaveAttribute(
-    'href',
-    'https://gist.github.com/burkeholland/f71d1156812fd91e4369308358892817',
-  );
-  await expect(links.nth(1)).toHaveAttribute('href', 'https://github.com/burkeholland/prd');
-  await expect(links.nth(2)).toHaveAttribute(
-    'href',
-    'https://github.com/burkeholland/prd/issues/new',
-  );
+test('every page has the reference and source footer with route-aware current markers', async ({ page, browser }) => {
+  const history = JSON.parse(readFileSync(resolve(CONTENT.history), 'utf8')) as {
+    revisions: { n: number }[];
+  };
+  const routes = [
+    { path: '/', status: 200, current: null },
+    { path: '/create/', status: 200, current: null },
+    { path: '/sample/', status: 200, current: null },
+    { path: '/guide/', status: 200, current: 'Guide' },
+    { path: '/walkthrough/', status: 200, current: 'Walkthrough' },
+    { path: '/template/', status: 200, current: 'Template' },
+    { path: '/history/', status: 200, current: 'History' },
+    ...history.revisions.map((revision) => ({
+      path: `/history/${revision.n}/`,
+      status: 200,
+      current: 'History',
+    })),
+    { path: '/missing-footer-test/', status: 404, current: null },
+  ];
+  const referenceHrefs = FOOTER_REFERENCES.map((item) => to(item.href));
+  const allLabels = [...FOOTER_REFERENCES, ...FOOTER_SOURCES].map((item) => item.label);
+
+  for (const route of routes) {
+    const response = await page.goto(to(route.path));
+    expect(response?.status(), `${route.path} status`).toBe(route.status);
+
+    const footer = page.locator('footer.site-footer');
+    await expect(footer, `${route.path} footer`).toHaveCount(1);
+    const references = page.getByRole('navigation', { name: 'References', exact: true });
+    await expect(references, `${route.path} References navigation`).toHaveCount(1);
+    await expect(references.locator('a'), `${route.path} reference labels`).toHaveText(
+      FOOTER_REFERENCES.map((item) => item.label),
+    );
+    expect(
+      await references.locator('a').evaluateAll((links) => links.map((link) => link.getAttribute('href'))),
+      `${route.path} reference hrefs`,
+    ).toEqual(referenceHrefs);
+    await expect(footer.locator('.site-footer__sources a'), `${route.path} source labels`).toHaveText(
+      FOOTER_SOURCES.map((item) => item.label),
+    );
+    expect(
+      await footer
+        .locator('.site-footer__sources a')
+        .evaluateAll((links) => links.map((link) => link.getAttribute('href'))),
+      `${route.path} source hrefs`,
+    ).toEqual(FOOTER_SOURCES.map((item) => item.href));
+    await expect(footer.locator('a'), `${route.path} all footer links`).toHaveText(allLabels);
+
+    const current = footer.locator('a[aria-current="page"]');
+    await expect(current, `${route.path} current reference`).toHaveCount(route.current ? 1 : 0);
+    if (route.current) await expect(current, `${route.path} current label`).toHaveText(route.current);
+  }
+
+  for (const href of referenceHrefs) {
+    expect(href.endsWith('/'), `${href} has a trailing slash`).toBe(true);
+    expect((await page.request.get(href)).status(), `${href} status`).toBe(200);
+  }
+
+  const origin = new URL(page.url()).origin;
+  const noScriptContext = await browser.newContext({ javaScriptEnabled: false });
+  const noScriptPage = await noScriptContext.newPage();
+  await noScriptPage.goto(`${origin}${to('/guide/')}`);
+  await expect(noScriptPage.locator('footer a'), 'footer links without JavaScript').toHaveText(allLabels);
+  await noScriptContext.close();
+
+  await page.goto(to('/guide/'));
+  await page.emulateMedia({ media: 'print' });
+  await expect(page.locator('footer a:visible'), 'visible footer links in print').toHaveCount(0);
 });
 
 // The deploy job polls this stamp on the live site until `sha` is the commit it just deployed
