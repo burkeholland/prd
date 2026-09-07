@@ -672,6 +672,11 @@ test('copy uses this tab live values without changing saved bytes or resolving a
     'data-state',
     'conflict',
   );
+  expect(await page.evaluate(() => {
+    const event = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  })).toBe(true);
   await other.close();
 });
 

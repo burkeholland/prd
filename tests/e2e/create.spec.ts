@@ -30,10 +30,81 @@ const partialDraft = (): PrdEditorState => {
   return { title: blank.title, values };
 };
 
+const pendingDraft = (): PrdEditorState => {
+  const blank = createBlankPrdEditorState();
+  const values: MutablePrdValues = { ...blank.values };
+  for (const [index, section] of PRD_TEMPLATE_SECTIONS.entries()) {
+    values[section.id] = ` \tPending field ${index}\nExact value ${index}  `;
+  }
+  return { title: ' \tPending exact title  ', values };
+};
+
 test.beforeEach(async ({ page }) => {
   await page.goto(CREATE_PATH);
   await page.evaluate((key) => localStorage.removeItem(key), PRD_EDITOR_STORAGE_KEY);
   await page.reload();
+});
+
+test('immediate navigation synchronously saves one complete pending payload and restores it without a warning', async ({
+  page,
+}) => {
+  const state = pendingDraft();
+  await page.clock.install();
+  await page.clock.pauseAt(new Date(Date.now() + 1000));
+  await page.evaluate(
+    ({ key, state }) => {
+      const countKey = 'prd-test:draft-writes';
+      sessionStorage.setItem(countKey, '0');
+      const set = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (storageKey, value) {
+        if (this === localStorage && storageKey === key) {
+          const count = Number(sessionStorage.getItem(countKey) ?? '0') + 1;
+          set.call(sessionStorage, countKey, String(count));
+        }
+        return set.call(this, storageKey, value);
+      };
+      const title = document.querySelector<HTMLInputElement>('#document-title');
+      if (!title) throw new Error('Missing title field');
+      title.value = state.title;
+      title.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
+      for (const [sectionId, value] of Object.entries(state.values)) {
+        const input = document.querySelector<HTMLTextAreaElement>(`#section-input-${sectionId}`);
+        if (!input) throw new Error(`Missing ${sectionId} field`);
+        input.value = value;
+        input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
+      }
+    },
+    { key: PRD_EDITOR_STORAGE_KEY, state },
+  );
+  let dialogs = 0;
+  page.on('dialog', async (dialog) => {
+    dialogs += 1;
+    await dialog.dismiss();
+  });
+
+  await page.getByRole('link', { name: 'Example', exact: true }).click();
+
+  await expect(page).toHaveURL('/prd/sample/');
+  expect(dialogs).toBe(0);
+  const saved = await page.evaluate(
+    ({ key, countKey }) => ({
+      raw: localStorage.getItem(key),
+      writes: Number(sessionStorage.getItem(countKey)),
+    }),
+    { key: PRD_EDITOR_STORAGE_KEY, countKey: 'prd-test:draft-writes' },
+  );
+  expect(saved.writes).toBe(1);
+  expect(JSON.parse(saved.raw ?? 'null')).toMatchObject({ version: 1, state });
+
+  await page.goBack();
+
+  await expect(page.locator('#save-status')).toHaveAttribute('data-state', 'restored');
+  expect(
+    await page.locator('#prd-editor-form input, #prd-editor-form textarea')
+      .evaluateAll((nodes) =>
+        nodes.map((node) => (node as HTMLInputElement | HTMLTextAreaElement).value)
+      ),
+  ).toEqual([state.title, ...Object.values(state.values)]);
 });
 
 for (const path of ['/prd/', '/prd/create/']) {

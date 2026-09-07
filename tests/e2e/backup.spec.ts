@@ -62,6 +62,12 @@ const download = async (page: Page) => {
   const payload = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
   return { file, path, payload };
 };
+const beforeUnloadPrevented = (page: Page) =>
+  page.evaluate(() => {
+    const event = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
 
 const watchRequests = (context: BrowserContext, requests: string[]) => {
   context.on('request', (request) => {
@@ -126,6 +132,7 @@ test('a real UTF-8 backup round-trips all 13 fields through a fresh browser and 
     const saved = JSON.parse((await stored(other))!);
     expect(saved.state).toEqual(state);
     expect(Date.parse(saved.savedAt)).toBeGreaterThanOrEqual(Date.parse(result.payload.savedAt));
+    expect(await beforeUnloadPrevented(other)).toBe(false);
     await other.reload();
     await expectFields(other, state);
     await expect(other.locator('#save-status')).toContainText('Draft restored from this browser.');
@@ -302,14 +309,27 @@ for (const failure of ['access', 'write'] as const) {
         Storage.prototype.setItem = () => { throw new DOMException('Full', 'QuotaExceededError'); };
       });
     }
+    const imported = failure === 'write' ? current : fixture();
     expect((await download(page)).payload.state).toEqual(current);
     page.once('dialog', (dialog) => dialog.accept());
-    await choose(page, backupBytes());
-    await expectFields(page, fixture());
+    await choose(page, backupBytes(imported));
+    await expectFields(page, imported);
     await expect(page.locator('#save-status')).toContainText('imported into the editor, but not saved in this browser');
     await expect(page.locator('#document-title')).toBeEditable();
     if (failure === 'write') expect(await stored(page)).toBe(before);
-    expect((await download(page)).payload.state).toEqual(fixture());
+    expect((await download(page)).payload.state).toEqual(imported);
+    let warned = false;
+    page.once('dialog', async (dialog) => {
+      expect(dialog.type()).toBe('beforeunload');
+      warned = true;
+      await dialog.dismiss();
+    });
+    await page.getByRole('link', { name: 'Example', exact: true }).click();
+    expect(warned).toBe(true);
+    await expect(page).toHaveURL(PATH);
+    await expectFields(page, imported);
+    expect((await download(page)).payload.state).toEqual(imported);
+    expect(await beforeUnloadPrevented(page)).toBe(true);
     await page.locator('#document-title').fill('Continue editing');
     await expect(page.locator('#document-title')).toHaveValue('Continue editing');
   });
