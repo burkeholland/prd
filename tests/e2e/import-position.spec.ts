@@ -14,8 +14,18 @@ import {
 const ROUTES = ['/prd/', '/prd/create/'] as const;
 const FIELD_ID = `section-input-${PRD_TEMPLATE_SECTIONS.at(-1)!.id}`;
 
+const diagnostics = new WeakMap<Page, { pageErrors: string[]; consoleErrors: string[] }>();
 test.beforeEach(async ({ page }) => {
+  const observed = { pageErrors: [] as string[], consoleErrors: [] as string[] };
+  diagnostics.set(page, observed);
+  page.on('pageerror', (error) => observed.pageErrors.push(error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') observed.consoleErrors.push(message.text());
+  });
   await page.setViewportSize({ width: 1440, height: 2400 });
+});
+test.afterEach(async ({ page }) => {
+  expect(diagnostics.get(page)).toEqual({ pageErrors: [], consoleErrors: [] });
 });
 
 type ImportKind = 'Markdown' | 'backup';
@@ -181,6 +191,8 @@ for (const route of ROUTES) {
     }) => {
       await page.goto(route);
       await page.addStyleTag({ content: 'html { scroll-behavior: auto !important; }' });
+      const importRequests: string[] = [];
+      page.on('request', (request) => importRequests.push(request.url()));
       const current = currentState();
       await fillState(page, current);
       await page.locator('#save-draft').click();
@@ -212,6 +224,7 @@ for (const route of ROUTES) {
       await expectState(page, imported);
       await expect(page.locator('#document-title')).toBeFocused();
       await expect(field).not.toBeFocused();
+      expect(importRequests).toEqual([]);
     });
   }
 }
