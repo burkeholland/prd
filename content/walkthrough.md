@@ -6,6 +6,25 @@ order: 3
 
 Read the [Example PRD](/sample) section by section. Each entry pairs a verbatim excerpt with the decision it settles and a reusable rule. Start from the full example, or use the [Template](/template) to draft a new document.
 
+## How the example maps to the template
+
+The template is adaptable, so its headings do not need to match the example: one example section may support several template decisions.
+
+| Template section | Evidence in the example |
+|---|---|
+| [Product summary and desired outcome](/template/#summary-outcome) | [Product](/sample/#product) defines what will be built and its operating rules. The desired user outcome is not explicit, so a new PRD should add it. |
+| [Context and problem](/template/#context-problem) | Not explicit. A new PRD should add the current situation, the problem, and evidence for why it matters. |
+| [Goals and success measures](/template/#goals-success) | Not explicit. A new PRD should add outcome measures, targets, and timeframes rather than treating implementation checks as product success. |
+| [Users and important use cases](/template/#users-use-cases) | [Product](/sample/#product) identifies creators, owners, and viewers; [Routes](/sample/#routes) lays out their important journeys. |
+| [Scope and non-goals](/template/#scope-non-goals) | [Product](/sample/#product) sets the product boundary and names excluded features. |
+| [User experience](/template/#user-experience) | [Mocks](/sample/#mocks) show the screens, [Draft and editor](/sample/#draft-and-editor) defines interactions, and [Theme and accessibility](/sample/#theme-responsive-ui-and-accessibility) covers responsive behavior and states. |
+| [Functional requirements](/template/#functional-requirements) | [Routes](/sample/#routes) defines the surface and precedence; [Aliases and publication](/sample/#aliases-and-publication) gives exact limits, validation, and fallback behavior. |
+| [Data, APIs, and external integrations](/template/#data-apis-integrations) | [Live metadata](/sample/#live-metadata) defines the external fetch, while [Storage and security](/sample/#storage-and-security) defines persisted data. |
+| [Constraints and fixed implementation decisions](/template/#constraints-decisions) | [Stack and design](/sample/#stack-and-design) fixes the runtime, libraries, database, test tools, and design system. |
+| [Security, privacy, identity, and permissions](/template/#security-privacy-permissions) | [Login and ownership](/sample/#login-and-ownership) defines identity and authorization; [Live metadata](/sample/#live-metadata) and [Storage and security](/sample/#storage-and-security) define trust boundaries. |
+| [Acceptance criteria and failure recovery](/template/#acceptance-recovery) | [Technical specification and checklist](/sample/#technical-specification-and-checklist) makes requirements pass-or-fail; [Live metadata](/sample/#live-metadata) defines failure and recovery behavior. |
+| [Validation plan and definition of done](/template/#validation-done) | [Scripts, tests, and documentation](/sample/#scripts-tests-and-documentation) names runnable checks and journeys; [Completion](/sample/#completion) defines the exit procedure. |
+
 ## Mocks
 
 <!-- quote: not-gist -->

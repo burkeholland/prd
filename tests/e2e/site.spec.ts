@@ -407,8 +407,8 @@ test('the sample PRD has a table of contents that resolves', async ({ page }) =>
 
 test('the walkthrough preserves its sections and excerpts with neutral, bounded framing', async ({ page }) => {
   test.skip(!present(CONTENT.walkthrough), 'content not merged yet');
-  const { headings } = await expectTocResolves(page, '/walkthrough/', 18);
-  expect(headings).toBe(18);
+  const { headings } = await expectTocResolves(page, '/walkthrough/', 19);
+  expect(headings).toBe(19);
   await expect(page.locator('h1')).toHaveText('Example PRD, section by section');
   await expect(page.locator('meta[name="description"]')).toHaveAttribute(
     'content',
