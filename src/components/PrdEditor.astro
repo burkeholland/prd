@@ -152,6 +152,20 @@ const blankDownloads = [
           </button>
           <button id="start-over" class="editor-button" type="button">Start over</button>
         </div>
+        <div id="draft-conflict" class="editor-conflict" hidden>
+          <p id="conflict-help" class="editor-backup-help">
+            Saving and Start over are paused. Download a draft backup first to preserve
+            this copy before choosing which draft to keep.
+          </p>
+          <div class="editor-actions">
+            <button id="load-saved-draft" class="editor-button" type="button" aria-describedby="conflict-help">
+              Load saved draft
+            </button>
+            <button id="keep-this-draft" class="editor-button" type="button" aria-describedby="conflict-help">
+              Keep this draft
+            </button>
+          </div>
+        </div>
         <p id="backup-help" class="editor-backup-help">
           A JSON backup reopens your editable draft, here or in another browser.
           Downloads and imports stay on your device. Import limit: 5 MiB.
@@ -191,10 +205,12 @@ const blankDownloads = [
   import notoSansRegularUrl from '@fontsource/noto-sans/files/noto-sans-latin-400-normal.woff?url';
   import notoSansBoldUrl from '@fontsource/noto-sans/files/noto-sans-latin-700-normal.woff?url';
   import {
+    checkPrdEditorDraft,
     clearPrdEditorDraft,
     createBlankPrdEditorState,
     createPrdEditorDraftPayload,
     loadPrdEditorDraft,
+    PRD_EDITOR_STORAGE_KEY,
     readPrdEditorBackup,
     savePrdEditorDraft,
     type PrdEditorState,
@@ -217,6 +233,9 @@ const blankDownloads = [
   const status = document.querySelector('#save-status');
   const saveButton = document.querySelector('#save-draft');
   const startOverButton = document.querySelector('#start-over');
+  const conflictControls = document.querySelector('#draft-conflict');
+  const loadSavedButton = document.querySelector('#load-saved-draft');
+  const keepDraftButton = document.querySelector('#keep-this-draft');
   const downloadBackupButton = document.querySelector('#download-backup');
   const importBackupButton = document.querySelector('#import-backup');
   const backupFileInput = document.querySelector('#backup-file');
@@ -233,6 +252,9 @@ const blankDownloads = [
     !(status instanceof HTMLParagraphElement) ||
     !(saveButton instanceof HTMLButtonElement) ||
     !(startOverButton instanceof HTMLButtonElement) ||
+    !(conflictControls instanceof HTMLDivElement) ||
+    !(loadSavedButton instanceof HTMLButtonElement) ||
+    !(keepDraftButton instanceof HTMLButtonElement) ||
     !(downloadBackupButton instanceof HTMLButtonElement) ||
     !(importBackupButton instanceof HTMLButtonElement) ||
     !(backupFileInput instanceof HTMLInputElement) ||
@@ -253,7 +275,7 @@ const blankDownloads = [
   );
 
   const showStatus = (message: string, state: string) => {
-    status.textContent = message;
+    if (status.textContent !== message) status.textContent = message;
     status.dataset.state = state;
   };
 
@@ -309,7 +331,8 @@ const blankDownloads = [
     const completed = Array.from(sectionInputs.values()).filter(
       (input) => input.value.trim().length > 0,
     ).length;
-    completion.textContent = `${completed} of ${PRD_TEMPLATE.sections.length} sections completed`;
+    const message = `${completed} of ${PRD_TEMPLATE.sections.length} sections completed`;
+    if (completion.textContent !== message) completion.textContent = message;
   };
 
   let storage: PrdEditorStorage | undefined;
@@ -322,7 +345,70 @@ const blankDownloads = [
     );
   }
 
-  const persistDraft = (mode: 'automatic' | 'explicit' | 'import') => {
+  let baseline: string | null | undefined;
+  let conflict = false;
+  let observedRaw: string | null | undefined;
+  let storageReadFailed = false;
+  let autoSaveTimer: number | undefined;
+  const cancelAutoSave = () => {
+    if (autoSaveTimer !== undefined) window.clearTimeout(autoSaveTimer);
+    autoSaveTimer = undefined;
+  };
+  const conflictMessage =
+    'Saving is paused because the saved draft changed in another tab. Your text is unchanged. Use Draft controls to load the saved draft or keep this draft.';
+  const showConflict = (raw: string | null, message = conflictMessage) => {
+    cancelAutoSave();
+    conflict = true;
+    observedRaw = raw;
+    conflictControls.hidden = false;
+    saveButton.setAttribute('aria-disabled', 'true');
+    startOverButton.setAttribute('aria-disabled', 'true');
+    showStatus(message, 'conflict');
+  };
+  const clearConflict = () => {
+    conflict = false;
+    observedRaw = undefined;
+    storageReadFailed = false;
+    conflictControls.hidden = true;
+    saveButton.removeAttribute('aria-disabled');
+    startOverButton.removeAttribute('aria-disabled');
+  };
+  const showReadFailure = () => {
+    cancelAutoSave();
+    storageReadFailed = true;
+    showStatus(
+      'Saving is paused because this browser could not read local draft storage. Your text is unchanged. Download a draft backup before leaving; try again when storage is available.',
+      conflict ? 'conflict' : 'error',
+    );
+  };
+  const checkForChanges = () => {
+    if (!storage) {
+      showReadFailure();
+      return false;
+    }
+    const checked = checkPrdEditorDraft(storage, baseline);
+    if (checked.status === 'storage-error') {
+      showReadFailure();
+      return false;
+    }
+    const wasUnreadable = storageReadFailed;
+    storageReadFailed = false;
+    if (checked.status === 'conflict' || conflict) {
+      if (!conflict || checked.raw !== observedRaw || wasUnreadable) {
+        showConflict(checked.raw);
+      }
+      return false;
+    }
+    if (wasUnreadable) {
+      showStatus('Browser storage is readable again. Save this draft to keep your unsaved changes.', 'pending');
+    }
+    return true;
+  };
+
+  const writeDraft = (
+    expectedRaw: string | null | undefined,
+    mode: 'automatic' | 'explicit' | 'import',
+  ) => {
     const failureMessage = mode === 'import'
       ? 'Draft backup imported into the editor, but not saved in this browser. You can keep editing; download a draft backup before leaving.'
       : 'Draft could not be saved in this browser. You can still edit, but copy your work before leaving.';
@@ -334,15 +420,23 @@ const blankDownloads = [
       return;
     }
 
-    const result = savePrdEditorDraft(storage, readState());
+    const result = savePrdEditorDraft(storage, readState(), expectedRaw);
+    if (result.status === 'conflict') {
+      showConflict(result.raw, mode === 'import'
+        ? 'Draft backup imported into the editor, but not saved. Saving is paused because the saved draft changed in another tab. Download a draft backup before choosing which copy to keep.'
+        : 'Saving is paused because the saved draft changed again. Your text is unchanged. Review the latest saved draft and choose again.');
+      return;
+    }
     if (result.status === 'storage-error') {
       showStatus(
-        failureMessage,
-        'error',
+        conflict ? `${failureMessage} Saving is still paused; choose again to retry.` : failureMessage,
+        conflict ? 'conflict' : 'error',
       );
       return;
     }
 
+    baseline = result.raw;
+    clearConflict();
     const lead = mode === 'import'
       ? 'Draft backup imported and saved'
       : mode === 'automatic' ? 'Draft saved automatically' : 'Draft saved';
@@ -352,8 +446,29 @@ const blankDownloads = [
     );
   };
 
+  const persistDraft = (mode: 'automatic' | 'explicit' | 'import') => {
+    const ready = checkForChanges();
+    if (conflict) {
+      if (mode === 'import' && observedRaw !== undefined) {
+        showConflict(observedRaw, 'Draft backup imported into the editor, but not saved. Saving is paused because the saved draft changed in another tab. Download a draft backup before choosing which copy to keep.');
+      }
+      return;
+    }
+    if (!ready) {
+      if (mode === 'import') {
+        showStatus(
+          'Draft backup imported into the editor, but not saved in this browser. You can keep editing; download a draft backup before leaving.',
+          'error',
+        );
+      }
+      return;
+    }
+    writeDraft(baseline, mode);
+  };
+
   if (storage) {
     const restored = loadPrdEditorDraft(storage);
+    if (restored.status !== 'storage-error') baseline = restored.raw;
     switch (restored.status) {
       case 'valid':
         applyState(restored.payload.state);
@@ -378,6 +493,7 @@ const blankDownloads = [
         );
         break;
       case 'storage-error':
+        storageReadFailed = true;
         showStatus(
           'This browser could not read local draft storage. You can still edit this document.',
           'error',
@@ -389,13 +505,13 @@ const blankDownloads = [
   updateCompletion();
   editor.hidden = false;
 
-  let autoSaveTimer: number | undefined;
   form.addEventListener('input', (event) => {
     if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
       originalValues.delete(event.target);
     }
     updateCompletion();
-    if (autoSaveTimer !== undefined) window.clearTimeout(autoSaveTimer);
+    cancelAutoSave();
+    if (conflict || storageReadFailed) return;
     showStatus('Unsaved changes. Saving in this browser.', 'pending');
     autoSaveTimer = window.setTimeout(() => {
       autoSaveTimer = undefined;
@@ -404,11 +520,89 @@ const blankDownloads = [
   });
 
   saveButton.addEventListener('click', () => {
-    if (autoSaveTimer !== undefined) {
-      window.clearTimeout(autoSaveTimer);
-      autoSaveTimer = undefined;
-    }
+    cancelAutoSave();
     persistDraft('explicit');
+  });
+
+  const hasLocalContent = () => {
+    const current = readState();
+    return [current.title, ...Object.values(current.values)].some((value) => value.length > 0);
+  };
+  const readResolution = () => {
+    if (!storage) {
+      showReadFailure();
+      return;
+    }
+    const current = loadPrdEditorDraft(storage);
+    if (current.status === 'storage-error') {
+      showReadFailure();
+      return;
+    }
+    return current;
+  };
+  loadSavedButton.addEventListener('click', () => {
+    if (!conflict) return;
+    const current = readResolution();
+    if (!current || !storage) return;
+    if (current.status === 'corrupt' || current.status === 'unsupported-version') {
+      const reason = current.status === 'unsupported-version'
+        ? `uses unsupported version ${current.version}; this editor supports version 1`
+        : current.reason === 'json'
+          ? 'is not valid JSON'
+          : current.reason === 'fields'
+            ? 'must include a text title and all 12 sections as text'
+            : 'has a missing or damaged version, saved timestamp, or draft structure';
+      showConflict(current.raw, `The saved draft ${reason}. It was not loaded. Your text is unchanged and saving is paused.`);
+      return;
+    }
+    if ((current.status === 'empty' || hasLocalContent()) && !window.confirm(
+      current.status === 'empty'
+        ? 'The saved draft was removed in another tab. Load an empty draft and clear all current fields? Download a draft backup first to keep this copy.'
+        : 'Load the saved draft and replace all current fields? Download a draft backup first if you want to keep both copies.',
+    )) {
+      showConflict(current.raw, 'Loading canceled. Your text is unchanged and saving is paused.');
+      return;
+    }
+    const checked = checkPrdEditorDraft(storage, current.raw);
+    if (checked.status === 'storage-error') {
+      showReadFailure();
+      return;
+    }
+    if (checked.status === 'conflict') {
+      showConflict(checked.raw, 'Saving is paused because the saved draft changed again. Nothing was loaded. Review the latest saved draft and choose again.');
+      return;
+    }
+    cancelAutoSave();
+    applyState(current.status === 'empty' ? createBlankPrdEditorState() : current.payload.state);
+    updateCompletion();
+    baseline = current.raw;
+    clearConflict();
+    showStatus(current.status === 'empty'
+      ? 'The saved draft was removed. An empty draft is now loaded.'
+      : `Draft loaded from this browser. Last saved ${formatSavedAt(current.payload.savedAt)}.`,
+    current.status === 'empty' ? 'empty' : 'restored');
+  });
+  keepDraftButton.addEventListener('click', () => {
+    if (!conflict) return;
+    const current = readResolution();
+    if (!current) return;
+    if (!window.confirm(
+      'Keep this draft and replace the current browser-saved copy with all fields from this tab? Download a draft backup first if you want to preserve both copies.',
+    )) {
+      showConflict(current.raw, 'Keeping this draft was canceled. Your text is unchanged and saving is paused.');
+      return;
+    }
+    writeDraft(current.raw, 'explicit');
+  });
+
+  window.addEventListener('storage', (event) => {
+    if (event.storageArea === storage && (event.key === PRD_EDITOR_STORAGE_KEY || event.key === null)) {
+      checkForChanges();
+    }
+  });
+  window.addEventListener('focus', () => { checkForChanges(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkForChanges();
   });
 
   let pdfFonts:
@@ -551,22 +745,25 @@ const blankDownloads = [
         return;
       }
 
+      checkForChanges();
+      if (conflict) {
+        showDownloadStatus('Import paused because the saved draft changed in another tab. Your draft is unchanged. Resolve the saved draft choice, then import again.', 'error');
+        return;
+      }
       // Read after the asynchronous file read so confirmation covers the latest edits.
-      const current = readState();
-      const hasContent = [current.title, ...Object.values(current.values)].some(
-        (value) => value.length > 0,
-      );
-      if (hasContent && !window.confirm(
+      if (hasLocalContent() && !window.confirm(
         'Replace the current draft with this backup? This replaces all fields and the draft saved in this browser. Download a backup first if you want to keep both.',
       )) {
         showDownloadStatus('Import canceled. Your draft is unchanged.', 'canceled');
         return;
       }
 
-      if (autoSaveTimer !== undefined) {
-        window.clearTimeout(autoSaveTimer);
-        autoSaveTimer = undefined;
+      checkForChanges();
+      if (conflict) {
+        showDownloadStatus('Import paused because the saved draft changed during confirmation. Your draft is unchanged. Resolve the saved draft choice, then import again.', 'error');
+        return;
       }
+      cancelAutoSave();
       applyState(result.payload.state);
       updateCompletion();
       showDownloadStatus('', 'idle');
@@ -582,33 +779,27 @@ const blankDownloads = [
   });
 
   startOverButton.addEventListener('click', () => {
+    if (!checkForChanges()) return;
     const confirmed = window.confirm(
       'Start over? This removes the local draft from this browser and clears all fields.',
     );
     if (!confirmed) return;
-
-    if (autoSaveTimer !== undefined) {
-      window.clearTimeout(autoSaveTimer);
-      autoSaveTimer = undefined;
+    if (!checkForChanges() || !storage) return;
+    cancelAutoSave();
+    const result = clearPrdEditorDraft(storage, baseline);
+    if (result.status === 'conflict') {
+      showConflict(result.raw);
+      return;
     }
+    if (result.status === 'storage-error') {
+      showStatus('The local draft could not be removed from this browser. Your current fields are unchanged.', 'error');
+      return;
+    }
+    baseline = null;
     originalValues.clear();
     form.reset();
     updateCompletion();
-
-    if (!storage) {
-      showStatus(
-        'All fields are clear, but browser storage was unavailable, so the local draft could not be removed.',
-        'error',
-      );
-    } else {
-      const result = clearPrdEditorDraft(storage);
-      showStatus(
-        result.status === 'cleared'
-          ? 'Local draft removed. All fields are clear.'
-          : 'All fields are clear, but the local draft could not be removed from this browser.',
-        result.status === 'cleared' ? 'cleared' : 'error',
-      );
-    }
+    showStatus('Local draft removed. All fields are clear.', 'cleared');
     titleInput.focus();
   });
 
@@ -627,8 +818,7 @@ const blankDownloads = [
 
   window.addEventListener('pagehide', () => {
     if (autoSaveTimer === undefined) return;
-    window.clearTimeout(autoSaveTimer);
-    autoSaveTimer = undefined;
+    cancelAutoSave();
     persistDraft('automatic');
   });
 </script>
@@ -642,8 +832,14 @@ const blankDownloads = [
     border-block: 1px solid var(--border);
   }
 
-  .editor-page[hidden] {
+  .editor-page[hidden],
+  .editor-conflict[hidden] {
     display: none;
+  }
+
+  .editor-conflict {
+    display: grid;
+    gap: 0.75rem;
   }
 
   .editor-blank-links {

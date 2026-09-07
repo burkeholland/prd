@@ -3,6 +3,8 @@ import { PRD_EDITOR_STORAGE_KEY } from '../../src/lib/prd-editor-state';
 
 const BASE = '/prd';
 const to = (path: string) => `${BASE}${path}`;
+const pausedStorageMessage =
+  'Saving is paused because this browser could not read local draft storage. Your text is unchanged. Download a draft backup before leaving; try again when storage is available.';
 
 test('localStorage access failure leaves the editor usable and announces that persistence is unavailable', async ({
   page,
@@ -21,13 +23,19 @@ test('localStorage access failure leaves the editor usable and announces that pe
   await expect(page.locator('#save-status')).toHaveText(
     'This browser did not allow access to local draft storage. You can still edit this document.',
   );
-  await page.locator('#document-title').fill('Unsaved but still editable');
-  await expect(page.locator('#document-title')).toHaveValue(
-    'Unsaved but still editable',
+  await expect(page.locator('#save-status')).toHaveAttribute('data-state', 'error');
+  await expect(page.locator('.editor-privacy')).toHaveText(
+    'Your draft stays in this browser unless you download it.',
   );
-  await expect(page.locator('#save-status')).toContainText(
-    'Draft could not be saved in this browser.',
-  );
+  await expect(page.locator('#download-backup')).toBeEnabled();
+
+  const title = page.locator('#document-title');
+  await title.fill('Unsaved but still editable');
+  await expect(page.locator('#save-status')).toHaveText(pausedStorageMessage);
+  await expect(page.locator('#save-status')).toHaveAttribute('data-state', 'error');
+  await expect(title).toBeEditable();
+  await expect(title).toHaveValue('Unsaved but still editable');
+  await expect(page.locator('#download-backup')).toBeEnabled();
 });
 
 test('a localStorage read failure is explicit and leaves every field editable', async ({
@@ -47,8 +55,22 @@ test('a localStorage read failure is explicit and leaves every field editable', 
   await expect(page.locator('#save-status')).toHaveText(
     'This browser could not read local draft storage. You can still edit this document.',
   );
-  await expect(page.locator('#document-title')).toBeEditable();
+  await expect(page.locator('#save-status')).toHaveAttribute('data-state', 'error');
+  const title = page.locator('#document-title');
+  await expect(title).toBeEditable();
   await expect(page.locator('textarea')).toHaveCount(12);
+  await expect(page.locator('.editor-privacy')).toHaveText(
+    'Your draft stays in this browser unless you download it.',
+  );
+  await expect(page.locator('#download-backup')).toBeEnabled();
+
+  await title.fill('Read failure keeps this local title');
+  await page.locator('#save-draft').click();
+  await expect(page.locator('#save-status')).toHaveText(pausedStorageMessage);
+  await expect(page.locator('#save-status')).toHaveAttribute('data-state', 'error');
+  await expect(title).toBeEditable();
+  await expect(title).toHaveValue('Read failure keeps this local title');
+  await expect(page.locator('#download-backup')).toBeEnabled();
 });
 
 test('the two live regions have unique identities and report save and download outcomes accurately', async ({

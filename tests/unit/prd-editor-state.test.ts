@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  checkPrdEditorDraft,
   clearPrdEditorDraft,
   createBlankPrdEditorState,
   createPrdEditorDraftPayload,
@@ -113,24 +114,27 @@ describe('PRD editor storage', () => {
     const storage = memoryStorage();
     const state = filledState();
 
-    expect(savePrdEditorDraft(storage, state, NOW)).toEqual({
+    const raw = JSON.stringify(createPrdEditorDraftPayload(state, NOW));
+    expect(savePrdEditorDraft(storage, state, null, NOW)).toEqual({
       status: 'saved',
       payload: createPrdEditorDraftPayload(state, NOW),
+      raw,
     });
     expect(storage.values.has(PRD_EDITOR_STORAGE_KEY)).toBe(true);
     expect(loadPrdEditorDraft(storage)).toEqual({
       status: 'valid',
       payload: createPrdEditorDraftPayload(state, NOW),
+      raw,
     });
   });
 
   it('distinguishes an empty store and clears a saved draft', () => {
     const storage = memoryStorage();
 
-    expect(loadPrdEditorDraft(storage)).toEqual({ status: 'empty' });
-    savePrdEditorDraft(storage, filledState(), NOW);
-    expect(clearPrdEditorDraft(storage)).toEqual({ status: 'cleared' });
-    expect(loadPrdEditorDraft(storage)).toEqual({ status: 'empty' });
+    expect(loadPrdEditorDraft(storage)).toEqual({ status: 'empty', raw: null });
+    savePrdEditorDraft(storage, filledState(), null, NOW);
+    expect(clearPrdEditorDraft(storage, storage.getItem(PRD_EDITOR_STORAGE_KEY))).toEqual({ status: 'cleared' });
+    expect(loadPrdEditorDraft(storage)).toEqual({ status: 'empty', raw: null });
   });
 
   it('surfaces read, write, and removal failures', () => {
@@ -151,13 +155,81 @@ describe('PRD editor storage', () => {
       status: 'storage-error',
       error,
     });
-    expect(savePrdEditorDraft(failingStorage, filledState(), NOW)).toEqual({
+    expect(savePrdEditorDraft(failingStorage, filledState(), null, NOW)).toEqual({
       status: 'storage-error',
       error,
     });
-    expect(clearPrdEditorDraft(failingStorage)).toEqual({
+    expect(clearPrdEditorDraft(failingStorage, null)).toEqual({
       status: 'storage-error',
       error,
     });
+    failingStorage.getItem = () => null;
+    expect(savePrdEditorDraft(failingStorage, filledState(), null, NOW)).toEqual({
+      status: 'storage-error', error,
+    });
+    expect(clearPrdEditorDraft(failingStorage, null)).toEqual({
+      status: 'storage-error', error,
+    });
+  });
+});
+
+describe('PRD saved-value conflict guards', () => {
+  it('retains exact restored bytes, including unrecognized fields and malformed data', () => {
+    const storage = memoryStorage();
+    for (const raw of [
+      JSON.stringify({ ...createPrdEditorDraftPayload(filledState(), NOW), extra: 'keep raw baseline' }, null, 2),
+      '{broken',
+      JSON.stringify({ version: 99 }),
+    ]) {
+      storage.setItem(PRD_EDITOR_STORAGE_KEY, raw);
+      expect(loadPrdEditorDraft(storage)).toHaveProperty('raw', raw);
+      expect(checkPrdEditorDraft(storage, raw)).toEqual({ status: 'unchanged', raw });
+    }
+  });
+
+  it.each([null, '{broken', JSON.stringify({ version: 99 })])(
+    'blocks both mutations when another tab changes the stored value to %s',
+    (raw) => {
+      const storage = memoryStorage();
+      const saved = savePrdEditorDraft(storage, filledState(), null, NOW);
+      expect(saved.status).toBe('saved');
+      const baseline = storage.getItem(PRD_EDITOR_STORAGE_KEY);
+      if (raw === null) storage.removeItem(PRD_EDITOR_STORAGE_KEY);
+      else storage.setItem(PRD_EDITOR_STORAGE_KEY, raw);
+      expect(savePrdEditorDraft(storage, filledState(), baseline, NOW)).toEqual({ status: 'conflict', raw });
+      expect(clearPrdEditorDraft(storage, baseline)).toEqual({ status: 'conflict', raw });
+      expect(storage.getItem(PRD_EDITOR_STORAGE_KEY)).toBe(raw);
+    },
+  );
+
+  it('does not mistake an unreadable baseline for an empty store', () => {
+    const storage = memoryStorage();
+    expect(savePrdEditorDraft(storage, filledState(), undefined, NOW)).toEqual({ status: 'conflict', raw: null });
+    expect(clearPrdEditorDraft(storage, undefined)).toEqual({ status: 'conflict', raw: null });
+    expect(storage.values.size).toBe(0);
+  });
+
+  it('compares bytes even when timestamps and all parsed fields match', () => {
+    const storage = memoryStorage();
+    const payload = createPrdEditorDraftPayload(filledState(), NOW);
+    const baseline = JSON.stringify(payload);
+    const raw = JSON.stringify(payload, null, 2);
+    storage.setItem(PRD_EDITOR_STORAGE_KEY, raw);
+    expect(savePrdEditorDraft(storage, filledState(), baseline, NOW)).toEqual({ status: 'conflict', raw });
+    expect(savePrdEditorDraft(storage, filledState(), raw, NOW)).toMatchObject({ status: 'saved' });
+  });
+
+  it('never calls a mutation when its preflight read fails', () => {
+    let mutations = 0;
+    const error = new DOMException('Cannot read', 'SecurityError');
+    const storage: PrdEditorStorage = {
+      getItem() { throw error; },
+      setItem() { mutations += 1; },
+      removeItem() { mutations += 1; },
+    };
+    expect(checkPrdEditorDraft(storage, null)).toEqual({ status: 'storage-error', error });
+    expect(savePrdEditorDraft(storage, filledState(), null, NOW)).toEqual({ status: 'storage-error', error });
+    expect(clearPrdEditorDraft(storage, null)).toEqual({ status: 'storage-error', error });
+    expect(mutations).toBe(0);
   });
 });
