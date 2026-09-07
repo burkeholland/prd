@@ -405,6 +405,62 @@ main:focus {
   border: 0;
 }
 
+.doc__section-link-button {
+  float: right;
+  clear: right;
+  inline-size: 8.5rem;
+  min-width: 32px;
+  min-height: 32px;
+  max-width: calc(100% - 2rem);
+  margin-inline-start: 0.75rem;
+  padding: 0.3rem 0.5rem;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text-muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.prose .doc__section-link-button + :is(h2, h3) > a.heading-link {
+  display: inline;
+}
+
+.doc__section-link-button:hover,
+.doc__section-link-button:focus-visible {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.doc__section-link-button[aria-busy='true'] {
+  cursor: progress;
+}
+
+.doc__section-link-button[data-state='copied'] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.doc__section-link-button[data-state='failed'] {
+  color: var(--text);
+}
+
+.doc__section-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 .button {
   display: inline-block;
   padding: 0.6rem 1.1rem;
@@ -592,6 +648,10 @@ main:focus {
 
 .prose h3 {
   margin-top: 1.8em;
+}
+
+.prose :is(h2, h3) {
+  overflow-wrap: anywhere;
 }
 
 .prose h4 {
