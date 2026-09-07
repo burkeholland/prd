@@ -39,6 +39,10 @@ const expectFields = async (page: Page, state: PrdEditorState) => {
 
 const stored = (page: Page) =>
   page.evaluate((key) => localStorage.getItem(key), PRD_EDITOR_STORAGE_KEY);
+const completedOutlineIds = (page: Page) =>
+  page.locator('.editor-outline a[data-outline-complete]').evaluateAll((links) =>
+    links.map((link) => (link as HTMLElement).dataset.outlineTarget)
+  );
 
 const choose = async (page: Page, input: string | Buffer) => {
   const pending = page.waitForEvent('filechooser');
@@ -128,6 +132,9 @@ test('a real UTF-8 backup round-trips all 13 fields through a fresh browser and 
     await expect(other.locator('#document-title')).toBeFocused();
     await expectFields(other, state);
     await expect(other.locator('#completion-count')).toHaveText('12 of 12 sections completed');
+    expect(await completedOutlineIds(other)).toEqual(
+      PRD_TEMPLATE_SECTIONS.map((section) => section.id),
+    );
     await expect(other.locator('[data-backup-content]')).toHaveCount(0);
     const saved = JSON.parse((await stored(other))!);
     expect(saved.state).toEqual(state);
@@ -136,6 +143,9 @@ test('a real UTF-8 backup round-trips all 13 fields through a fresh browser and 
     await other.reload();
     await expectFields(other, state);
     await expect(other.locator('#save-status')).toContainText('Draft restored from this browser.');
+    expect(await completedOutlineIds(other)).toEqual(
+      PRD_TEMPLATE_SECTIONS.map((section) => section.id),
+    );
     expect((await download(other)).payload.state).toEqual(state);
     expect(requests.join('\n')).not.toContain(SENTINEL);
   } finally {

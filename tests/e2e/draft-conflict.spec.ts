@@ -27,6 +27,10 @@ const put = (page: Page, raw: string | null) =>
   }, { key: PRD_EDITOR_STORAGE_KEY, raw });
 const fields = (page: Page) => page.locator('#prd-editor-form input, #prd-editor-form textarea')
   .evaluateAll((nodes) => nodes.map((node) => (node as HTMLInputElement).value));
+const completedOutlineIds = (page: Page) =>
+  page.locator('.editor-outline a[data-outline-complete]').evaluateAll((links) =>
+    links.map((link) => (link as HTMLElement).dataset.outlineTarget)
+  );
 const backup = async (page: Page) => {
   const pending = page.waitForEvent('download');
   await page.locator('#download-backup').click();
@@ -247,6 +251,8 @@ for (const action of ['load-saved-draft', 'keep-this-draft']) {
     await expect(page.getByRole('button', { name: 'Keep this draft', exact: true })).toHaveCount(0);
     await put(other, rawDraft(fixture('First external update')));
     await expectConflict(page);
+    const localBlank = PRD_TEMPLATE_SECTIONS[2];
+    await page.locator(`#section-input-${localBlank.id}`).fill(' \t ');
     await page.locator('#document-title').fill('Unsaved local copy');
     const before = await fields(page);
     const saved = await stored(page);
@@ -257,7 +263,12 @@ for (const action of ['load-saved-draft', 'keep-this-draft']) {
     await expectConflict(page);
     expect(await beforeUnloadPrevented(page)).toBe(true);
 
-    const latest = fixture(' Latest\r\nsaved copy ');
+    const latestBlank = PRD_TEMPLATE_SECTIONS[4];
+    const latestBase = fixture(' Latest\r\nsaved copy ');
+    const latest: PrdEditorState = {
+      ...latestBase,
+      values: { ...latestBase.values, [latestBlank.id]: '\r\n \t' },
+    };
     const latestRaw = rawDraft(latest);
     await put(other, latestRaw);
     page.once('dialog', async (dialog) => {
@@ -266,13 +277,24 @@ for (const action of ['load-saved-draft', 'keep-this-draft']) {
       await dialog.accept();
     });
     await page.locator(`#${action}`).click();
-    const chosen = action === 'load-saved-draft' ? latest : fixture('Unsaved local copy');
+    const localBase = fixture('Unsaved local copy');
+    const local: PrdEditorState = {
+      ...localBase,
+      values: { ...localBase.values, [localBlank.id]: ' \t ' },
+    };
+    const chosen = action === 'load-saved-draft' ? latest : local;
     expect((await backup(page)).state).toEqual(chosen);
     const resolved = await stored(page);
     if (action === 'load-saved-draft') expect(resolved).toBe(latestRaw);
     else expect(JSON.parse(resolved!).state).toEqual(chosen);
-    await expect(page.locator('#completion-count')).toHaveText('12 of 12 sections completed');
-    await expect(page.getByRole('button', { name: 'Continue draft', exact: true })).toBeHidden();
+    const incomplete = action === 'load-saved-draft' ? latestBlank.id : localBlank.id;
+    await expect(page.locator('#completion-count')).toHaveText('11 of 12 sections completed');
+    expect(await completedOutlineIds(page)).toEqual(
+      PRD_TEMPLATE_SECTIONS
+        .map((section) => section.id)
+        .filter((id) => id !== incomplete),
+    );
+    await expect(page.getByRole('button', { name: 'Continue draft', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Load saved draft', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Keep this draft', exact: true })).toHaveCount(0);
     await page.clock.runFor(1000);
@@ -334,6 +356,7 @@ for (const removal of ['remove', 'clear']) {
     expect(await fields(page)).toEqual(Array(13).fill(''));
     expect((await backup(page)).state).toEqual(createBlankPrdEditorState());
     await expect(page.locator('#completion-count')).toHaveText('0 of 12 sections completed');
+    expect(await completedOutlineIds(page)).toEqual([]);
     await expect(page.locator('#save-status')).toContainText('empty draft is now loaded');
     expect(await stored(page)).toBeNull();
     await page.reload();

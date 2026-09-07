@@ -206,7 +206,8 @@ const blankDownloads = [
             PRD_TEMPLATE.sections.map((section) => (
               <li>
                 <a href={`#section-${section.id}`} data-outline-target={section.id}>
-                  {section.title}
+                  <span class="editor-outline-title">{section.title}</span>
+                  <span class="editor-outline-status" data-outline-status hidden>Done</span>
                 </a>
               </li>
             ))
@@ -295,6 +296,14 @@ const blankDownloads = [
       return [section.id, input] as const;
     }),
   );
+  const outlineLinks = new Map(
+    Array.from(document.querySelectorAll<HTMLAnchorElement>('[data-outline-target]')).map(
+      (link) => [link.dataset.outlineTarget, link] as const,
+    ),
+  );
+  if (outlineLinks.size !== PRD_TEMPLATE.sections.length) {
+    throw new Error('The PRD editor outline is incomplete.');
+  }
 
   const showStatus = (message: string, state: string) => {
     if (status.textContent !== message) status.textContent = message;
@@ -349,10 +358,20 @@ const blankDownloads = [
     }
   };
 
+  const isSectionComplete = (input: HTMLTextAreaElement | undefined) =>
+    input ? input.value.trim().length > 0 : false;
+
   const updateCompletion = () => {
-    const completed = Array.from(sectionInputs.values()).filter(
-      (input) => input.value.trim().length > 0,
-    ).length;
+    let completed = 0;
+    for (const section of PRD_TEMPLATE.sections) {
+      const isComplete = isSectionComplete(sectionInputs.get(section.id));
+      if (isComplete) completed += 1;
+      const link = outlineLinks.get(section.id);
+      if (!link) continue;
+      link.toggleAttribute('data-outline-complete', isComplete);
+      const marker = link.querySelector<HTMLElement>('[data-outline-status]');
+      if (marker) marker.hidden = !isComplete;
+    }
     const message = `${completed} of ${PRD_TEMPLATE.sections.length} sections completed`;
     if (completion.textContent !== message) completion.textContent = message;
     continueButton.hidden = completed === PRD_TEMPLATE.sections.length;
@@ -929,7 +948,7 @@ const blankDownloads = [
 
   continueButton.addEventListener('click', () => {
     const firstIncomplete = PRD_TEMPLATE.sections.find((section) =>
-      sectionInputs.get(section.id)?.value.trim().length === 0
+      !isSectionComplete(sectionInputs.get(section.id))
     );
     if (firstIncomplete) navigateToSection(firstIncomplete.id);
   });
@@ -1092,12 +1111,26 @@ const blankDownloads = [
   .editor-outline a {
     display: flex;
     align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
     min-height: 2rem;
     padding-block: 0.2rem;
     color: var(--text-muted);
     font-size: 0.9rem;
     line-height: 1.35;
     text-decoration: none;
+  }
+
+  .editor-outline-title {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .editor-outline-status {
+    flex: none;
+    color: var(--text);
+    font-size: 0.75rem;
+    font-weight: 700;
   }
 
   .editor-outline a:hover {
