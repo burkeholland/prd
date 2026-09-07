@@ -16,6 +16,11 @@ const sectionField = (page: Page, index: number) =>
 const storedDraft = (page: Page) =>
   page.evaluate((key) => localStorage.getItem(key), PRD_EDITOR_STORAGE_KEY);
 
+const completedOutlineIds = (page: Page) =>
+  page.locator('.editor-outline a[data-outline-complete]').evaluateAll((links) =>
+    links.map((link) => (link as HTMLElement).dataset.outlineTarget)
+  );
+
 type MutablePrdValues = {
   -readonly [Id in keyof PrdEditorState['values']]: string;
 };
@@ -123,6 +128,9 @@ for (const path of ['/prd/', '/prd/create/']) {
     await expect(action).toHaveCount(1);
     await expect(action).toBeVisible();
     await expect(page.locator('#completion-count')).toHaveText('4 of 12 sections completed');
+    expect(await completedOutlineIds(page)).toEqual(
+      [0, 1, 3, 11].map((index) => PRD_TEMPLATE_SECTIONS[index].id),
+    );
     const historyLength = await page.evaluate(() => history.length);
 
     await action.focus();
@@ -163,7 +171,17 @@ test('renders one editor with the canonical heading, 12 optional section fields,
 
   const textareas = page.locator('textarea');
   await expect(textareas).toHaveCount(12);
-  await expect(page.locator('.editor-outline a')).toHaveCount(12);
+  const outlineLinks = page.locator('.editor-outline a');
+  await expect(outlineLinks).toHaveCount(12);
+  expect(await outlineLinks.evaluateAll((links) => links.map((link) => ({
+    id: (link as HTMLElement).dataset.outlineTarget,
+    href: link.getAttribute('href'),
+  })))).toEqual(PRD_TEMPLATE_SECTIONS.map((section) => ({
+    id: section.id,
+    href: `#section-${section.id}`,
+  })));
+  await expect(page.locator('[data-outline-status]')).toHaveCount(12);
+  expect(await completedOutlineIds(page)).toEqual([]);
   for (const [index, section] of PRD_TEMPLATE_SECTIONS.entries()) {
     const field = sectionField(page, index);
     await expect(field).toHaveAttribute('id', `section-input-${section.id}`);
@@ -204,6 +222,34 @@ test('renders one editor with the canonical heading, 12 optional section fields,
   await expect(page.locator('#download-status')).toHaveAttribute('role', 'status');
 });
 
+test('outline completion uses section text only and updates immediately for non-whitespace input', async ({
+  page,
+}) => {
+  const first = PRD_TEMPLATE_SECTIONS[0];
+  const second = PRD_TEMPLATE_SECTIONS[1];
+  const firstLink = page.locator(`[data-outline-target="${first.id}"]`);
+  const secondLink = page.locator(`[data-outline-target="${second.id}"]`);
+
+  await page.locator('#document-title').fill('A title is not a completed section');
+  await sectionField(page, 1).fill(' \t\r\n ');
+  expect(await completedOutlineIds(page)).toEqual([]);
+  await expect(page.locator('#completion-count')).toHaveText('0 of 12 sections completed');
+  await expect(firstLink).toHaveAccessibleName(first.title);
+  await expect(secondLink).toHaveAccessibleName(second.title);
+
+  await sectionField(page, 0).fill('A decision');
+  expect(await completedOutlineIds(page)).toEqual([first.id]);
+  await expect(page.locator('#completion-count')).toHaveText('1 of 12 sections completed');
+  await expect(firstLink.locator('[data-outline-status]')).toBeVisible();
+  await expect(firstLink).toHaveAccessibleName(`${first.title} Done`);
+
+  await sectionField(page, 0).fill(' \n ');
+  expect(await completedOutlineIds(page)).toEqual([]);
+  await expect(page.locator('#completion-count')).toHaveText('0 of 12 sections completed');
+  await expect(firstLink.locator('[data-outline-status]')).toBeHidden();
+  await expect(firstLink).toHaveAccessibleName(first.title);
+});
+
 test('automatically saves and restores the title and all 12 section values after reload', async ({
   page,
 }) => {
@@ -214,6 +260,9 @@ test('automatically saves and restores the title and all 12 section values after
 
   await expect(page.locator('#completion-count')).toHaveText(
     '12 of 12 sections completed',
+  );
+  expect(await completedOutlineIds(page)).toEqual(
+    PRD_TEMPLATE_SECTIONS.map((section) => section.id),
   );
   await expect(page.getByRole('button', { name: 'Continue draft', exact: true })).toBeHidden();
   await expect(page.locator('#save-status')).toContainText(
@@ -230,6 +279,9 @@ test('automatically saves and restores the title and all 12 section values after
       `Saved content for ${section.id}`,
     );
   }
+  expect(await completedOutlineIds(page)).toEqual(
+    PRD_TEMPLATE_SECTIONS.map((section) => section.id),
+  );
 });
 
 test('Save draft immediately writes a complete versioned payload and visible timestamp', async ({
@@ -332,6 +384,7 @@ test('Start over requires confirmation; cancel preserves content and confirm cle
   await page.locator('#start-over').click();
   await expect(page.locator('#document-title')).toHaveValue('Keep or clear');
   await expect(sectionField(page, 0)).toHaveValue('A saved section');
+  expect(await completedOutlineIds(page)).toEqual([PRD_TEMPLATE_SECTIONS[0].id]);
   expect(
     await page.evaluate((key) => localStorage.getItem(key), PRD_EDITOR_STORAGE_KEY),
   ).not.toBeNull();
@@ -349,6 +402,7 @@ test('Start over requires confirmation; cancel preserves content and confirm cle
     'Local draft removed. All fields are clear.',
   );
   await expect(page.getByRole('button', { name: 'Continue draft', exact: true })).toBeVisible();
+  expect(await completedOutlineIds(page)).toEqual([]);
 });
 
 test('Continue draft follows current non-contiguous values and its visibility never steals focus', async ({
@@ -408,6 +462,9 @@ test('Continue draft uses newly imported partial values', async ({ page }) => {
   });
   await expect(page.locator('#save-status')).toContainText('Draft backup imported and saved');
   await expect(page.locator('#completion-count')).toHaveText('4 of 12 sections completed');
+  expect(await completedOutlineIds(page)).toEqual(
+    [0, 1, 3, 11].map((index) => PRD_TEMPLATE_SECTIONS[index].id),
+  );
 
   const action = page.getByRole('button', { name: 'Continue draft', exact: true });
   await action.focus();
@@ -459,7 +516,21 @@ test('Continue draft remains navigation-only when localStorage is inaccessible',
 test('keyboard flow reaches every field and action, and outline links focus their section fields', async ({
   page,
 }) => {
-  const firstOutlineLink = page.locator('.editor-outline a').first();
+  const outlineLinks = page.locator('.editor-outline a');
+  const firstOutlineLink = outlineLinks.first();
+  await firstOutlineLink.focus();
+  for (let index = 0; index < PRD_TEMPLATE_SECTIONS.length; index += 1) {
+    const link = outlineLinks.nth(index);
+    await expect(link).toBeFocused();
+    const focusRing = await link.evaluate((node) => {
+      const style = getComputedStyle(node);
+      return { style: style.outlineStyle, width: parseFloat(style.outlineWidth) };
+    });
+    expect(focusRing.style, `outline link ${index + 1} focus style`).not.toBe('none');
+    expect(focusRing.width, `outline link ${index + 1} focus width`).toBeGreaterThan(0);
+    if (index < PRD_TEMPLATE_SECTIONS.length - 1) await page.keyboard.press('Tab');
+  }
+
   await firstOutlineLink.focus();
   await page.keyboard.press('Enter');
   await expect(sectionField(page, 0)).toBeFocused();
@@ -575,10 +646,16 @@ test('at target widths Continue draft is at least 32px square, unobstructed, and
 
     const targets = page.locator('.editor-outline a:visible, .editor-button:visible');
     await expect(targets).toHaveCount(21);
-    const heights = await targets.evaluateAll((nodes) =>
-      nodes.map((node) => node.getBoundingClientRect().height),
+    const sizes = await targets.evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const bounds = node.getBoundingClientRect();
+        return { width: bounds.width, height: bounds.height };
+      }),
     );
-    for (const height of heights) expect(height).toBeGreaterThanOrEqual(32);
+    for (const size of sizes) {
+      expect(size.width).toBeGreaterThanOrEqual(32);
+      expect(size.height).toBeGreaterThanOrEqual(32);
+    }
   }
 });
 
