@@ -59,7 +59,7 @@ const expectPrivateDownloads = (
   observedRequests: ObservedRequest[],
   origin: string,
 ) => {
-  expect(downloadUrls).toHaveLength(16);
+  expect(downloadUrls).toHaveLength(4);
   for (const url of downloadUrls) {
     expect(new URL(url).origin).toBe(origin);
   }
@@ -70,62 +70,68 @@ const expectPrivateDownloads = (
   }
 };
 
-test('all index links download their snapshots without JavaScript or external requests', async ({ browser }) => {
-  test.setTimeout(90_000);
-  const context = await browser.newContext({ javaScriptEnabled: false });
-  const page = await context.newPage();
-  const observedRequests: ObservedRequest[] = [];
-  const downloadUrls: string[] = [];
-  context.on('request', (request) => {
-    observedRequests.push({
-      method: request.method(),
-      postData: request.postData(),
-      url: request.url(),
+const revisionShards = Array.from({ length: 4 }, (_, index) =>
+  history.revisions.slice(index * 4, index * 4 + 4),
+);
+
+for (const revisions of revisionShards) {
+  const range = `revisions ${revisions[0]!.n}-${revisions.at(-1)!.n}`;
+
+  test(`index links download ${range} without JavaScript or external requests`, async ({ browser }) => {
+    const context = await browser.newContext({ javaScriptEnabled: false });
+    const page = await context.newPage();
+    const observedRequests: ObservedRequest[] = [];
+    const downloadUrls: string[] = [];
+    context.on('request', (request) => {
+      observedRequests.push({
+        method: request.method(),
+        postData: request.postData(),
+        url: request.url(),
+      });
     });
+
+    await page.goto(to('/history/'));
+    const indexLinks = page.locator('table.history a.history-download');
+    for (const revision of revisions) {
+      const pending = page.waitForEvent('download');
+      await indexLinks.nth(revision.n - 1).click();
+      const download = await pending;
+      downloadUrls.push(download.url());
+      expect(download.suggestedFilename()).toBe(historyDownloadFilename(revision));
+      expect(await downloadBytes(download)).toEqual(snapshot(revision.file));
+    }
+
+    expectPrivateDownloads(downloadUrls, observedRequests, new URL(page.url()).origin);
+    await context.close();
   });
 
-  await page.goto(to('/history/'));
-  const indexLinks = page.locator('table.history a.history-download');
-  for (const [index, revision] of history.revisions.entries()) {
-    const pending = page.waitForEvent('download');
-    await indexLinks.nth(index).click();
-    const download = await pending;
-    downloadUrls.push(download.url());
-    expect(download.suggestedFilename()).toBe(historyDownloadFilename(revision));
-    expect(await downloadBytes(download)).toEqual(snapshot(revision.file));
-  }
-
-  expectPrivateDownloads(downloadUrls, observedRequests, new URL(page.url()).origin);
-  await context.close();
-});
-
-test('all revision-page links download their snapshots without JavaScript or external requests', async ({ browser }) => {
-  test.setTimeout(90_000);
-  const context = await browser.newContext({ javaScriptEnabled: false });
-  const page = await context.newPage();
-  const observedRequests: ObservedRequest[] = [];
-  const downloadUrls: string[] = [];
-  context.on('request', (request) => {
-    observedRequests.push({
-      method: request.method(),
-      postData: request.postData(),
-      url: request.url(),
+  test(`revision-page links download ${range} without JavaScript or external requests`, async ({ browser }) => {
+    const context = await browser.newContext({ javaScriptEnabled: false });
+    const page = await context.newPage();
+    const observedRequests: ObservedRequest[] = [];
+    const downloadUrls: string[] = [];
+    context.on('request', (request) => {
+      observedRequests.push({
+        method: request.method(),
+        postData: request.postData(),
+        url: request.url(),
+      });
     });
+
+    for (const revision of revisions) {
+      await page.goto(to(`/history/${revision.n}/`));
+      const pending = page.waitForEvent('download');
+      await page.locator('a.history-download').click();
+      const download = await pending;
+      downloadUrls.push(download.url());
+      expect(download.suggestedFilename()).toBe(historyDownloadFilename(revision));
+      expect(await downloadBytes(download)).toEqual(snapshot(revision.file));
+    }
+
+    expectPrivateDownloads(downloadUrls, observedRequests, new URL(page.url()).origin);
+    await context.close();
   });
-
-  for (const revision of history.revisions) {
-    await page.goto(to(`/history/${revision.n}/`));
-    const pending = page.waitForEvent('download');
-    await page.locator('a.history-download').click();
-    const download = await pending;
-    downloadUrls.push(download.url());
-    expect(download.suggestedFilename()).toBe(historyDownloadFilename(revision));
-    expect(await downloadBytes(download)).toEqual(snapshot(revision.file));
-  }
-
-  expectPrivateDownloads(downloadUrls, observedRequests, new URL(page.url()).origin);
-  await context.close();
-});
+}
 
 const rectangles = (locator: Locator) =>
   locator.evaluateAll((nodes) =>
