@@ -947,10 +947,14 @@ main:focus {
 }
 
 .history-index-action {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
   margin: 0;
 }
 
-.history-index-download {
+.history-index-download,
+.history-csv-download {
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
@@ -967,7 +971,9 @@ main:focus {
 }
 
 .history-index-download:hover,
-.history-index-download:focus-visible {
+.history-index-download:focus-visible,
+.history-csv-download:hover,
+.history-csv-download:focus-visible {
   color: var(--text);
   border-color: var(--text-muted);
 }

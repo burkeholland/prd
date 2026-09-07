@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 const DOCX_MIME =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 const MARKDOWN_MIME = 'text/markdown; charset=utf-8';
+const CSV_MIME = 'text/csv; charset=utf-8';
 
 function portFrom(argv) {
   const index = argv.indexOf('--port');
@@ -25,14 +26,16 @@ try {
   if (!httpServer) throw new Error('Astro did not expose its preview HTTP server.');
 
   // Vite's MIME table omits OOXML. Set the header before its static handler runs;
-  // GitHub Pages already serves .docx with this registered media type. Include Markdown's
-  // UTF-8 charset here too so local public-format checks match the generated response.
+  // GitHub Pages already serves .docx with this registered media type. Include text-format
+  // charsets here too so local public-format checks match the generated responses.
   httpServer.prependListener('request', (request, response) => {
     const pathname = request.url?.split('?', 1)[0];
     if (pathname?.endsWith('.docx')) {
       response.setHeader('Content-Type', DOCX_MIME);
     } else if (pathname?.endsWith('.md')) {
       response.setHeader('Content-Type', MARKDOWN_MIME);
+    } else if (pathname?.endsWith('.csv')) {
+      response.setHeader('Content-Type', CSV_MIME);
     }
   });
 } catch (error) {
