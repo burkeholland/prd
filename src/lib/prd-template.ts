@@ -211,16 +211,34 @@ export const createPrdTemplateDocument = (
   };
 };
 
+const serializePrdDocumentSection = (
+  section: Pick<PrdTemplateDocumentSection, 'title' | 'body'>,
+): string =>
+  `## ${section.title}${section.body ? `\n\n${section.body}` : ''}\n`;
+
+export const serializePrdSectionMarkdown = (
+  sectionId: PrdTemplateSectionId,
+  value: string | null | undefined,
+): string => {
+  const section = PRD_TEMPLATE.sections.find(({ id }) => id === sectionId);
+  if (!section) throw new Error(`Unknown PRD template section: ${sectionId}`);
+
+  return serializePrdDocumentSection({
+    title: section.title,
+    body: normalizePrdSectionValue(value),
+  });
+};
+
 export const serializePrdMarkdown = (
   state: PrdTemplateStateInput,
   options: SerializePrdMarkdownOptions = {},
 ): string => {
   const document = createPrdTemplateDocument(state, options);
-  const sections = document.sections.map((section) => {
-    return `## ${section.title}${section.body ? `\n\n${section.body}` : ''}`;
-  });
+  const sections = document.sections.map(serializePrdDocumentSection).join('\n');
 
-  return [`# ${document.title}`, ...sections].join('\n\n') + '\n';
+  return sections
+    ? `# ${document.title}\n\n${sections}`
+    : `# ${document.title}\n`;
 };
 
 export const serializeBlankPrdMarkdown = (

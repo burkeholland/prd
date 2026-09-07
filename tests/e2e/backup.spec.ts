@@ -399,7 +399,7 @@ test('backup controls remain compact, local, and keyboard accessible at 320, 390
   await expect(page.locator('#backup-help')).toContainText('reopens your editable draft');
   await expect(page.locator('#backup-help')).toContainText('stay on your device');
   await expect(page.locator('#backup-help')).toContainText('5 MiB');
-  await expect(page.locator('[aria-live="polite"]')).toHaveCount(2);
+  await expect(page.locator('[aria-live="polite"]')).toHaveCount(3);
   const ids = await page.locator('[id]').evaluateAll((nodes) => nodes.map((node) => node.id));
   expect(new Set(ids).size).toBe(ids.length);
 });

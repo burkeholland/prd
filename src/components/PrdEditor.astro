@@ -265,9 +265,13 @@ const blankDownloads = [
     sanitizePrdFilename,
     type PrdExportFormat,
   } from '../lib/prd-export';
-  import { PRD_TEMPLATE } from '../lib/prd-template';
+  import {
+    PRD_TEMPLATE,
+    serializePrdSectionMarkdown,
+  } from '../lib/prd-template';
 
   const editor = document.querySelector<HTMLElement>('[data-prd-editor]');
+  const editorStatus = document.querySelector('.editor-status');
   const form = document.querySelector('#prd-editor-form');
   const titleInput = document.querySelector('#document-title');
   const completion = document.querySelector('#completion-count');
@@ -292,6 +296,7 @@ const blankDownloads = [
 
   if (
     !editor ||
+    !(editorStatus instanceof HTMLElement) ||
     !(form instanceof HTMLFormElement) ||
     !(titleInput instanceof HTMLInputElement) ||
     !(completion instanceof HTMLOutputElement) ||
@@ -385,6 +390,114 @@ const blankDownloads = [
       if (input) applyField(input, state.values[section.id]);
     }
   };
+
+  const clipboard = navigator.clipboard;
+  if (clipboard && typeof clipboard.writeText === 'function') {
+    const copyStatus = document.createElement('p');
+    copyStatus.className = 'editor-section-copy-status';
+    copyStatus.id = 'section-copy-status';
+    copyStatus.setAttribute('role', 'status');
+    copyStatus.setAttribute('aria-live', 'polite');
+    copyStatus.setAttribute('aria-atomic', 'true');
+    editorStatus.append(copyStatus);
+
+    const copyButtons: HTMLButtonElement[] = [];
+    const editableFields = [titleInput, ...sectionInputs.values()];
+    // Pointer activation can collapse a textarea selection before a rejected write settles.
+    const captureCopyState = () => ({
+      fields: editableFields.map((field) => ({
+        field,
+        selectionStart: field.selectionStart,
+        selectionEnd: field.selectionEnd,
+        selectionDirection: field.selectionDirection,
+        scrollLeft: field.scrollLeft,
+        scrollTop: field.scrollTop,
+      })),
+      scrollX: window.scrollX,
+      scrollY: window.scrollY,
+    });
+    const restoreCopyState = (
+      snapshot: ReturnType<typeof captureCopyState>,
+    ) => {
+      for (const field of snapshot.fields) {
+        if (field.selectionStart !== null && field.selectionEnd !== null) {
+          field.field.setSelectionRange(
+            field.selectionStart,
+            field.selectionEnd,
+            field.selectionDirection ?? 'none',
+          );
+        }
+        field.field.scrollLeft = field.scrollLeft;
+        field.field.scrollTop = field.scrollTop;
+      }
+      window.scrollTo(snapshot.scrollX, snapshot.scrollY);
+    };
+    let copyPending = false;
+    for (const section of PRD_TEMPLATE.sections) {
+      const input = sectionInputs.get(section.id);
+      const heading = input?.closest('.editor-section')?.querySelector('h2');
+      if (!input || !(heading instanceof HTMLHeadingElement)) {
+        throw new Error(`The PRD editor heading "${section.id}" is missing.`);
+      }
+
+      const button = document.createElement('button');
+      button.className = 'editor-section-copy';
+      button.id = `copy-section-${section.id}`;
+      button.type = 'button';
+      button.textContent = 'Copy section';
+      button.setAttribute(
+        'aria-label',
+        `Copy ${section.title} section as Markdown`,
+      );
+      heading.classList.add('editor-section-heading--copyable');
+      heading.append(button);
+      copyButtons.push(button);
+
+      let stateBeforeActivation: ReturnType<typeof captureCopyState> | undefined;
+      button.addEventListener('pointerdown', () => {
+        stateBeforeActivation = captureCopyState();
+      });
+      button.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          stateBeforeActivation = captureCopyState();
+        }
+      });
+      button.addEventListener('click', async () => {
+        const preservedState = stateBeforeActivation ?? captureCopyState();
+        stateBeforeActivation = undefined;
+        if (copyPending) return;
+        copyPending = true;
+        copyStatus.textContent = '';
+        copyStatus.dataset.state = 'pending';
+        for (const action of copyButtons) {
+          action.setAttribute('aria-disabled', 'true');
+        }
+        button.setAttribute('aria-busy', 'true');
+
+        try {
+          await clipboard.writeText(
+            serializePrdSectionMarkdown(section.id, readField(input)),
+          );
+          copyStatus.textContent = `Copied ${section.title} section as Markdown.`;
+          copyStatus.dataset.state = 'copied';
+        } catch {
+          await new Promise<void>((resolve) => {
+            window.requestAnimationFrame(() => resolve());
+          });
+          restoreCopyState(preservedState);
+          copyStatus.textContent =
+            `Could not copy ${section.title} section as Markdown. Your draft is unchanged.`;
+          copyStatus.dataset.state = 'error';
+        } finally {
+          for (const action of copyButtons) {
+            action.removeAttribute('aria-disabled');
+          }
+          button.removeAttribute('aria-busy');
+          copyPending = false;
+        }
+      });
+    }
+  }
 
   const isSectionComplete = (input: HTMLTextAreaElement | undefined) =>
     input ? input.value.trim().length > 0 : false;
@@ -1521,6 +1634,64 @@ const blankDownloads = [
     .editor-outline {
       max-height: calc(100vh - 3rem);
       overflow-y: auto;
+    }
+  }
+</style>
+
+<style is:global>
+  .editor-section h2.editor-section-heading--copyable {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.5rem;
+    align-items: start;
+    min-width: 0;
+  }
+
+  .editor-section-heading--copyable label {
+    min-width: 0;
+  }
+
+  .editor-section-heading--copyable label > span:first-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .editor-section-copy {
+    min-width: 2rem;
+    min-height: 2rem;
+    max-width: 100%;
+    padding: 0.3rem 0.55rem;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 650;
+    line-height: 1.25;
+    color: var(--text);
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+  }
+
+  .editor-section-copy:hover {
+    border-color: var(--text-muted);
+  }
+
+  .editor-section-copy-status {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  @media print {
+    .editor-section-copy,
+    .editor-section-copy-status {
+      display: none !important;
     }
   }
 </style>

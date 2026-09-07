@@ -149,7 +149,7 @@ for (const path of ['/prd/', '/prd/create/']) {
   });
 }
 
-test('renders one editor with the canonical heading, 12 optional section fields, one copy action, six downloads, and status regions', async ({
+test('renders one editor with 12 section-copy actions, one full-copy action, six downloads, and status regions', async ({
   page,
 }) => {
   await expect(page.locator('h1')).toHaveCount(1);
@@ -199,8 +199,14 @@ test('renders one editor with the canonical heading, 12 optional section fields,
     await expect(
       page.locator(`label[for="section-input-${section.id}"] .field-state`),
     ).toHaveText('Optional');
+    await expect(page.getByRole('button', {
+      name: `Copy ${section.title} section as Markdown`,
+      exact: true,
+    })).toHaveCount(1);
   }
 
+  await expect(page.locator('.editor-section-copy')).toHaveCount(12);
+  await expect(page.locator('.editor-title-field .editor-section-copy')).toHaveCount(0);
   await expect(page.locator('[data-export-format]')).toHaveCount(3);
   await expect(page.getByRole('button', { name: 'Copy Markdown', exact: true })).toHaveCount(1);
   const includeBlankSections = page.getByRole('checkbox', {
@@ -219,9 +225,10 @@ test('renders one editor with the canonical heading, 12 optional section fields,
   await expect(page.locator('.hero, .cards, a.card')).toHaveCount(0);
 
   const liveRegions = page.locator('[aria-live="polite"]');
-  await expect(liveRegions).toHaveCount(2);
+  await expect(liveRegions).toHaveCount(3);
   await expect(page.locator('#save-status')).toHaveAttribute('role', 'status');
   await expect(page.locator('#download-status')).toHaveAttribute('role', 'status');
+  await expect(page.locator('#section-copy-status')).toHaveAttribute('role', 'status');
 });
 
 test('outline completion uses section text only and updates immediately for non-whitespace input', async ({
@@ -550,7 +557,10 @@ test('keyboard flow reaches every field and action, and outline links focus thei
   await page.locator('#document-title').focus();
   const requiredBeforeBlankDownloads = [
     'document-title',
-    ...PRD_TEMPLATE_SECTIONS.map((section) => `section-input-${section.id}`),
+    ...PRD_TEMPLATE_SECTIONS.flatMap((section) => [
+      `copy-section-${section.id}`,
+      `section-input-${section.id}`,
+    ]),
     'include-blank-sections',
     'copy-markdown',
     'download-md',
@@ -656,8 +666,10 @@ test('at target widths Continue draft is at least 32px square, unobstructed, and
     expect(layout.obscuresText).toBe(false);
     expect(layout.scrollWidth).toBe(layout.viewport);
 
-    const targets = page.locator('.editor-outline a:visible, .editor-button:visible');
-    await expect(targets).toHaveCount(22);
+    const targets = page.locator(
+      '.editor-outline a:visible, .editor-button:visible, .editor-section-copy:visible',
+    );
+    await expect(targets).toHaveCount(34);
     const sizes = await targets.evaluateAll((nodes) =>
       nodes.map((node) => {
         const bounds = node.getBoundingClientRect();

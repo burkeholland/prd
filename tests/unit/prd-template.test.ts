@@ -6,6 +6,7 @@ import {
   PRD_TEMPLATE_SECTIONS,
   serializeBlankPrdMarkdown,
   serializePrdMarkdown,
+  serializePrdSectionMarkdown,
   type PrdTemplateSectionId,
 } from '../../src/lib/prd-template';
 
@@ -156,5 +157,38 @@ describe('serializePrdMarkdown', () => {
     const state = createBlankPrdTemplateState();
 
     expect(serializePrdMarkdown(state)).toBe(serializePrdMarkdown(state));
+  });
+});
+
+describe('serializePrdSectionMarkdown', () => {
+  it('serializes every canonical heading and normalized nonblank body', () => {
+    const values = Object.fromEntries(
+      PRD_TEMPLATE_SECTIONS.map((section, index) => [
+        section.id,
+        ` \r\n Decision ${index + 1}.\rSupporting ${section.id}. \n `,
+      ]),
+    ) as Record<PrdTemplateSectionId, string>;
+
+    for (const section of PRD_TEMPLATE_SECTIONS) {
+      expect(serializePrdSectionMarkdown(section.id, values[section.id])).toBe(
+        `## ${section.title}\n\nDecision ${PRD_TEMPLATE_SECTIONS.indexOf(section) + 1}.\nSupporting ${section.id}.\n`,
+      );
+    }
+
+    expect(serializePrdMarkdown({ title: 'Section parity', values })).toBe(
+      `# Section parity\n\n${PRD_TEMPLATE_SECTIONS.map((section) =>
+        serializePrdSectionMarkdown(section.id, values[section.id])
+      ).join('\n')}`,
+    );
+  });
+
+  it('serializes blank, whitespace-only, null, and undefined bodies as one H2 line', () => {
+    const section = PRD_TEMPLATE_SECTIONS[1];
+
+    for (const value of ['', ' \t\r\n ', null, undefined]) {
+      expect(serializePrdSectionMarkdown(section.id, value)).toBe(
+        `## ${section.title}\n`,
+      );
+    }
   });
 });
