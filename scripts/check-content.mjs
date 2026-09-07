@@ -26,6 +26,7 @@ const FILE_ROUTES = [
   '/downloads/build-the-urlist.docx',
   '/downloads/build-the-urlist.pdf',
   '/downloads/prd-handoff-checklist.md',
+  '/downloads/prd-revision-history.md',
   '/raw/build-the-urlist.md',
 ];
 

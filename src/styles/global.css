@@ -904,6 +904,32 @@ main:focus {
   font-size: 1.05rem;
 }
 
+.history-index-action {
+  margin: 0;
+}
+
+.history-index-download {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  max-width: 100%;
+  padding: 0.35rem 0.75rem;
+  overflow-wrap: anywhere;
+  color: var(--text-muted);
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.history-index-download:hover,
+.history-index-download:focus-visible {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
 .table-scroll {
   max-width: 100%;
   overflow-x: auto;
