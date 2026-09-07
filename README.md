@@ -32,7 +32,7 @@ src/                  Astro site
   layouts/            Base.astro (head, nav, footer) and Doc.astro (a markdown document + its table of contents)
   components/         PrdEditor, Nav, Footer, Toc
   pages/              one .astro per route: index, create, sample, guide, walkthrough, history, template, 404
-  pages/downloads/    prerendered Markdown, DOCX, and PDF blank-template files -> /downloads/prd-template.*
+  pages/downloads/    prerendered blank-template files plus the Markdown Template guide
   pages/prd-template.md.ts  compatibility endpoint, identical to /downloads/prd-template.md
   pages/history/[n].astro  one text-diff page per gist revision       -> /history/<n>
   lib/*.ts            base (withBase), site (SITE, NAV, routes), seo (canonical URL + social cards), toc, diff, history, history-notes
@@ -102,7 +102,9 @@ files during every build.
 
 The annotated `/template/` page renders the same sections, prompts, helper
 questions, and blank Markdown as the editor from `src/lib/prd-template.ts`.
-`content/template.md` supplies only its metadata and introduction. The old
+`content/template.md` supplies the metadata, introduction, and format guidance
+for both the page and the separate `/downloads/prd-template-guide.md` portable
+reference; the shared template model supplies its 12 guided section examples. The old
 `/prd-template.md` URL shares the canonical Markdown response factory, not a
 second public file. The completed example remains separate and unchanged.
 
