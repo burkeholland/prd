@@ -3,8 +3,12 @@ import { getEntry } from 'astro:content';
 import Doc from '../layouts/Doc.astro';
 import { DOC_ROUTES } from '../lib/site';
 import { withBase } from '../lib/base';
-import { PRD_TEMPLATE, serializeBlankPrdMarkdown } from '../lib/prd-template';
+import { PRD_TEMPLATE } from '../lib/prd-template';
 import { PRD_TEMPLATE_ALIASES } from '../lib/prd-template-compat';
+import {
+  getBlankTemplateSectionMarkdownExamples,
+  TEMPLATE_REPLACE_PLACEHOLDERS_GUIDANCE,
+} from '../lib/template-guide';
 
 const route = DOC_ROUTES['/template'];
 const entry = await getEntry(route.collection, route.id);
@@ -15,8 +19,7 @@ const headings = PRD_TEMPLATE.sections.map(({ id, title }) => ({
   slug: id,
   text: title,
 }));
-// Copy the serializer's complete sections, including their Markdown headings.
-const blankSections = serializeBlankPrdMarkdown().split(/(?=^## )/m).slice(1).map((text) => text.trimEnd());
+const blankSections = getBlankTemplateSectionMarkdownExamples();
 const aliases = Object.entries(PRD_TEMPLATE_ALIASES);
 const guideDownload = {
   label: 'Download guide (.md)',
@@ -46,7 +49,7 @@ const guideDownload = {
       <a class="template-download" href={withBase('/downloads/prd-template.pdf')} download>PDF</a>
     </p>
   </Fragment>
-  <p>{PRD_TEMPLATE.guidance} Replace the placeholders you keep with your own decisions.</p>
+  <p>{PRD_TEMPLATE.guidance} {TEMPLATE_REPLACE_PLACEHOLDERS_GUIDANCE}</p>
   {
     PRD_TEMPLATE.sections.map((section, index) => (
       <section class="template-section" aria-labelledby={section.id}>

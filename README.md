@@ -102,8 +102,9 @@ files during every build.
 
 The annotated `/template/` page renders the same sections, prompts, helper
 questions, and blank Markdown as the editor from `src/lib/prd-template.ts`.
-`content/template.md` supplies its metadata and introduction, and builds the
-separate `/downloads/prd-template-guide.md` portable reference. The old
+`content/template.md` supplies the metadata, introduction, and format guidance
+for both the page and the separate `/downloads/prd-template-guide.md` portable
+reference; the shared template model supplies its 12 guided section examples. The old
 `/prd-template.md` URL shares the canonical Markdown response factory, not a
 second public file. The completed example remains separate and unchanged.
 

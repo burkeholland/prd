@@ -1,164 +1,185 @@
-import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  parseTemplateGuideSource,
-  serializeTemplateGuideMarkdown,
-  templateGuideMarkdownBytes,
-} from '../../src/lib/template-guide';
+  extractHeadings,
+  parseFrontmatter,
+} from '../../scripts/lib/content.mjs';
 import {
-  createPrdTemplateGuideMarkdownResponse,
-  TEMPLATE_GUIDE_FILENAME,
-  TEMPLATE_GUIDE_MIME_TYPE,
-} from '../../src/pages/downloads/prd-template-guide.md';
+  createTemplateGuideMarkdownResponse,
+  getBlankTemplateSectionMarkdownExamples,
+  serializeTemplateGuideMarkdown,
+  TEMPLATE_GUIDE_DOWNLOAD_FILENAME,
+  TEMPLATE_GUIDE_MARKDOWN_MIME,
+  TEMPLATE_REPLACE_PLACEHOLDERS_GUIDANCE,
+  type TemplateGuideDownloadEntry,
+} from '../../src/lib/template-guide';
+import { PRD_TEMPLATE } from '../../src/lib/prd-template';
 
-const SOURCE_PATH = resolve('content/template.md');
-const decoder = new TextDecoder('utf-8', { fatal: true });
-
-const sourceBodyWithoutComments = (source: string): string => {
-  const normalized = source.replace(/\r\n?/g, '\n');
-  const closing = normalized.indexOf('\n---\n', 4);
-  if (closing === -1) throw new Error('Expected the fixture to have frontmatter.');
-  return normalized
-    .slice(closing + 5)
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .trim();
+const source = readFileSync(resolve('content/template.md'), 'utf8');
+const parsed = parseFrontmatter(source);
+if (
+  !parsed.data ||
+  !('title' in parsed.data) ||
+  typeof parsed.data.title !== 'string' ||
+  !('description' in parsed.data) ||
+  typeof parsed.data.description !== 'string'
+) {
+  throw new Error('template guide fixture requires title and description frontmatter');
+}
+const { title, description } = parsed.data;
+const entry: TemplateGuideDownloadEntry = {
+  data: parsed.data,
+  body: parsed.body,
 };
+const sourceOnlyComment =
+  '<!-- Introduction and metadata only. Sections come from src/lib/prd-template.ts in template.astro. -->';
+const expectedBody = parsed.body
+  .replace(/\r\n?/g, '\n')
+  .split('\n')
+  .filter((line) => line.trim() !== sourceOnlyComment)
+  .join('\n')
+  .replace(/^\n+|\n+$/g, '');
+const blankExamples = getBlankTemplateSectionMarkdownExamples();
+const expectedSections = PRD_TEMPLATE.sections.map((section, index) => [
+  `## ${section.title}`,
+  '',
+  section.prompt,
+  '',
+  ...section.helperQuestions.map((question) => `- ${question}`),
+  '',
+  '```markdown',
+  blankExamples[index],
+  '```',
+].join('\n'));
+const expected = [
+  `# ${title}`,
+  '',
+  description,
+  '',
+  expectedBody,
+  '',
+  `${PRD_TEMPLATE.guidance} ${TEMPLATE_REPLACE_PLACEHOLDERS_GUIDANCE}`,
+  '',
+  expectedSections.join('\n\n'),
+  '',
+].join('\n');
 
-describe('Template guide Markdown serialization', () => {
-  it('emits the exact source title, description, and complete body in order', async () => {
-    const source = await readFile(SOURCE_PATH, 'utf8');
-    const parsed = parseTemplateGuideSource(source);
-    const markdown = serializeTemplateGuideMarkdown(source);
-    const expectedBody = sourceBodyWithoutComments(source);
+describe('Template guide Markdown download', () => {
+  it('serializes the complete checked-in introduction and all model-driven guidance in order', () => {
+    const markdown = serializeTemplateGuideMarkdown(entry);
+    const headings = extractHeadings(markdown);
 
-    expect(parsed).toEqual({
-      title: 'PRD template',
-      description:
-        "The editor's adaptable PRD template, with prompts and blank sections to copy or download.",
-      body: expectedBody,
-    });
-    expect(markdown).toBe(
-      `# ${parsed.title}\n\n${parsed.description}\n\n${expectedBody}\n`,
-    );
-    expect(markdown.match(/^# /gm)).toHaveLength(1);
-    expect(markdown).not.toContain('---');
-    expect(markdown).not.toContain('<!--');
-    expect(markdown).not.toContain('-->');
-  });
-
-  it('preserves Markdown constructs, normalizes CRLF, removes only out-of-fence source comments, and writes one terminal LF', () => {
-    const source = [
-      '---',
-      'title: "Portable guide"',
-      'description: "Opening description."',
-      'order: 4',
-      '---',
-      '',
-      '<!-- source-only validator note -->',
-      '',
-      '## Prompt and example',
-      '',
-      '> Keep this **emphasis** and [link](/sample).',
-      '',
-      '| Format | Use |',
-      '|---|---|',
-      '| Markdown | Source control |',
-      '',
-      '1. First',
-      '2. Second',
-      '',
-      '```md',
-      '<!-- authored fenced example -->',
-      '# Example',
-      '```',
-      '',
-    ].join('\r\n');
-    const expected = [
-      '# Portable guide',
-      '',
-      'Opening description.',
-      '',
-      '## Prompt and example',
-      '',
-      '> Keep this **emphasis** and [link](/sample).',
-      '',
-      '| Format | Use |',
-      '|---|---|',
-      '| Markdown | Source control |',
-      '',
-      '1. First',
-      '2. Second',
-      '',
-      '```md',
-      '<!-- authored fenced example -->',
-      '# Example',
-      '```',
-      '',
-    ].join('\n');
-
-    const markdown = serializeTemplateGuideMarkdown(source);
     expect(markdown).toBe(expected);
-    expect(decoder.decode(templateGuideMarkdownBytes(source))).toBe(expected);
-    expect(markdown).not.toContain('\r');
-    expect(markdown.match(/\n+$/)?.[0]).toBe('\n');
-  });
+    expect(headings.map(({ depth, text }) => ({ depth, text }))).toEqual([
+      { depth: 1, text: title },
+      ...PRD_TEMPLATE.sections.map(({ title: sectionTitle }) => ({
+        depth: 2,
+        text: sectionTitle,
+      })),
+    ]);
+    expect(blankExamples).toHaveLength(12);
 
-  it.each([
-    ['absent source', '', 'is absent'],
-    ['missing frontmatter', '# Title\n\nBody', 'has malformed frontmatter'],
-    ['unclosed frontmatter', '---\ntitle: "Title"\n', 'has malformed frontmatter'],
-    [
-      'malformed frontmatter entry',
-      '---\ntitle: "Title"\nnot an entry\n---\nBody',
-      'has malformed frontmatter',
-    ],
-    [
-      'missing title',
-      '---\ndescription: "Description"\n---\nBody',
-      'has no title',
-    ],
-    [
-      'missing description',
-      '---\ntitle: "Title"\n---\nBody',
-      'has no description',
-    ],
-    [
-      'missing body',
-      '---\ntitle: "Title"\ndescription: "Description"\n---\n<!-- marker -->',
-      'has no body',
-    ],
-    [
-      'unclosed validator marker',
-      '---\ntitle: "Title"\ndescription: "Description"\n---\n<!-- marker\nBody',
-      'still contains a source-only validator marker',
-    ],
-  ])('fails explicitly for %s', (_label, source, reason) => {
-    expect(() => serializeTemplateGuideMarkdown(source)).toThrow(
-      `Template guide generation failed: content/template.md ${reason}`,
+    let cursor = markdown.indexOf(
+      `${PRD_TEMPLATE.guidance} ${TEMPLATE_REPLACE_PLACEHOLDERS_GUIDANCE}`,
     );
-  });
-});
+    for (const [index, section] of PRD_TEMPLATE.sections.entries()) {
+      expect(section.helperQuestions).toHaveLength(2);
+      const sectionIndex = markdown.indexOf(expectedSections[index]!, cursor);
+      expect(sectionIndex, `${section.id} follows the prior section`).toBeGreaterThan(cursor);
+      cursor = sectionIndex + expectedSections[index]!.length;
+    }
 
-describe('prerendered Template guide response', () => {
-  it('returns the same deterministic non-empty UTF-8 attachment twice', async () => {
-    const source = await readFile(SOURCE_PATH, 'utf8');
-    const expected = templateGuideMarkdownBytes(source);
-    const first = await createPrdTemplateGuideMarkdownResponse();
-    const second = await createPrdTemplateGuideMarkdownResponse();
+    expect(markdown).not.toMatch(/^---$/m);
+    expect(markdown).not.toContain(sourceOnlyComment);
+    expect(markdown).not.toContain('\r');
+    expect(markdown).toMatch(/[^\n]\n$/);
+    expect(markdown).not.toMatch(/\n\n$/);
+  });
+
+  it('preserves authored Markdown and removes only the known marker outside fences', () => {
+    const fixture: TemplateGuideDownloadEntry = {
+      data: { title: 'Portable guide', description: 'Opening description.' },
+      body: [
+        '',
+        sourceOnlyComment,
+        '',
+        '## Prompt and example',
+        '',
+        '> Keep this **emphasis** and [link](/sample).',
+        '',
+        '| Format | Use |',
+        '|---|---|',
+        '| Markdown | Source control |',
+        '',
+        '1. First',
+        '2. Second',
+        '',
+        '```md',
+        sourceOnlyComment,
+        '# Authored fenced example',
+        '```',
+        '',
+      ].join('\r\n'),
+    };
+    const markdown = serializeTemplateGuideMarkdown(fixture);
+
+    expect(markdown).toContain('> Keep this **emphasis** and [link](/sample).');
+    expect(markdown).toContain('| Markdown | Source control |');
+    expect(markdown).toContain('1. First\n2. Second');
+    expect(markdown).toContain(
+      `\`\`\`md\n${sourceOnlyComment}\n# Authored fenced example\n\`\`\``,
+    );
+    expect(markdown.match(new RegExp(sourceOnlyComment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')))
+      .toHaveLength(1);
+  });
+
+  it('returns deterministic non-empty UTF-8 bytes and exact attachment metadata twice', async () => {
+    const first = createTemplateGuideMarkdownResponse(entry);
+    const second = createTemplateGuideMarkdownResponse(entry);
     const firstBytes = new Uint8Array(await first.arrayBuffer());
     const secondBytes = new Uint8Array(await second.arrayBuffer());
 
     expect(first.status).toBe(200);
-    expect(first.headers.get('content-type')).toBe(TEMPLATE_GUIDE_MIME_TYPE);
+    expect(first.headers.get('content-type')).toBe(TEMPLATE_GUIDE_MARKDOWN_MIME);
     expect(first.headers.get('content-disposition')).toBe(
-      `attachment; filename="${TEMPLATE_GUIDE_FILENAME}"`,
+      `attachment; filename="${TEMPLATE_GUIDE_DOWNLOAD_FILENAME}"`,
     );
     expect(firstBytes.byteLength).toBeGreaterThan(0);
-    expect(decoder.decode(firstBytes)).toBe(serializeTemplateGuideMarkdown(source));
-    expect(firstBytes).toEqual(expected);
     expect(secondBytes).toEqual(firstBytes);
+    expect(new TextDecoder('utf-8', { fatal: true }).decode(firstBytes)).toBe(expected);
     expect(firstBytes.at(-1)).toBe(0x0a);
     expect(firstBytes.at(-2)).not.toBe(0x0a);
+  });
+
+  it.each([
+    ['entry', undefined, 'content entry is required'],
+    ['title', { data: { description: 'Description' }, body: 'Body' }, 'title is required'],
+    [
+      'multiline title',
+      { data: { title: 'Title\nextra', description: 'Description' }, body: 'Body' },
+      'title must be one line',
+    ],
+    ['description', { data: { title: 'Title' }, body: 'Body' }, 'description is required'],
+    ['body', { data: { title: 'Title', description: 'Description' } }, 'body is required'],
+    [
+      'body after marker removal',
+      {
+        data: { title: 'Title', description: 'Description' },
+        body: sourceOnlyComment,
+      },
+      'body is required',
+    ],
+    [
+      'unexpected source marker',
+      {
+        data: { title: 'Title', description: 'Description' },
+        body: '<!-- Introduction and metadata only. Changed marker -->\nBody',
+      },
+      'source-only validator marker remains',
+    ],
+  ])('rejects a malformed %s fixture explicitly', (_name, malformed, message) => {
+    expect(() => serializeTemplateGuideMarkdown(malformed)).toThrow(message);
+    expect(() => createTemplateGuideMarkdownResponse(malformed)).toThrow(message);
   });
 });

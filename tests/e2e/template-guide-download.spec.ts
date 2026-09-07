@@ -1,18 +1,44 @@
+import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { expect, test, type Download, type Page } from '@playwright/test';
 import {
-  loadTemplateGuideMarkdownBytes,
+  getBlankTemplateSectionMarkdownExamples,
+  serializeTemplateGuideMarkdown,
+  TEMPLATE_GUIDE_DOWNLOAD_FILENAME,
+  TEMPLATE_REPLACE_PLACEHOLDERS_GUIDANCE,
+  type TemplateGuideDownloadEntry,
 } from '../../src/lib/template-guide';
+import { PRD_TEMPLATE, PRD_TEMPLATE_SECTIONS } from '../../src/lib/prd-template';
 import {
-  TEMPLATE_GUIDE_FILENAME,
-} from '../../src/pages/downloads/prd-template-guide.md';
-import { PRD_TEMPLATE_SECTIONS } from '../../src/lib/prd-template';
+  extractHeadings,
+  parseFrontmatter,
+} from '../../scripts/lib/content.mjs';
 
 const BASE = '/prd';
 const to = (path: string) => `${BASE}${path}`;
 const GUIDE_PATH = to('/downloads/prd-template-guide.md');
 const guideLink = (page: Page) =>
   page.getByRole('link', { name: 'Download guide (.md)', exact: true });
+const parsed = parseFrontmatter(
+  readFileSync(resolve('content/template.md'), 'utf8'),
+);
+if (
+  !parsed.data ||
+  !('title' in parsed.data) ||
+  typeof parsed.data.title !== 'string' ||
+  !('description' in parsed.data) ||
+  typeof parsed.data.description !== 'string'
+) {
+  throw new Error('template guide fixture requires title and description frontmatter');
+}
+const guideTitle = parsed.data.title;
+const guideEntry: TemplateGuideDownloadEntry = {
+  data: parsed.data,
+  body: parsed.body,
+};
+const expectedGuideText = serializeTemplateGuideMarkdown(guideEntry);
+const expectedGuideBytes = Buffer.from(expectedGuideText);
 
 const downloadBytes = async (download: Download): Promise<Buffer> => {
   const path = await download.path();
@@ -35,34 +61,69 @@ test('Template downloads the exact prerendered guide and retries with its distin
   const link = guideLink(page);
   await expect(link).toHaveCount(1);
   await expect(link).toHaveAttribute('href', GUIDE_PATH);
-  await expect(link).toHaveAttribute('download', TEMPLATE_GUIDE_FILENAME);
+  await expect(link).toHaveAttribute('download', TEMPLATE_GUIDE_DOWNLOAD_FILENAME);
   await expect(page.locator('.doc__page-actions')).toHaveCount(1);
   await expect(page.locator('.doc__page-actions button.doc__copy-button')).toHaveCount(1);
   await expect(page.locator('.doc__page-actions button.doc__print-button')).toHaveCount(1);
   await expect(page.locator('.template-download-actions a[download]')).toHaveCount(3);
 
-  const expected = Buffer.from(await loadTemplateGuideMarkdownBytes());
   const direct = await request.get(GUIDE_PATH);
   expect(direct.status()).toBe(200);
   expect(direct.headers()['content-type']).toBe('text/markdown; charset=utf-8');
-  expect(await direct.body()).toEqual(expected);
+  expect(await direct.body()).toEqual(expectedGuideBytes);
 
   const firstPending = page.waitForEvent('download');
   await link.click();
   const first = await firstPending;
-  expect(first.suggestedFilename()).toBe(TEMPLATE_GUIDE_FILENAME);
-  expect(await downloadBytes(first)).toEqual(expected);
+  expect(first.suggestedFilename()).toBe(TEMPLATE_GUIDE_DOWNLOAD_FILENAME);
+  expect(await downloadBytes(first)).toEqual(expectedGuideBytes);
 
   const retryPending = page.waitForEvent('download');
   await link.focus();
   await expect(link).toBeFocused();
   await page.keyboard.press('Enter');
   const retry = await retryPending;
-  expect(retry.suggestedFilename()).toBe(TEMPLATE_GUIDE_FILENAME);
-  expect(await downloadBytes(retry)).toEqual(expected);
+  expect(retry.suggestedFilename()).toBe(TEMPLATE_GUIDE_DOWNLOAD_FILENAME);
+  expect(await downloadBytes(retry)).toEqual(expectedGuideBytes);
 
   await expect(page).toHaveURL(new RegExp(`${BASE}/template/$`));
   expect(diagnostics).toEqual([]);
+});
+
+test('the downloaded guide has exact 12-section model parity in source order', async ({
+  request,
+}) => {
+  const response = await request.get(GUIDE_PATH);
+  const markdown = await response.text();
+  const blankExamples = getBlankTemplateSectionMarkdownExamples();
+
+  expect(markdown).toBe(expectedGuideText);
+  expect(extractHeadings(markdown).map(({ depth, text }) => ({ depth, text }))).toEqual([
+    { depth: 1, text: guideTitle },
+    ...PRD_TEMPLATE.sections.map(({ title }) => ({ depth: 2, text: title })),
+  ]);
+
+  let cursor = markdown.indexOf(
+    `${PRD_TEMPLATE.guidance} ${TEMPLATE_REPLACE_PLACEHOLDERS_GUIDANCE}`,
+  );
+  for (const [index, section] of PRD_TEMPLATE.sections.entries()) {
+    const expectedSection = [
+      `## ${section.title}`,
+      '',
+      section.prompt,
+      '',
+      ...section.helperQuestions.map((question) => `- ${question}`),
+      '',
+      '```markdown',
+      blankExamples[index],
+      '```',
+    ].join('\n');
+    const sectionIndex = markdown.indexOf(expectedSection, cursor);
+    expect(sectionIndex, `${section.id} heading, prompt, questions, and example`).toBeGreaterThan(
+      cursor,
+    );
+    cursor = sectionIndex + expectedSection.length;
+  }
 });
 
 test('the static guide download is independent of Clipboard, draft state, request bodies, and history', async ({
@@ -235,9 +296,7 @@ test.describe('without JavaScript', () => {
     const pending = page.waitForEvent('download');
     await link.click();
     const download = await pending;
-    expect(download.suggestedFilename()).toBe(TEMPLATE_GUIDE_FILENAME);
-    expect(await downloadBytes(download)).toEqual(
-      Buffer.from(await loadTemplateGuideMarkdownBytes()),
-    );
+    expect(download.suggestedFilename()).toBe(TEMPLATE_GUIDE_DOWNLOAD_FILENAME);
+    expect(await downloadBytes(download)).toEqual(expectedGuideBytes);
   });
 });

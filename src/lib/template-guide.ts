@@ -1,65 +1,45 @@
-import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import {
+  PRD_TEMPLATE,
+  serializeBlankPrdMarkdown,
+} from './prd-template';
 
-const TEMPLATE_GUIDE_SOURCE = resolve('content/template.md');
-const FENCE_RE = /^ {0,3}(`{3,}|~{3,})/;
-const HTML_COMMENT_RE = /<!--[\s\S]*?-->/g;
-const HTML_COMMENT_MARKER_RE = /<!--|-->/;
+export const TEMPLATE_GUIDE_DOWNLOAD_PATH = '/downloads/prd-template-guide.md';
+export const TEMPLATE_GUIDE_DOWNLOAD_FILENAME = 'prd-template-guide.md';
+export const TEMPLATE_GUIDE_MARKDOWN_MIME = 'text/markdown; charset=utf-8';
+export const TEMPLATE_REPLACE_PLACEHOLDERS_GUIDANCE =
+  'Replace the placeholders you keep with your own decisions.';
 
-const generationError = (reason: string): Error =>
-  new Error(
-    `Template guide generation failed: content/template.md ${reason}`,
-  );
+export interface TemplateGuideDownloadEntry {
+  data?: {
+    title?: unknown;
+    description?: unknown;
+  };
+  body?: unknown;
+}
 
-const normalizeLineEndings = (value: string): string =>
-  value.replace(/\r\n?/g, '\n');
+const SOURCE_ONLY_INTRODUCTION_COMMENT =
+  '<!-- Introduction and metadata only. Sections come from src/lib/prd-template.ts in template.astro. -->';
+const SOURCE_ONLY_INTRODUCTION_MARKER =
+  '<!-- Introduction and metadata only.';
+const FENCE_OPEN_RE = /^ {0,3}(`{3,}|~{3,})/;
 
-const parseScalar = (raw: string): string => {
-  const value = raw.trim();
-  if (value === '') return '';
-
-  if (value.startsWith('"')) {
-    try {
-      const parsed: unknown = JSON.parse(value);
-      if (typeof parsed === 'string') return parsed;
-    } catch {
-      // The shared malformed-frontmatter error below is more useful than JSON syntax details.
-    }
-    throw generationError('has malformed frontmatter.');
+const requiredText = (value: unknown, field: string): string => {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new Error(`template guide download: content entry ${field} is required`);
   }
-
-  if (value.startsWith("'")) {
-    if (!value.endsWith("'") || value.length < 2) {
-      throw generationError('has malformed frontmatter.');
-    }
-    const inner = value.slice(1, -1);
-    if (/(^|[^'])'(?!')/.test(inner)) {
-      throw generationError('has malformed frontmatter.');
-    }
-    return inner.replace(/''/g, "'");
-  }
-
-  if (value.endsWith('"') || value.endsWith("'")) {
-    throw generationError('has malformed frontmatter.');
-  }
-  return value;
+  return value.replace(/\r\n?/g, '\n');
 };
 
-const transformOutsideFences = (
-  source: string,
-  transform: (segment: string) => string,
-): string => {
+const cleanAuthoredBody = (value: unknown): string => {
+  const lines = requiredText(value, 'body').split('\n');
   const output: string[] = [];
-  let plain = '';
   let fence: { character: string; length: number } | undefined;
+  let sourceMarkerRemains = false;
 
-  for (const line of source.match(/[^\n]*(?:\n|$)/g) ?? []) {
-    if (line === '') continue;
-    const content = line.endsWith('\n') ? line.slice(0, -1) : line;
-
+  for (const line of lines) {
     if (fence) {
       output.push(line);
-      const closing = /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(content);
+      const closing = /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(line);
       if (
         closing &&
         closing[1]![0] === fence.character &&
@@ -70,115 +50,105 @@ const transformOutsideFences = (
       continue;
     }
 
-    const opening = FENCE_RE.exec(content);
+    const opening = FENCE_OPEN_RE.exec(line);
     if (opening) {
-      output.push(transform(plain), line);
-      plain = '';
       fence = {
         character: opening[1]![0]!,
         length: opening[1]!.length,
       };
+      output.push(line);
       continue;
     }
 
-    plain += line;
+    if (line.trim() === SOURCE_ONLY_INTRODUCTION_COMMENT) continue;
+    if (line.includes(SOURCE_ONLY_INTRODUCTION_MARKER)) {
+      sourceMarkerRemains = true;
+    }
+    output.push(line);
   }
 
-  output.push(transform(plain));
-  return output.join('');
+  if (sourceMarkerRemains) {
+    throw new Error('template guide download: source-only validator marker remains');
+  }
+
+  const body = output.join('\n').replace(/^\n+|\n+$/g, '');
+  if (body.trim() === '') {
+    throw new Error('template guide download: content entry body is required');
+  }
+  return body;
 };
 
-const trimBlankEdgeLines = (value: string): string =>
-  value
-    .replace(/^(?:[ \t]*\n)+/, '')
-    .replace(/(?:\n[ \t]*)+$/, '');
+export const getBlankTemplateSectionMarkdownExamples = (): readonly string[] => {
+  const sections = serializeBlankPrdMarkdown()
+    .split(/(?=^## )/m)
+    .slice(1)
+    .map((section) => section.trimEnd());
 
-export interface TemplateGuideSource {
-  readonly title: string;
-  readonly description: string;
-  readonly body: string;
+  if (sections.length !== PRD_TEMPLATE.sections.length) {
+    throw new Error('template guide download: blank section examples are incomplete');
+  }
+  return sections;
+};
+
+export function serializeTemplateGuideMarkdown(
+  entry: TemplateGuideDownloadEntry | null | undefined,
+): string {
+  if (!entry) {
+    throw new Error('template guide download: content entry is required');
+  }
+
+  const title = requiredText(entry.data?.title, 'title');
+  if (title.includes('\n')) {
+    throw new Error('template guide download: content entry title must be one line');
+  }
+  const description = requiredText(entry.data?.description, 'description');
+  const body = cleanAuthoredBody(entry.body);
+  const blankExamples = getBlankTemplateSectionMarkdownExamples();
+  const guidance =
+    `${PRD_TEMPLATE.guidance} ${TEMPLATE_REPLACE_PLACEHOLDERS_GUIDANCE}`;
+  const sections = PRD_TEMPLATE.sections.map((section, index) => {
+    if (section.helperQuestions.length !== 2) {
+      throw new Error(
+        `template guide download: ${section.id} must have exactly two helper questions`,
+      );
+    }
+
+    return [
+      `## ${section.title}`,
+      '',
+      section.prompt,
+      '',
+      ...section.helperQuestions.map((question) => `- ${question}`),
+      '',
+      '```markdown',
+      blankExamples[index]!,
+      '```',
+    ].join('\n');
+  }).join('\n\n');
+
+  return [
+    `# ${title}`,
+    '',
+    description,
+    '',
+    body,
+    '',
+    guidance,
+    '',
+    sections,
+    '',
+  ].join('\n');
 }
 
-export const parseTemplateGuideSource = (
-  source: string,
-): TemplateGuideSource => {
-  if (typeof source !== 'string' || source.trim() === '') {
-    throw generationError('is absent.');
-  }
-
-  const normalized = normalizeLineEndings(source).replace(/^\uFEFF/, '');
-  const lines = normalized.split('\n');
-  if (!/^---[ \t]*$/.test(lines[0] ?? '')) {
-    throw generationError('has malformed frontmatter.');
-  }
-
-  const closingIndex = lines.findIndex(
-    (line, index) => index > 0 && /^---[ \t]*$/.test(line),
-  );
-  if (closingIndex === -1) {
-    throw generationError('has malformed frontmatter.');
-  }
-
-  const data = new Map<string, string>();
-  for (const line of lines.slice(1, closingIndex)) {
-    if (line.trim() === '' || line.trimStart().startsWith('#')) continue;
-    const entry = /^([A-Za-z_][\w-]*)[ \t]*:(?:[ \t]*(.*))?$/.exec(line);
-    if (!entry || data.has(entry[1]!)) {
-      throw generationError('has malformed frontmatter.');
-    }
-    data.set(entry[1]!, parseScalar(entry[2] ?? ''));
-  }
-
-  const title = data.get('title');
-  if (!title?.trim()) throw generationError('has no title.');
-  if (title.includes('\n')) throw generationError('has malformed frontmatter.');
-
-  const description = data.get('description');
-  if (!description?.trim()) throw generationError('has no description.');
-  if (description.includes('\n')) {
-    throw generationError('has malformed frontmatter.');
-  }
-
-  const withoutSourceComments = transformOutsideFences(
-    lines.slice(closingIndex + 1).join('\n'),
-    (segment) => segment.replace(HTML_COMMENT_RE, ''),
-  );
-  let markerRemains = false;
-  transformOutsideFences(withoutSourceComments, (segment) => {
-    markerRemains ||= HTML_COMMENT_MARKER_RE.test(segment);
-    return segment;
+export function createTemplateGuideMarkdownResponse(
+  entry: TemplateGuideDownloadEntry | null | undefined,
+): Response {
+  const bytes = new TextEncoder().encode(serializeTemplateGuideMarkdown(entry));
+  return new Response(bytes, {
+    headers: {
+      'Content-Type': TEMPLATE_GUIDE_MARKDOWN_MIME,
+      'Content-Disposition':
+        `attachment; filename="${TEMPLATE_GUIDE_DOWNLOAD_FILENAME}"`,
+    },
   });
-  if (markerRemains) {
-    throw generationError('still contains a source-only validator marker.');
-  }
-
-  const body = trimBlankEdgeLines(withoutSourceComments);
-  if (body.trim() === '') throw generationError('has no body.');
-
-  return { title, description, body };
-};
-
-export const serializeTemplateGuideMarkdown = (source: string): string => {
-  const { title, description, body } = parseTemplateGuideSource(source);
-  return `# ${title}\n\n${description}\n\n${body}\n`;
-};
-
-export const templateGuideMarkdownBytes = (source: string): Uint8Array =>
-  new TextEncoder().encode(serializeTemplateGuideMarkdown(source));
-
-export const loadTemplateGuideMarkdownBytes = async (): Promise<Uint8Array> => {
-  try {
-    return templateGuideMarkdownBytes(
-      await readFile(TEMPLATE_GUIDE_SOURCE, 'utf8'),
-    );
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      'code' in error &&
-      error.code === 'ENOENT'
-    ) {
-      throw generationError('is absent.');
-    }
-    throw error;
-  }
-};
+}
