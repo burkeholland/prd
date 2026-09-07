@@ -16,7 +16,7 @@ test.beforeEach(async ({ page }) => {
   await page.reload();
 });
 
-test('renders one editor with the canonical heading, 12 optional section fields, six downloads, and status regions', async ({
+test('renders one editor with the canonical heading, 12 optional section fields, one copy action, six downloads, and status regions', async ({
   page,
 }) => {
   await expect(page.locator('h1')).toHaveCount(1);
@@ -58,6 +58,7 @@ test('renders one editor with the canonical heading, 12 optional section fields,
   }
 
   await expect(page.locator('[data-export-format]')).toHaveCount(3);
+  await expect(page.getByRole('button', { name: 'Copy Markdown', exact: true })).toHaveCount(1);
   await expect(page.locator('.editor-downloads .editor-blank-links a[download]')).toHaveCount(3);
   await expect(page.locator('#download-heading')).toHaveText('Download your PRD');
   await expect(page.locator('.editor-downloads h3')).toHaveText('Or start with a blank file');
@@ -227,6 +228,7 @@ test('keyboard flow reaches every field and action, and outline links focus thei
   const requiredBeforeBlankDownloads = [
     'document-title',
     ...PRD_TEMPLATE_SECTIONS.map((section) => `section-input-${section.id}`),
+    'copy-markdown',
     'download-md',
     'download-docx',
     'download-pdf',
@@ -272,7 +274,7 @@ test('keyboard flow reaches every field and action, and outline links focus thei
       : withoutSequentialBlankDownloads,
   );
 
-  for (const id of [...blankDownloads, 'download-backup', 'import-backup']) {
+  for (const id of ['copy-markdown', ...blankDownloads, 'download-backup', 'import-backup']) {
     const link = page.locator(`#${id}`);
     await link.focus();
     await expect(link).toBeFocused();
@@ -311,7 +313,7 @@ test('at 320px the page does not overflow and every outline link and button is a
   expect(dimensions).toEqual({ scrollWidth: 320, viewport: 320 });
 
   const targets = page.locator('.editor-outline a:visible, .editor-button:visible');
-  await expect(targets).toHaveCount(19);
+  await expect(targets).toHaveCount(20);
   const heights = await targets.evaluateAll((nodes) =>
     nodes.map((node) => node.getBoundingClientRect().height),
   );

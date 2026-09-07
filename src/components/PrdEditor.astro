@@ -93,6 +93,13 @@ const blankDownloads = [
         <p class="editor-group-label">Current draft</p>
         <div class="editor-download-actions">
           <button
+            id="copy-markdown"
+            class="editor-button"
+            type="button"
+          >
+            Copy Markdown
+          </button>
+          <button
             id="download-md"
             class="editor-button"
             type="button"
@@ -240,6 +247,7 @@ const blankDownloads = [
   const importBackupButton = document.querySelector('#import-backup');
   const backupFileInput = document.querySelector('#backup-file');
   const downloadStatus = document.querySelector('#download-status');
+  const copyMarkdownButton = document.querySelector('#copy-markdown');
   const downloadButtons = Array.from(
     document.querySelectorAll<HTMLButtonElement>('[data-export-format]'),
   );
@@ -259,6 +267,7 @@ const blankDownloads = [
     !(importBackupButton instanceof HTMLButtonElement) ||
     !(backupFileInput instanceof HTMLInputElement) ||
     !(downloadStatus instanceof HTMLParagraphElement) ||
+    !(copyMarkdownButton instanceof HTMLButtonElement) ||
     downloadButtons.length !== 3
   ) {
     throw new Error('The PRD editor markup is incomplete.');
@@ -664,6 +673,35 @@ const blankDownloads = [
       window.setTimeout(() => URL.revokeObjectURL(url), 0);
     }
   };
+
+  copyMarkdownButton.addEventListener('click', async () => {
+    downloadStatus.textContent = '';
+    downloadStatus.dataset.state = 'pending';
+    if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+      showDownloadStatus(
+        'Clipboard access is unavailable. Use the Markdown (.md) download instead.',
+        'error',
+      );
+      return;
+    }
+
+    const markdown = new TextDecoder().decode(exportPrdMarkdown(readState()));
+    copyMarkdownButton.disabled = true;
+    copyMarkdownButton.setAttribute('aria-busy', 'true');
+    try {
+      await navigator.clipboard.writeText(markdown);
+      showDownloadStatus('Copied Markdown to the clipboard.', 'copied');
+    } catch (error) {
+      console.error('Could not copy Markdown to the clipboard.', error);
+      showDownloadStatus(
+        'Could not copy Markdown to the clipboard. Use the Markdown (.md) download instead.',
+        'error',
+      );
+    } finally {
+      copyMarkdownButton.disabled = false;
+      copyMarkdownButton.removeAttribute('aria-busy');
+    }
+  });
 
   for (const button of downloadButtons) {
     button.addEventListener('click', async () => {
