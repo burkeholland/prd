@@ -27,7 +27,7 @@ const aliases = Object.entries(PRD_TEMPLATE_ALIASES);
     <p class="doc__actions">
       <a class="button" href={withBase('/')}>Open the editor</a>
     </p>
-    <p class="doc__actions">
+    <p class="doc__actions template-download-actions">
       <span class="doc__actions-note">Download a blank file:</span>
       <a class="template-download" href={withBase('/downloads/prd-template.md')} download>Markdown</a>
       <a class="template-download" href={withBase('/downloads/prd-template.docx')} download>Word (.docx)</a>
@@ -58,20 +58,79 @@ const aliases = Object.entries(PRD_TEMPLATE_ALIASES);
 <script>
   const RESET = 'Copy';
   const main = document.querySelector('main');
-  let status: HTMLParagraphElement | undefined;
+  const status = document.createElement('p');
+  status.className = 'copy-status';
+  status.setAttribute('role', 'status');
+  status.setAttribute('aria-live', 'polite');
+  status.setAttribute('aria-atomic', 'true');
+  main?.append(status);
 
   /** Mirrors the last result in one polite live region so screen readers hear it. */
   const announce = (message: string) => {
-    if (!main) return;
-    if (!status) {
-      status = document.createElement('p');
-      status.className = 'copy-status';
-      status.setAttribute('role', 'status');
-      status.setAttribute('aria-live', 'polite');
-      main.append(status);
-    }
     status.textContent = message;
   };
+
+  const downloadActions = document.querySelector('.template-download-actions');
+  const markdownDownload = downloadActions?.querySelector<HTMLAnchorElement>(
+    'a[download][href$="/downloads/prd-template.md"]',
+  );
+  const pdfDownload = downloadActions?.querySelector<HTMLAnchorElement>(
+    'a[download][href$="/downloads/prd-template.pdf"]',
+  );
+
+  if (
+    downloadActions &&
+    markdownDownload &&
+    pdfDownload &&
+    typeof fetch === 'function' &&
+    typeof navigator.clipboard?.writeText === 'function'
+  ) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'template-copy-all';
+    button.textContent = 'Copy blank Markdown';
+    pdfDownload.after(button);
+
+    let busy = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const show = (text: string, copied: boolean) => {
+      button.textContent = text;
+      if (copied) button.dataset.state = 'copied';
+      else delete button.dataset.state;
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        button.textContent = 'Copy blank Markdown';
+        delete button.dataset.state;
+      }, 1500);
+    };
+
+    button.addEventListener('click', async () => {
+      if (busy) return;
+      busy = true;
+      button.disabled = true;
+      button.setAttribute('aria-busy', 'true');
+      button.textContent = 'Copying…';
+      delete button.dataset.state;
+      clearTimeout(timer);
+      announce('');
+
+      try {
+        const response = await fetch(markdownDownload.href);
+        if (!response.ok) throw new Error(`Markdown download returned ${response.status}`);
+        const text = await response.text();
+        await navigator.clipboard.writeText(text);
+        show('Copied', true);
+        announce('Copied the whole blank Markdown template.');
+      } catch {
+        show('Copy failed', false);
+        announce('Copy failed. Use the Markdown download instead.');
+      } finally {
+        busy = false;
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
+      }
+    });
+  }
 
   for (const pre of document.querySelectorAll<HTMLPreElement>('main .prose pre[data-section-title]')) {
     const code = pre.querySelector('code') ?? pre;
@@ -153,6 +212,43 @@ const aliases = Object.entries(PRD_TEMPLATE_ALIASES);
     padding-block: 0.2rem;
   }
 
+  .template-copy-all {
+    display: inline-block;
+    min-width: 32px;
+    min-height: 32px;
+    padding: 0.2rem 0;
+    font: inherit;
+    color: var(--accent);
+    background: none;
+    border: 0;
+    cursor: pointer;
+    text-align: start;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.15em;
+  }
+
+  /* Reserve the resting label's width while shorter progress and result labels are shown. */
+  .template-copy-all::after {
+    content: 'Copy blank Markdown';
+    display: block;
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
+  }
+
+  .template-copy-all:hover {
+    text-decoration-thickness: 2px;
+  }
+
+  .template-copy-all[data-state='copied'] {
+    color: var(--text-muted);
+  }
+
+  .template-copy-all[aria-busy='true'] {
+    cursor: progress;
+  }
+
   .code-block {
     position: relative;
   }
@@ -197,7 +293,8 @@ const aliases = Object.entries(PRD_TEMPLATE_ALIASES);
   }
 
   @media print {
-    .copy-button {
+    .copy-button,
+    .template-copy-all {
       display: none;
     }
   }
