@@ -83,7 +83,32 @@ const beforeUnloadPrevented = (page: Page) =>
     return event.defaultPrevented;
   });
 
+const installClipboardStub = (page: Page) =>
+  page.addInitScript(() => {
+    const testWindow = window as typeof window & {
+      __prdClipboardWrites: string[];
+    };
+    testWindow.__prdClipboardWrites = [];
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText(text: string) {
+          testWindow.__prdClipboardWrites.push(text);
+          return new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+        },
+      },
+    });
+  });
+
+const clipboardWrites = (page: Page) =>
+  page.evaluate(
+    () =>
+      (window as typeof window & { __prdClipboardWrites: string[] })
+        .__prdClipboardWrites,
+  );
+
 test.beforeEach(async ({ page }) => {
+  await installClipboardStub(page);
   await page.goto(PATH);
   await page.evaluate((key) => localStorage.removeItem(key), PRD_EDITOR_STORAGE_KEY);
   await page.reload();
@@ -166,9 +191,7 @@ test('supported body syntax, progress, Continue draft, print, and exports reflec
   await expect(page.locator('#download-status')).toHaveText(
     'Copied Markdown to the clipboard.',
   );
-  expect(
-    (await page.evaluate(() => navigator.clipboard.readText())).replaceAll('\r\n', '\n'),
-  ).toBe(serializePrdMarkdown(state));
+  expect(await clipboardWrites(page)).toEqual([serializePrdMarkdown(state)]);
 
   await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
   await expect(page.locator('[data-prd-print-title]')).toHaveText(state.title);
