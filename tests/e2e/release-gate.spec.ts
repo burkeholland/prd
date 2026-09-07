@@ -247,19 +247,24 @@ test('successful save and restored draft have no active leave warning', async ({
   expect(await beforeUnloadPrevented(page)).toBe(false);
 });
 
-test('the three live regions have unique identities and report isolated outcomes accurately', async ({
+test('the four live regions have unique identities and report isolated outcomes accurately', async ({
   page,
 }) => {
   await page.goto(to('/'));
   const liveRegions = page.locator(
     '[role="status"][aria-live="polite"][aria-atomic="true"]',
   );
-  await expect(liveRegions).toHaveCount(3);
+  await expect(liveRegions).toHaveCount(4);
   expect(
     await liveRegions.evaluateAll((regions) =>
       regions.map((region) => region.id),
     ),
-  ).toEqual(['save-status', 'section-copy-status', 'download-status']);
+  ).toEqual([
+    'total-word-count',
+    'save-status',
+    'section-copy-status',
+    'download-status',
+  ]);
   await expect(page.locator('#save-status')).toHaveText(
     'No draft saved in this browser yet.',
   );

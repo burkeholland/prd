@@ -194,7 +194,7 @@ test('renders one editor with 12 section action pairs, one full-copy action, six
     );
     await expect(field).toHaveAttribute(
       'aria-describedby',
-      `section-prompt-${section.id} section-questions-${section.id}`,
+      `section-prompt-${section.id} section-questions-${section.id} section-word-count-${section.id}`,
     );
     await expect(
       page.locator(`label[for="section-input-${section.id}"] .field-state`),
@@ -231,7 +231,8 @@ test('renders one editor with 12 section action pairs, one full-copy action, six
   await expect(page.locator('.hero, .cards, a.card')).toHaveCount(0);
 
   const liveRegions = page.locator('[aria-live="polite"]');
-  await expect(liveRegions).toHaveCount(3);
+  await expect(liveRegions).toHaveCount(4);
+  await expect(page.locator('#total-word-count')).toHaveAttribute('role', 'status');
   await expect(page.locator('#save-status')).toHaveAttribute('role', 'status');
   await expect(page.locator('#download-status')).toHaveAttribute('role', 'status');
   await expect(page.locator('#section-copy-status')).toHaveAttribute('role', 'status');
