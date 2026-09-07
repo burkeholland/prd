@@ -674,6 +674,7 @@ test('clipboard and JavaScript fallbacks add no section-copy UI', async ({
   for (const route of ROUTES) {
     await page.goto(route);
     await expect(page.locator('.editor-section-copy, #section-copy-status')).toHaveCount(0);
+    await expect(page.locator('.editor-section-download')).toHaveCount(12);
     await expect(page.locator('#prd-editor-form input, #prd-editor-form textarea')).toHaveCount(13);
     await expect(page.locator('.editor-download-actions .editor-button')).toHaveCount(4);
   }
@@ -684,7 +685,7 @@ test('clipboard and JavaScript fallbacks add no section-copy UI', async ({
     for (const route of ROUTES) {
       await noScriptPage.goto(route);
       await expect(
-        noScriptPage.locator('.editor-section-copy, #section-copy-status'),
+        noScriptPage.locator('.editor-section-action, #section-copy-status'),
       ).toHaveCount(0);
       await expect(
         noScriptPage.locator('#prd-editor-form input, #prd-editor-form textarea'),
@@ -742,7 +743,7 @@ test('section actions are print-hidden, 32px targets, non-overlapping, and overf
   }
 
   await page.emulateMedia({ media: 'print' });
-  await expect(page.locator('.editor-section-copy:visible, #section-copy-status:visible'))
+  await expect(page.locator('.editor-section-actions:visible, #section-copy-status:visible'))
     .toHaveCount(0);
   await expect(page.locator('.prd-print')).toBeVisible();
   await expect(page.locator('.prd-print h2')).toHaveCount(12);

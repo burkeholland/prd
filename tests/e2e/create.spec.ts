@@ -149,7 +149,7 @@ for (const path of ['/prd/', '/prd/create/']) {
   });
 }
 
-test('renders one editor with 12 section-copy actions, one full-copy action, six downloads, and status regions', async ({
+test('renders one editor with 12 section action pairs, one full-copy action, six document downloads, and status regions', async ({
   page,
 }) => {
   await expect(page.locator('h1')).toHaveCount(1);
@@ -203,10 +203,16 @@ test('renders one editor with 12 section-copy actions, one full-copy action, six
       name: `Copy ${section.title} section as Markdown`,
       exact: true,
     })).toHaveCount(1);
+    await expect(page.getByRole('button', {
+      name: `Download ${section.title} section as Markdown`,
+      exact: true,
+    })).toHaveCount(1);
   }
 
   await expect(page.locator('.editor-section-copy')).toHaveCount(12);
   await expect(page.locator('.editor-title-field .editor-section-copy')).toHaveCount(0);
+  await expect(page.locator('.editor-section-download')).toHaveCount(12);
+  await expect(page.locator('.editor-title-field .editor-section-download')).toHaveCount(0);
   await expect(page.locator('[data-export-format]')).toHaveCount(3);
   await expect(page.getByRole('button', { name: 'Copy Markdown', exact: true })).toHaveCount(1);
   const includeBlankSections = page.getByRole('checkbox', {
@@ -559,6 +565,7 @@ test('keyboard flow reaches every field and action, and outline links focus thei
     'document-title',
     ...PRD_TEMPLATE_SECTIONS.flatMap((section) => [
       `copy-section-${section.id}`,
+      `download-section-${section.id}`,
       `section-input-${section.id}`,
     ]),
     'include-blank-sections',
@@ -667,9 +674,9 @@ test('at target widths Continue draft is at least 32px square, unobstructed, and
     expect(layout.scrollWidth).toBe(layout.viewport);
 
     const targets = page.locator(
-      '.editor-outline a:visible, .editor-button:visible, .editor-section-copy:visible',
+      '.editor-outline a:visible, .editor-button:visible, .editor-section-action:visible',
     );
-    await expect(targets).toHaveCount(34);
+    await expect(targets).toHaveCount(46);
     const sizes = await targets.evaluateAll((nodes) =>
       nodes.map((node) => {
         const bounds = node.getBoundingClientRect();

@@ -391,6 +391,39 @@ const blankDownloads = [
     }
   };
 
+  const sectionActions = PRD_TEMPLATE.sections.map((section) => {
+    const input = sectionInputs.get(section.id);
+    const heading = input?.closest('.editor-section')?.querySelector('h2');
+    if (!input || !(heading instanceof HTMLHeadingElement)) {
+      throw new Error(`The PRD editor heading "${section.id}" is missing.`);
+    }
+
+    const actions = document.createElement('span');
+    actions.className = 'editor-section-actions';
+
+    const downloadButton = document.createElement('button');
+    downloadButton.className = 'editor-section-action editor-section-download';
+    downloadButton.id = `download-section-${section.id}`;
+    downloadButton.type = 'button';
+    downloadButton.textContent = 'Download section (.md)';
+    downloadButton.setAttribute(
+      'aria-label',
+      `Download ${section.title} section as Markdown`,
+    );
+    downloadButton.addEventListener('click', () => {
+      const markdown = serializePrdSectionMarkdown(section.id, readField(input));
+      startDownload(
+        new Blob([markdown], { type: 'text/markdown;charset=utf-8' }),
+        `prd-section-${section.id}.md`,
+      );
+    });
+
+    actions.append(downloadButton);
+    heading.classList.add('editor-section-heading--actionable');
+    heading.append(actions);
+    return { section, input, actions };
+  });
+
   const clipboard = navigator.clipboard;
   if (clipboard && typeof clipboard.writeText === 'function') {
     const copyStatus = document.createElement('p');
@@ -432,15 +465,9 @@ const blankDownloads = [
       }
     };
     let copyPending = false;
-    for (const section of PRD_TEMPLATE.sections) {
-      const input = sectionInputs.get(section.id);
-      const heading = input?.closest('.editor-section')?.querySelector('h2');
-      if (!input || !(heading instanceof HTMLHeadingElement)) {
-        throw new Error(`The PRD editor heading "${section.id}" is missing.`);
-      }
-
+    for (const { section, input, actions } of sectionActions) {
       const button = document.createElement('button');
-      button.className = 'editor-section-copy';
+      button.className = 'editor-section-action editor-section-copy';
       button.id = `copy-section-${section.id}`;
       button.type = 'button';
       button.textContent = 'Copy section';
@@ -448,8 +475,7 @@ const blankDownloads = [
         'aria-label',
         `Copy ${section.title} section as Markdown`,
       );
-      heading.classList.add('editor-section-heading--copyable');
-      heading.append(button);
+      actions.prepend(button);
       copyButtons.push(button);
 
       let stateBeforeActivation: ReturnType<typeof captureCopyState> | undefined;
@@ -1750,24 +1776,35 @@ const blankDownloads = [
 </style>
 
 <style is:global>
-  .editor-section h2.editor-section-heading--copyable {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+  .editor-section h2.editor-section-heading--actionable {
+    display: flex;
+    flex-wrap: wrap;
     gap: 0.5rem;
     align-items: start;
     min-width: 0;
   }
 
-  .editor-section-heading--copyable label {
+  .editor-section-heading--actionable label {
+    flex: 1 1 12rem;
     min-width: 0;
   }
 
-  .editor-section-heading--copyable label > span:first-child {
+  .editor-section-heading--actionable label > span:first-child {
     min-width: 0;
     overflow-wrap: anywhere;
   }
 
-  .editor-section-copy {
+  .editor-section-actions {
+    display: flex;
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .editor-section-action {
     min-width: 2rem;
     min-height: 2rem;
     max-width: 100%;
@@ -1781,9 +1818,10 @@ const blankDownloads = [
     border: 1px solid var(--border);
     border-radius: var(--radius);
     cursor: pointer;
+    overflow-wrap: anywhere;
   }
 
-  .editor-section-copy:hover {
+  .editor-section-action:hover {
     border-color: var(--text-muted);
   }
 
@@ -1800,7 +1838,7 @@ const blankDownloads = [
   }
 
   @media print {
-    .editor-section-copy,
+    .editor-section-actions,
     .editor-section-copy-status {
       display: none !important;
     }
