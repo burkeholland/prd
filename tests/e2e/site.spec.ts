@@ -436,7 +436,12 @@ test('the template page links the home editor and canonical blank files', async 
 
   await expect(page.locator('.doc__header a.button')).toHaveText('Open the editor');
   await expect(page.locator('.doc__header a.button')).toHaveAttribute('href', to('/'));
-  await expect(page.locator('.doc__header a[download]')).toHaveText(['Markdown', 'Word (.docx)', 'PDF']);
+  await expect(page.locator('.doc__header a[download]')).toHaveText([
+    'Markdown',
+    'Word (.docx)',
+    'PDF',
+    'Download guide (.md)',
+  ]);
   for (const format of ['md', 'docx', 'pdf']) {
     const href = to(`/downloads/prd-template.${format}`);
     await expect(page.locator(`.doc__header a[download][href="${href}"]`)).toHaveCount(1);

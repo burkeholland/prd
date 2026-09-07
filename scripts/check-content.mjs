@@ -18,6 +18,7 @@ const PAGE_ROUTES = ['/', '/sample', '/guide', '/walkthrough', '/history', '/tem
 const FILE_ROUTES = [
   '/prd-template.md',
   '/downloads/prd-template.md',
+  '/downloads/prd-template-guide.md',
   '/downloads/prd-template.docx',
   '/downloads/prd-template.pdf',
   '/downloads/prd-example-walkthrough.md',
