@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { PRD_EDITOR_STORAGE_KEY } from '../../src/lib/prd-editor-state';
 import { normalizePrdTitle, PRD_TEMPLATE } from '../../src/lib/prd-template';
 
 // The site is published under this base path (astro.config.mjs). Playwright resolves
@@ -357,7 +358,22 @@ for (const path of ['/', '/create/']) {
 
     await page.reload();
     await expect(page.locator('#save-status')).toContainText('Draft restored');
-    await expectPrintDocument(page, LONG_TITLE, PRINT_VALUES);
+    await expect(page.locator('#document-title')).toHaveValue(newestTitle);
+    await expect(page.locator('.editor-section textarea').first()).toHaveValue(newestValue);
+    const restored = await page.evaluate(
+      (key) => JSON.parse(localStorage.getItem(key) ?? 'null'),
+      PRD_EDITOR_STORAGE_KEY,
+    );
+    expect(restored).toMatchObject({
+      version: 1,
+      state: {
+        title: newestTitle,
+        values: {
+          [PRD_TEMPLATE.sections[0]!.id]: newestValue,
+        },
+      },
+    });
+    await expectPrintDocument(page, newestTitle, [newestValue, ...PRINT_VALUES.slice(1)]);
     await page.emulateMedia({ media: 'screen' });
     page.once('dialog', (dialog) => dialog.accept());
     await page.locator('#start-over').click();
