@@ -165,6 +165,7 @@ test('renders one editor with the canonical heading, 12 optional section fields,
   const title = page.locator('input#document-title');
   await expect(page.locator('input[type="text"]')).toHaveCount(1);
   await expect(page.locator('#backup-file')).toBeHidden();
+  await expect(page.locator('#markdown-file')).toBeHidden();
   await expect(title).toHaveCount(1);
   await expect(page.locator('label[for="document-title"] > span').first()).toHaveText('Document title');
   await expect(page.locator('label[for="document-title"] .field-state')).toHaveText('Optional');
@@ -213,6 +214,7 @@ test('renders one editor with the canonical heading, 12 optional section fields,
   await expect(page.locator('.editor-downloads h3')).toHaveText('Or start with a blank file');
   await expect(page.getByRole('button', { name: 'Download draft backup' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Import draft backup' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Import Markdown' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Continue draft', exact: true })).toBeVisible();
   await expect(page.locator('.hero, .cards, a.card')).toHaveCount(0);
 
@@ -647,7 +649,7 @@ test('at target widths Continue draft is at least 32px square, unobstructed, and
     expect(layout.scrollWidth).toBe(layout.viewport);
 
     const targets = page.locator('.editor-outline a:visible, .editor-button:visible');
-    await expect(targets).toHaveCount(21);
+    await expect(targets).toHaveCount(22);
     const sizes = await targets.evaluateAll((nodes) =>
       nodes.map((node) => {
         const bounds = node.getBoundingClientRect();
