@@ -9,7 +9,7 @@ const ROUTES = {
   '/template/': 12,
 } as const;
 
-type ClipboardMode = 'resolve' | 'reject' | 'hold';
+type ClipboardMode = 'resolve' | 'reject' | 'hold' | 'hold-reject';
 type InstrumentedWindow = typeof window & {
   __clipboardAttempts: string[];
   __clipboardSuccesses: string[];
@@ -42,9 +42,19 @@ const installInstrumentation = (page: Page, mode: ClipboardMode = 'resolve') =>
           if (clipboardMode === 'reject') {
             throw new DOMException('Clipboard write rejected', 'NotAllowedError');
           }
-          if (clipboardMode === 'hold') {
-            await new Promise<void>((resolve) => {
-              testWindow.__finishClipboardWrite = resolve;
+          if (
+            (clipboardMode === 'hold' || clipboardMode === 'hold-reject') &&
+            testWindow.__clipboardAttempts.length === 1
+          ) {
+            await new Promise<void>((resolve, reject) => {
+              testWindow.__finishClipboardWrite = () => {
+                delete testWindow.__finishClipboardWrite;
+                if (clipboardMode === 'hold-reject') {
+                  reject(new DOMException('Clipboard write rejected', 'NotAllowedError'));
+                } else {
+                  resolve();
+                }
+              };
             });
           }
           testWindow.__clipboardSuccesses.push(text);
@@ -298,33 +308,105 @@ test('click, Enter, and Space each write and announce exactly once with a stable
   });
 });
 
-test('one held write suppresses two additional activations of the same action', async ({
-  page,
-}) => {
-  await installInstrumentation(page, 'hold');
+const exerciseHeldCrossActionCopy = async (
+  page: Page,
+  mode: Extract<ClipboardMode, 'hold' | 'hold-reject'>,
+) => {
+  await installInstrumentation(page, mode);
   await page.goto(to('/walkthrough/'));
   await observeSectionAnnouncements(page);
 
-  const button = sectionButtons(page).first();
-  await button.evaluate((element: HTMLButtonElement) => {
-    element.click();
-    element.click();
-    element.click();
-  });
+  const buttons = sectionButtons(page);
+  const activatingButton = buttons.first();
+  const otherButton = buttons.nth(1);
+  const programmaticButton = buttons.nth(2);
+  const expected = await expectedSectionUrls(page);
 
-  await expect(button).toHaveAttribute('aria-busy', 'true');
-  await expect(button).toHaveAccessibleName('Copy section link');
-  expect((await clipboardState(page)).attempts).toHaveLength(1);
+  await activatingButton.click();
+  await expect
+    .poll(() => clipboardState(page).then(({ attempts }) => attempts.length))
+    .toBe(1);
+
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Space');
+  const otherBox = await otherButton.boundingBox();
+  if (!otherBox) throw new Error('The alternate section action has no pointer target.');
+  await page.mouse.click(otherBox.x + otherBox.width / 2, otherBox.y + otherBox.height / 2);
+  await programmaticButton.evaluate((element: HTMLButtonElement) => element.click());
+
+  await expect(activatingButton).toHaveAttribute('aria-busy', 'true');
+  await expect(activatingButton).toBeFocused();
+  await expect(sectionStatus(page)).toHaveText('');
+  expect(
+    await buttons.evaluateAll((elements) =>
+      elements.map((element) => element.getAttribute('aria-disabled')),
+    ),
+  ).toEqual(Array(ROUTES['/walkthrough/']).fill('true'));
+  expect(
+    await buttons.evaluateAll((elements) =>
+      elements.map((element) => element.getAttribute('aria-busy')),
+    ),
+  ).toEqual(['true', ...Array(ROUTES['/walkthrough/'] - 1).fill(null)]);
+  expect(await clipboardState(page)).toEqual({
+    attempts: [expected[0]],
+    successes: [],
+    announcements: [],
+  });
 
   await page.evaluate(() => (window as InstrumentedWindow).__finishClipboardWrite?.());
-  await expect(sectionStatus(page)).toHaveText('Section link copied.');
-  await expect(button).toHaveAttribute('aria-busy', 'false');
-  await expect(button).toHaveAccessibleName('Copy section link');
-  expect(await clipboardState(page)).toMatchObject({
-    attempts: [expect.stringMatching(/\/walkthrough\/#/)],
-    successes: [expect.stringMatching(/\/walkthrough\/#/)],
-    announcements: ['Section link copied.'],
+  const firstAnnouncement =
+    mode === 'hold' ? 'Section link copied.' : 'Section link could not be copied.';
+  await expect(sectionStatus(page)).toHaveText(firstAnnouncement);
+  await expect
+    .poll(() => clipboardState(page).then(({ announcements }) => announcements.length))
+    .toBe(1);
+
+  expect(
+    await buttons.evaluateAll((elements) =>
+      elements.map((element) => element.getAttribute('aria-disabled')),
+    ),
+  ).toEqual(Array(ROUTES['/walkthrough/']).fill(null));
+  expect(
+    await buttons.evaluateAll((elements) =>
+      elements.map((element) => element.getAttribute('aria-busy')),
+    ),
+  ).toEqual(Array(ROUTES['/walkthrough/']).fill(null));
+  expect(
+    await buttons.evaluateAll((elements) => elements.map((element) => element.dataset.state ?? null)),
+  ).toEqual([
+    mode === 'hold' ? 'copied' : 'failed',
+    ...Array(ROUTES['/walkthrough/'] - 1).fill(null),
+  ]);
+  for (const button of await buttons.all()) {
+    await expect(button).toHaveAccessibleName('Copy section link');
+  }
+  await expect(activatingButton).toBeFocused();
+  expect(await clipboardState(page)).toEqual({
+    attempts: [expected[0]],
+    successes: mode === 'hold' ? [expected[0]] : [],
+    announcements: [firstAnnouncement],
   });
+
+  await otherButton.click();
+  await expect
+    .poll(() => clipboardState(page).then(({ announcements }) => announcements.length))
+    .toBe(2);
+  await expect(otherButton).toBeFocused();
+  expect(await clipboardState(page)).toEqual({
+    attempts: [expected[0], expected[1]],
+    successes: mode === 'hold' ? [expected[0], expected[1]] : [expected[1]],
+    announcements: [firstAnnouncement, 'Section link copied.'],
+  });
+};
+
+test('one held write blocks every section action until success and then resets', async ({ page }) => {
+  await exerciseHeldCrossActionCopy(page, 'hold');
+});
+
+test('one held rejected write blocks every section action until failure and then resets', async ({
+  page,
+}) => {
+  await exerciseHeldCrossActionCopy(page, 'hold-reject');
 });
 
 test('a rejected write announces one failure and preserves selection, focus, and page state', async ({

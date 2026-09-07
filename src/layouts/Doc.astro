@@ -174,6 +174,10 @@ const hasToc = toc.length > 0;
       status.setAttribute('aria-atomic', 'true');
       article.append(status);
 
+      const sectionButtons: HTMLButtonElement[] = [];
+      let sectionCopyPending = false;
+      let pendingButton: HTMLButtonElement | undefined;
+
       for (const { heading, offset } of headings) {
         const button = document.createElement('button');
         button.type = 'button';
@@ -181,18 +185,26 @@ const hasToc = toc.length > 0;
         button.textContent = RESET_LABEL;
         button.setAttribute('aria-label', RESET_LABEL);
         button.setAttribute('aria-describedby', heading.id);
-        button.setAttribute('aria-busy', 'false');
         // The preceding float keeps the heading itself untouched; carry its block-start spacing
         // onto the action so the two controls share a line in every document's heading layout.
         button.style.marginBlockStart = `${offset}px`;
+        sectionButtons.push(button);
         heading.before(button);
 
         let resetTimer: ReturnType<typeof setTimeout> | undefined;
         button.addEventListener('click', async () => {
-          if (button.getAttribute('aria-busy') === 'true') return;
+          if (sectionCopyPending) {
+            pendingButton?.focus({ preventScroll: true });
+            return;
+          }
 
+          sectionCopyPending = true;
+          pendingButton = button;
           clearTimeout(resetTimer);
           button.setAttribute('aria-busy', 'true');
+          for (const sectionButton of sectionButtons) {
+            sectionButton.setAttribute('aria-disabled', 'true');
+          }
           button.textContent = 'Copying link';
           delete button.dataset.state;
           status.textContent = '';
@@ -207,7 +219,12 @@ const hasToc = toc.length > 0;
             button.dataset.state = 'failed';
             status.textContent = 'Section link could not be copied.';
           } finally {
-            button.setAttribute('aria-busy', 'false');
+            for (const sectionButton of sectionButtons) {
+              sectionButton.removeAttribute('aria-disabled');
+            }
+            button.removeAttribute('aria-busy');
+            sectionCopyPending = false;
+            pendingButton = undefined;
             resetTimer = setTimeout(() => {
               button.textContent = RESET_LABEL;
               delete button.dataset.state;
