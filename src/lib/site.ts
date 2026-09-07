@@ -1,6 +1,7 @@
 export const SITE = {
   name: 'PRD Template',
   tagline: 'Use this template as a starting point. Add, remove, or change sections to fit your project.',
+  publicUrl: 'https://burkeholland.github.io/prd/',
   gistUrl: 'https://gist.github.com/burkeholland/f71d1156812fd91e4369308358892817',
   gistTitle: 'Build The Urlist',
   repoUrl: 'https://github.com/burkeholland/prd',

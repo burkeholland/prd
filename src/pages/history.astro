@@ -8,6 +8,7 @@ import {
   historyDownloadFilename,
   historyDownloadPath,
 } from '../lib/history-downloads';
+import { HISTORY_INDEX_DOWNLOAD } from '../lib/history-index-download';
 import { noteFor } from '../lib/history-notes';
 // Written by scripts/fetch-gist-history.mjs: one entry per gist revision, oldest → newest.
 import history from '../../content/gist/history.json';
@@ -82,6 +83,15 @@ const baseline = (row: (typeof list)[number]) => list.indexOf(row) * ROW_HEIGHT 
         copy, mocks, and the specification checklist, bringing the current example to {kb(shown.bytes, 0)} KB. Open
         a revision to read the exact change.
       </p>
+      <div class="history-index-action">
+        <a
+          class="history-index-download"
+          href={withBase(HISTORY_INDEX_DOWNLOAD.path)}
+          download={HISTORY_INDEX_DOWNLOAD.filename}
+        >
+          {HISTORY_INDEX_DOWNLOAD.label}
+        </a>
+      </div>
     </header>
 
     <section class="history-chart" aria-labelledby="size-chart-heading">
