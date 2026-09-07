@@ -61,3 +61,30 @@ const hasToc = toc.length > 0;
     }
   </article>
 </Base>
+
+<script>
+  const header = document.querySelector<HTMLElement>('article.doc > header.doc__header');
+
+  if (header && typeof window.print === 'function') {
+    const action = document.createElement('p');
+    action.className = 'doc__print-action';
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'doc__print-button';
+    button.textContent = 'Print this page';
+    action.append(button);
+    header.append(action);
+
+    const restoreFocus = () => {
+      if (button.isConnected) button.focus({ preventScroll: true });
+    };
+
+    button.addEventListener('click', () => {
+      restoreFocus();
+      window.addEventListener('afterprint', restoreFocus, { once: true });
+      window.print();
+      restoreFocus();
+    });
+  }
+</script>

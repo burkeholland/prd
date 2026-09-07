@@ -214,12 +214,9 @@ test.describe('without JavaScript', () => {
   });
 });
 
-test('other pages ship no template Copy buttons and static guides ship no script', async ({ page }) => {
+test('other pages expose no template Copy buttons', async ({ page }) => {
   for (const path of ['/', '/sample/', '/guide/', '/walkthrough/']) {
     await page.goto(to(path));
     await expect(page.locator('button.copy-button'), `${path} copy buttons`).toHaveCount(0);
-    if (path === '/guide/' || path === '/walkthrough/') {
-      await expect(page.locator('script'), `${path} script elements`).toHaveCount(0);
-    }
   }
 });
