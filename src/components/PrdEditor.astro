@@ -269,9 +269,11 @@ const blankDownloads = [
     PRD_TEMPLATE,
     serializePrdSectionMarkdown,
   } from '../lib/prd-template';
+  import { countPrdWords, formatPrdWordCount } from '../lib/prd-word-count';
 
   const editor = document.querySelector<HTMLElement>('[data-prd-editor]');
   const editorStatus = document.querySelector('.editor-status');
+  const editorProgress = document.querySelector('.editor-progress');
   const form = document.querySelector('#prd-editor-form');
   const titleInput = document.querySelector('#document-title');
   const completion = document.querySelector('#completion-count');
@@ -297,6 +299,7 @@ const blankDownloads = [
   if (
     !editor ||
     !(editorStatus instanceof HTMLElement) ||
+    !(editorProgress instanceof HTMLDivElement) ||
     !(form instanceof HTMLFormElement) ||
     !(titleInput instanceof HTMLInputElement) ||
     !(completion instanceof HTMLOutputElement) ||
@@ -337,6 +340,14 @@ const blankDownloads = [
   if (outlineLinks.size !== PRD_TEMPLATE.sections.length) {
     throw new Error('The PRD editor outline is incomplete.');
   }
+
+  const totalWordCount = document.createElement('output');
+  totalWordCount.id = 'total-word-count';
+  totalWordCount.className = 'editor-word-count editor-total-word-count';
+  totalWordCount.setAttribute('role', 'status');
+  totalWordCount.setAttribute('aria-live', 'polite');
+  totalWordCount.setAttribute('aria-atomic', 'true');
+  editorProgress.insertBefore(totalWordCount, continueButton);
 
   const showStatus = (message: string, state: string) => {
     if (status.textContent !== message) status.textContent = message;
@@ -401,6 +412,15 @@ const blankDownloads = [
     const actions = document.createElement('span');
     actions.className = 'editor-section-actions';
 
+    const wordCount = document.createElement('span');
+    wordCount.id = `section-word-count-${section.id}`;
+    wordCount.className = 'editor-word-count editor-section-word-count';
+    const describedBy = input.getAttribute('aria-describedby');
+    input.setAttribute(
+      'aria-describedby',
+      [describedBy, wordCount.id].filter(Boolean).join(' '),
+    );
+
     const downloadButton = document.createElement('button');
     downloadButton.className = 'editor-section-action editor-section-download';
     downloadButton.id = `download-section-${section.id}`;
@@ -418,10 +438,10 @@ const blankDownloads = [
       );
     });
 
-    actions.append(downloadButton);
+    actions.append(wordCount, downloadButton);
     heading.classList.add('editor-section-heading--actionable');
     heading.append(actions);
-    return { section, input, actions };
+    return { section, input, actions, wordCount };
   });
 
   const clipboard = navigator.clipboard;
@@ -533,9 +553,20 @@ const blankDownloads = [
 
   const updateCompletion = () => {
     let completed = 0;
+    let totalWords = countPrdWords(readField(titleInput));
     for (const section of PRD_TEMPLATE.sections) {
-      const isComplete = isSectionComplete(sectionInputs.get(section.id));
+      const input = sectionInputs.get(section.id);
+      const isComplete = isSectionComplete(input);
       if (isComplete) completed += 1;
+      const sectionWords = input ? countPrdWords(readField(input)) : 0;
+      totalWords += sectionWords;
+      const sectionAction = sectionActions.find(
+        (candidate) => candidate.section.id === section.id,
+      );
+      const wordMessage = formatPrdWordCount(sectionWords);
+      if (sectionAction && sectionAction.wordCount.textContent !== wordMessage) {
+        sectionAction.wordCount.textContent = wordMessage;
+      }
       const link = outlineLinks.get(section.id);
       if (!link) continue;
       link.toggleAttribute('data-outline-complete', isComplete);
@@ -544,6 +575,10 @@ const blankDownloads = [
     }
     const message = `${completed} of ${PRD_TEMPLATE.sections.length} sections completed`;
     if (completion.textContent !== message) completion.textContent = message;
+    const totalMessage = formatPrdWordCount(totalWords);
+    if (totalWordCount.textContent !== totalMessage) {
+      totalWordCount.textContent = totalMessage;
+    }
     continueButton.hidden = completed === PRD_TEMPLATE.sections.length;
   };
 
@@ -862,6 +897,7 @@ const blankDownloads = [
       showConflict(current.raw, 'Keeping this draft was canceled. Your text is unchanged and saving is paused.');
       return;
     }
+    updateCompletion();
     writeDraft(current.raw, 'explicit');
   });
 
@@ -1442,6 +1478,15 @@ const blankDownloads = [
     font-weight: 650;
   }
 
+  .editor-word-count {
+    display: inline-block;
+    flex: 0 0 auto;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
   .editor-continue {
     flex: 0 0 auto;
     min-width: 2rem;
@@ -1804,6 +1849,10 @@ const blankDownloads = [
     max-width: 100%;
   }
 
+  .editor-section-word-count {
+    align-self: center;
+  }
+
   .editor-section-action {
     min-width: 2rem;
     min-height: 2rem;
@@ -1839,7 +1888,8 @@ const blankDownloads = [
 
   @media print {
     .editor-section-actions,
-    .editor-section-copy-status {
+    .editor-section-copy-status,
+    .editor-word-count {
       display: none !important;
     }
   }
