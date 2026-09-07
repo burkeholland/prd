@@ -7,6 +7,12 @@ import { PLACEHOLDER, SITE } from '../lib/site';
 
 type DocEntry = CollectionEntry<'docs'> | CollectionEntry<'gist'>;
 
+interface HeaderAction {
+  href: string;
+  label: string;
+  download?: string;
+}
+
 interface Props {
   /** Nav label for this route; the fallback for `title` when the content has none. */
   label: string;
@@ -17,9 +23,11 @@ interface Props {
   entry?: DocEntry;
   /** Headings supplied by a model-driven document body. */
   headings?: readonly Heading[];
+  /** A route-owned action that remains available before progressive enhancement runs. */
+  headerAction?: HeaderAction;
 }
 
-const { label, entry, title = label, description, headings } = Astro.props;
+const { label, entry, title = label, description, headings, headerAction } = Astro.props;
 const rendered = entry ? await render(entry) : undefined;
 const Content = rendered?.Content;
 const toc = buildToc(headings ?? rendered?.headings ?? []);
@@ -32,6 +40,19 @@ const hasToc = toc.length > 0;
       <slot name="header">
         <h1>{title}</h1>
         {description && <p class="doc__description">{description}</p>}
+        {
+          headerAction && (
+            <p class="doc__page-actions doc__print-action">
+              <a
+                class="doc__page-action-button doc__page-action-link"
+                href={headerAction.href}
+                download={headerAction.download}
+              >
+                {headerAction.label}
+              </a>
+            </p>
+          )
+        }
       </slot>
     </header>
 
@@ -72,8 +93,11 @@ const hasToc = toc.length > 0;
   const canPrint = typeof window.print === 'function';
 
   if (header && (canCopy || canPrint)) {
-    const action = document.createElement('p');
-    action.className = 'doc__page-actions doc__print-action';
+    const existingAction = header.querySelector<HTMLParagraphElement>(
+      ':scope > .doc__page-actions',
+    );
+    const action = existingAction ?? document.createElement('p');
+    if (!existingAction) action.className = 'doc__page-actions doc__print-action';
 
     if (canCopy) {
       const RESET_LABEL = 'Copy page link';
@@ -117,7 +141,7 @@ const hasToc = toc.length > 0;
         }
       });
 
-      action.append(copyButton, status);
+      action.prepend(copyButton, status);
     }
 
     if (canPrint) {
@@ -139,7 +163,7 @@ const hasToc = toc.length > 0;
       });
     }
 
-    header.append(action);
+    if (!existingAction) header.append(action);
   }
 
   if (article && body && canCopy) {
@@ -235,3 +259,17 @@ const hasToc = toc.length > 0;
     }
   }
 </script>
+
+<style is:global>
+  .doc__page-actions {
+    max-width: 100%;
+  }
+
+  .doc__page-action-link {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    text-decoration: none;
+  }
+</style>
