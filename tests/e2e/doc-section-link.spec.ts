@@ -500,6 +500,18 @@ for (const width of [320, 390, 1280]) {
             (other, otherIndex) =>
               buttonIndex !== otherIndex && intersects(rect, other.getBoundingClientRect()),
           );
+          let following = button.nextElementSibling?.nextElementSibling;
+          while (
+            following &&
+            (
+              following.matches('[hidden], [aria-hidden="true"]') ||
+              getComputedStyle(following).display === 'none' ||
+              following.getClientRects().length === 0
+            )
+          ) {
+            following = following.nextElementSibling;
+          }
+          const followingRect = following?.getBoundingClientRect();
           return {
             width: rect.width,
             height: rect.height,
@@ -508,6 +520,7 @@ for (const width of [320, 390, 1280]) {
             besideHeading,
             overlaps,
             otherActionOverlap,
+            clearsFollowingContent: !followingRect || rect.bottom <= followingRect.top,
           };
         });
       });
@@ -520,6 +533,10 @@ for (const width of [320, 390, 1280]) {
         expect(action.besideHeading, `${path} action ${index + 1} beside heading`).toBe(true);
         expect(action.overlaps, `${path} action ${index + 1} control overlap`).toBe(false);
         expect(action.otherActionOverlap, `${path} action ${index + 1} action overlap`).toBe(false);
+        expect(
+          action.clearsFollowingContent,
+          `${path} action ${index + 1} following content`,
+        ).toBe(true);
       }
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth),

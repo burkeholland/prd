@@ -427,6 +427,13 @@ main:focus {
 
 .prose .doc__section-link-button + :is(h2, h3) > a.heading-link {
   display: inline;
+  padding-block: 6px;
+}
+
+.prose .doc__section-link-button + :is(h2, h3)::after {
+  content: '';
+  display: block;
+  clear: right;
 }
 
 .doc__section-link-button:hover,
@@ -660,7 +667,13 @@ main:focus {
 }
 
 /* Section permalinks: the heading text is the link; a # appears on hover/focus. */
-.prose :is(h2, h3, h4) > a.heading-link { color: inherit; text-decoration: none; }
+.prose :is(h2, h3, h4) > a.heading-link {
+  display: inline-block;
+  min-width: 32px;
+  min-height: 32px;
+  color: inherit;
+  text-decoration: none;
+}
 .prose :is(h2, h3, h4) > a.heading-link::after {
   content: ' #' / '';            /* alt '' keeps it out of the accessible name */
   color: var(--accent);
