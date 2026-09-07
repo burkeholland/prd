@@ -11,6 +11,7 @@ import {
   type PrdTemplateStateInput,
   type SerializePrdMarkdownOptions,
 } from './prd-template';
+import type { PrdExportDocument } from './prd-export-document';
 
 type BodyBlock =
   | { readonly kind: 'paragraph'; readonly lines: readonly string[] }
@@ -145,11 +146,9 @@ const normalizeZipTimestamps = (source: Uint8Array): Uint8Array => {
   return bytes;
 };
 
-export const exportPrdDocx = async (
-  state: PrdTemplateStateInput,
-  options: SerializePrdMarkdownOptions = {},
+export const exportPrdDocumentDocx = async (
+  document: PrdExportDocument,
 ): Promise<Uint8Array> => {
-  const document = createPrdTemplateDocument(state, options);
   const children: FileChild[] = [
     new Paragraph({
       text: document.title,
@@ -157,6 +156,7 @@ export const exportPrdDocx = async (
       keepNext: true,
       spacing: { after: 320 },
     }),
+    ...bodyParagraphs(document.preamble ?? ''),
   ];
 
   for (const section of document.sections) {
@@ -192,3 +192,9 @@ export const exportPrdDocx = async (
   ]);
   return normalizeZipTimestamps(bytes);
 };
+
+export const exportPrdDocx = (
+  state: PrdTemplateStateInput,
+  options: SerializePrdMarkdownOptions = {},
+): Promise<Uint8Array> =>
+  exportPrdDocumentDocx(createPrdTemplateDocument(state, options));

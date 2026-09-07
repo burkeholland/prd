@@ -37,7 +37,9 @@ const revisionLabel = current ? `Gist revision ${current.n} of ${history.count}`
     <p>{intro.rest}</p>
     <ul class="source-card__links">
       <li><a href={gistUrl}>View original</a></li>
-      <li><a href={withBase('/raw/build-the-urlist.md')} download>Download .md</a></li>
+      <li><a href={withBase('/raw/build-the-urlist.md')} download="build-the-urlist.md">Download .md</a></li>
+      <li><a href={withBase('/downloads/build-the-urlist.docx')} download="build-the-urlist.docx">Word (.docx)</a></li>
+      <li><a href={withBase('/downloads/build-the-urlist.pdf')} download="build-the-urlist.pdf">PDF</a></li>
       <li><a href={withBase('/history/')}>Revision history</a></li>
     </ul>
     {

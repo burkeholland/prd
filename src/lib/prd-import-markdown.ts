@@ -1,4 +1,5 @@
 import { PRD_EDITOR_BACKUP_MAX_BYTES } from './prd-editor-state';
+import { markdownHeadings } from './prd-export-document';
 import {
   createBlankPrdTemplateState,
   normalizePrdLineEndings,
@@ -34,51 +35,6 @@ export type ReadPrdMarkdownFile =
   | { readonly status: 'unsupported-file' }
   | { readonly status: 'unreadable' }
   | { readonly status: 'invalid-utf8' };
-
-interface MarkdownHeading {
-  readonly level: number;
-  readonly title: string;
-  readonly line: number;
-}
-
-const markdownHeadings = (lines: readonly string[]): MarkdownHeading[] => {
-  const headings: MarkdownHeading[] = [];
-  let fence: { marker: '`' | '~'; length: number } | undefined;
-
-  for (const [line, value] of lines.entries()) {
-    if (fence) {
-      const closing = value.match(/^[ \t]{0,3}(`+|~+)[ \t]*$/);
-      if (
-        closing &&
-        closing[1]?.[0] === fence.marker &&
-        closing[1].length >= fence.length
-      ) {
-        fence = undefined;
-      }
-      continue;
-    }
-
-    const opening = value.match(/^[ \t]{0,3}(`{3,}|~{3,})/);
-    if (opening?.[1]) {
-      fence = {
-        marker: opening[1][0] as '`' | '~',
-        length: opening[1].length,
-      };
-      continue;
-    }
-
-    const heading = value.match(/^(#{1,6})[ \t]+(.*)$/);
-    if (heading?.[1] && heading[2] !== undefined) {
-      headings.push({
-        level: heading[1].length,
-        title: heading[2].trim(),
-        line,
-      });
-    }
-  }
-
-  return headings;
-};
 
 export const parsePrdMarkdown = (source: string): ParsedPrdMarkdown => {
   const normalized = normalizePrdLineEndings(source).replace(/^\uFEFF/, '');
