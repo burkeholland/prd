@@ -176,10 +176,11 @@ test('new links are non-overlapping 32px targets without page overflow', async (
 
     await page.goto(to('/history/16/'));
     expect(await page.evaluate(() => document.documentElement.scrollWidth), `${width}px revision overflow`).toBe(width);
-    const actions = await rectangles(page.locator('.revision__actions a'));
+    const actions = await rectangles(page.locator('.revision__actions :is(a, button)'));
     expect(actions.map((link) => link.label)).toEqual([
       'View on GitHub',
       'Download Markdown',
+      'Copy revision link',
       'the version on the sample page',
     ]);
     for (const link of actions) {
@@ -203,6 +204,9 @@ test('download actions are keyboard focusable and omitted from the printed revis
 
   await page.emulateMedia({ media: 'print' });
   await expect(action).toBeHidden();
+  await expect(
+    page.locator('.revision__copy-link:visible, .revision__copy-status:visible'),
+  ).toHaveCount(0);
   await expect(page.locator('table.diff')).toBeVisible();
   await expect(page.locator('pre.preview')).toHaveCount(0);
 });

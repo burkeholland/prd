@@ -92,7 +92,7 @@ const description =
     : `The first draft of ${SITE.gistTitle}: ${int(rev.lines)} lines, ${kb(rev.bytes)} KB, committed ${date}.`);
 ---
 
-<Base title={title} description={description} noindex>
+<Base title={title} description={description} noindex canonical>
   <article class="revision">
     <header class="revision__header">
       <h1>{heading}</h1>
@@ -209,6 +209,94 @@ const description =
   </article>
 </Base>
 
+<script is:inline define:vars={{ revisionNumber: rev.n }}>
+  const revisionActions = document.querySelector('.revision__actions');
+  const revisionCanonical = document.querySelector('link[rel="canonical"]');
+  const revisionClipboard = navigator.clipboard;
+
+  if (
+    revisionActions instanceof HTMLElement &&
+    revisionCanonical instanceof HTMLLinkElement &&
+    typeof revisionClipboard?.writeText === 'function'
+  ) {
+    const copyButton = document.createElement('button');
+    copyButton.type = 'button';
+    copyButton.className = 'revision__copy-link';
+    copyButton.textContent = 'Copy revision link';
+    copyButton.setAttribute('aria-label', `Copy revision ${revisionNumber} link`);
+
+    const copyStatus = document.createElement('span');
+    copyStatus.className = 'revision__copy-status';
+    copyStatus.setAttribute('role', 'status');
+    copyStatus.setAttribute('aria-live', 'polite');
+    copyStatus.setAttribute('aria-atomic', 'true');
+
+    const captureActivationState = () => {
+      const selection = window.getSelection();
+      return {
+        scrollX: window.scrollX,
+        scrollY: window.scrollY,
+        selection,
+        selectedRanges: selection
+          ? Array.from({ length: selection.rangeCount }, (_, index) =>
+              selection.getRangeAt(index).cloneRange())
+          : [],
+      };
+    };
+
+    let copyPending = false;
+    let activationState;
+    copyButton.addEventListener('pointerdown', () => {
+      activationState = captureActivationState();
+    });
+    copyButton.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        activationState = captureActivationState();
+      }
+    });
+    copyButton.addEventListener('click', async () => {
+      if (copyPending) {
+        activationState = undefined;
+        copyButton.focus({ preventScroll: true });
+        return;
+      }
+
+      const state = activationState ?? captureActivationState();
+      activationState = undefined;
+      copyPending = true;
+      copyButton.setAttribute('aria-busy', 'true');
+      copyButton.textContent = 'Copying link';
+      copyStatus.textContent = '';
+
+      try {
+        await revisionClipboard.writeText(revisionCanonical.href);
+        copyButton.textContent = 'Revision link copied';
+        copyStatus.textContent = `Revision ${revisionNumber} link copied.`;
+      } catch {
+        copyButton.textContent = 'Copy failed';
+        const restoreSelection = () => {
+          if (!state.selection) return;
+          state.selection.removeAllRanges();
+          for (const range of state.selectedRanges) state.selection.addRange(range);
+        };
+        restoreSelection();
+        if (copyButton.isConnected) copyButton.focus({ preventScroll: true });
+        // WebKit clears a document selection when a button receives focus.
+        restoreSelection();
+        window.scrollTo(state.scrollX, state.scrollY);
+        copyStatus.textContent = `Revision ${revisionNumber} link could not be copied.`;
+      } finally {
+        copyPending = false;
+        copyButton.removeAttribute('aria-busy');
+      }
+    });
+
+    const downloadAction = revisionActions.querySelector('.history-download');
+    downloadAction?.after(copyButton);
+    revisionActions.append(copyStatus);
+  }
+</script>
+
 <style is:global>
   .revision {
     display: grid;
@@ -261,7 +349,8 @@ const description =
     font-size: 0.95rem;
   }
 
-  .revision__actions > a {
+  .revision__actions > a,
+  .revision__copy-link {
     white-space: nowrap;
     display: inline-flex;
     align-items: center;
@@ -269,6 +358,34 @@ const description =
     min-width: 32px;
     min-height: 32px;
     padding-inline: 0.25rem;
+  }
+
+  .revision__copy-link {
+    inline-size: 9.75rem;
+    font: inherit;
+    color: var(--accent);
+    background: transparent;
+    border: 0;
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+    cursor: pointer;
+  }
+
+  .revision__copy-link[aria-busy="true"] {
+    cursor: progress;
+  }
+
+  .revision__copy-status {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
   }
 
   .revision .badge {
@@ -487,5 +604,12 @@ const description =
 
   .revision .preview code {
     font-size: inherit;
+  }
+
+  @media print {
+    .revision__copy-link,
+    .revision__copy-status {
+      display: none !important;
+    }
   }
 </style>

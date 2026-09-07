@@ -343,16 +343,26 @@ test('secondary and compatibility routes keep their intended status and canonica
     );
   }
 
-  for (const path of ['/create/', '/history/3/']) {
-    const response = await page.goto(to(path));
-    expect(response?.status(), path).toBe(200);
-    await expect(page.locator('meta[name="robots"]'), path).toHaveAttribute(
-      'content',
-      'noindex',
-    );
-    await expect(page.locator('link[rel="canonical"]'), path).toHaveCount(0);
-    await expect(page.locator('meta[property="og:url"]'), path).toHaveCount(0);
-  }
+  const createResponse = await page.goto(to('/create/'));
+  expect(createResponse?.status(), '/create/').toBe(200);
+  await expect(page.locator('meta[name="robots"]'), '/create/').toHaveAttribute(
+    'content',
+    'noindex',
+  );
+  await expect(page.locator('link[rel="canonical"]'), '/create/').toHaveCount(0);
+  await expect(page.locator('meta[property="og:url"]'), '/create/').toHaveCount(0);
+
+  const revisionResponse = await page.goto(to('/history/3/'));
+  expect(revisionResponse?.status(), '/history/3/').toBe(200);
+  await expect(page.locator('meta[name="robots"]'), '/history/3/').toHaveAttribute(
+    'content',
+    'noindex',
+  );
+  await expect(page.locator('link[rel="canonical"]'), '/history/3/').toHaveAttribute(
+    'href',
+    'https://burkeholland.github.io/prd/history/3/',
+  );
+  await expect(page.locator('meta[property="og:url"]'), '/history/3/').toHaveCount(0);
 });
 
 test('reduced-motion users receive the same editor without running animations', async ({
