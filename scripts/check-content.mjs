@@ -20,6 +20,8 @@ const FILE_ROUTES = [
   '/downloads/prd-template.md',
   '/downloads/prd-template.docx',
   '/downloads/prd-template.pdf',
+  '/downloads/build-the-urlist.docx',
+  '/downloads/build-the-urlist.pdf',
   '/raw/build-the-urlist.md',
 ];
 

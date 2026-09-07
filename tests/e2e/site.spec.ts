@@ -382,6 +382,8 @@ test('the sample source card has the generic intro, actions, and gist metadata',
   await expect(card.locator('.source-card__links a')).toHaveText([
     'View original',
     'Download .md',
+    'Word (.docx)',
+    'PDF',
     'Revision history',
   ]);
   await expect(card.locator('a', { hasText: 'View original' })).toHaveAttribute('href', meta.html_url);

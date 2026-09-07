@@ -53,7 +53,7 @@ const activeElement = (page: Page) =>
 // Linux WebKit → the button (`<button class="copy-prd">`, whose empty id the old `id === 'main'` check read as '').
 const FOCUS_AFTER_CLICK = ['button.copy-prd', 'main#main', 'body'];
 
-test('/sample/ adds Copy the PRD as the third action, after Download .md, and keeps its three links', async ({ page }) => {
+test('/sample/ adds Copy the PRD after Download .md and keeps all five links', async ({ page }) => {
   await page.goto(to('/sample/'));
 
   const button = copyButton(page);
@@ -62,9 +62,16 @@ test('/sample/ adds Copy the PRD as the third action, after Download .md, and ke
   await expect(button).toHaveAttribute('type', 'button');
 
   const items = page.locator('.source-card__links > li');
-  await expect(items).toHaveText(['View original', 'Download .md', RESET, 'Revision history']);
+  await expect(items).toHaveText([
+    'View original',
+    'Download .md',
+    RESET,
+    'Word (.docx)',
+    'PDF',
+    'Revision history',
+  ]);
   await expect(items.nth(2).locator('button.copy-prd')).toHaveCount(1);
-  await expect(page.locator('.source-card__links a')).toHaveCount(3);
+  await expect(page.locator('.source-card__links a')).toHaveCount(5);
 
   const status = statusRegion(page);
   await expect(status).toHaveCount(1);
@@ -131,7 +138,9 @@ test('when the gist cannot be fetched the button says so and leaves Download .md
     `focus after the failure is on ${focus.label} (tagName=${JSON.stringify(focus.tagName)} id=${JSON.stringify(focus.id)} className=${JSON.stringify(focus.className)} inside .source-card=${focus.inCard}); allowed: the button, main#main or body`,
   ).toContain(focus.kind);
   await expect(statusRegion(page)).toHaveText(FAILED);
-  await expect(page.locator('.source-card__links a[download]')).toHaveText('Download .md');
+  await expect(
+    page.locator('.source-card__links a[download]', { hasText: 'Download .md' }),
+  ).toHaveCount(1);
 
   await expect(button).toHaveText(RESET, { timeout: RESET_TIMEOUT });
 });
@@ -162,13 +171,13 @@ test('the button does not widen /sample/ at 320px', async ({ page }) => {
   expect(scrollWidth).toBeLessThanOrEqual(320);
 });
 
-test('on a phone the four card controls are thumb-sized (>= 32 px tall) and the card is no taller for it', async ({ page }) => {
+test('on a phone the six card controls are thumb-sized (>= 32 px tall) and the card is no taller for it', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(to('/sample/'));
   await expect(copyButton(page)).toHaveCount(1);
 
   const controls = page.locator('.source-card__links a, .source-card__links button.copy-prd');
-  await expect(controls).toHaveCount(4);
+  await expect(controls).toHaveCount(6);
   const rects = await controls.evaluateAll((nodes) =>
     nodes.map((node) => {
       const { width, height } = node.getBoundingClientRect();
