@@ -1,6 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Download, type Page } from '@playwright/test';
+import { parseFrontmatter } from '../../scripts/lib/content.mjs';
+import {
+  createGuideMarkdownResponse,
+  GUIDE_DOWNLOAD_FILENAME,
+  GUIDE_DOWNLOAD_PATH,
+  GUIDE_MARKDOWN_MIME,
+  type GuideDownloadEntry,
+} from '../../src/lib/guide-download';
 import {
   extractHandoffChecklistItems,
   HANDOFF_CHECKLIST_FILENAME,
@@ -10,11 +18,18 @@ import {
 
 const GUIDE = '/prd/guide/';
 const DOWNLOAD = '/prd/downloads/prd-handoff-checklist.md';
+const FULL_GUIDE_DOWNLOAD = `/prd${GUIDE_DOWNLOAD_PATH}`;
+const FULL_GUIDE_LABEL = 'Download full guide (.md)';
 const RESET_LABEL = 'Copy handoff checklist';
+const GUIDE_SOURCE = readFileSync(resolve('content/guide.md'), 'utf8');
+const GUIDE_CONTENT = parseFrontmatter(GUIDE_SOURCE);
+if (!GUIDE_CONTENT.data) throw new Error('Guide fixture requires frontmatter');
+const GUIDE_ENTRY: GuideDownloadEntry = {
+  data: GUIDE_CONTENT.data,
+  body: GUIDE_CONTENT.body,
+};
 const EXPECTED_MARKDOWN = serializeHandoffChecklist(
-  extractHandoffChecklistItems(
-    readFileSync(resolve('content/guide.md'), 'utf8'),
-  ),
+  extractHandoffChecklistItems(GUIDE_SOURCE),
 );
 
 type InstrumentedWindow = typeof window & {
@@ -31,6 +46,9 @@ const copyButton = (page: Page) =>
 
 const downloadLink = (page: Page) =>
   page.locator('a.guide-checklist-download');
+
+const fullGuideDownloadLink = (page: Page) =>
+  page.getByRole('link', { name: FULL_GUIDE_LABEL, exact: true });
 
 const checklist = (page: Page) =>
   page.locator('#before-you-hand-it-off ~ ul').first();
@@ -49,6 +67,9 @@ const downloadBytes = async (download: Download) => {
   }
   return readFileSync(path);
 };
+
+const fullGuideResponseBytes = async () =>
+  Buffer.from(await createGuideMarkdownResponse(GUIDE_ENTRY).arrayBuffer());
 
 const stubClipboard = async (
   page: Page,
@@ -139,6 +160,81 @@ test('copies the seven rendered handoff checks in order with one terminal newlin
   await expect(page.locator('.toc--sidebar .toc__list a')).toHaveCount(11);
 });
 
+test('serves deterministic complete Guide bytes at the stable route', async ({
+  request,
+}) => {
+  const expected = await fullGuideResponseBytes();
+  const first = await request.get(FULL_GUIDE_DOWNLOAD);
+  const second = await request.get(FULL_GUIDE_DOWNLOAD);
+  const firstBytes = await first.body();
+  const checklistBytes = await (await request.get(DOWNLOAD)).body();
+
+  expect(first.status()).toBe(200);
+  expect(first.headers()['content-type']).toBe(GUIDE_MARKDOWN_MIME);
+  expect(firstBytes).toEqual(expected);
+  expect(await second.body()).toEqual(firstBytes);
+  expect(firstBytes.byteLength).toBeGreaterThan(checklistBytes.byteLength);
+  expect(firstBytes).not.toEqual(checklistBytes);
+  expect(firstBytes.at(-1)).toBe(0x0a);
+  expect(firstBytes.at(-2)).not.toBe(0x0a);
+});
+
+test('renders one full Guide header download only on Guide in every capability mode', async ({
+  browser,
+  page,
+}) => {
+  await page.goto(GUIDE);
+  const link = fullGuideDownloadLink(page);
+  await expect(link).toHaveCount(1);
+  await expect(link).toHaveAttribute('href', FULL_GUIDE_DOWNLOAD);
+  await expect(link).toHaveAttribute('download', GUIDE_DOWNLOAD_FILENAME);
+  await expect(page.locator('.doc__page-actions > :is(a, button)')).toHaveText([
+    'Copy page link',
+    FULL_GUIDE_LABEL,
+    'Print this page',
+  ]);
+  await expect(downloadLink(page)).toHaveCount(1);
+  await link.focus();
+  await expect(link).toBeFocused();
+  expect(await link.evaluate((node) => getComputedStyle(node).outlineStyle)).not.toBe(
+    'none',
+  );
+
+  for (const route of ['/', '/sample/', '/walkthrough/', '/history/', '/template/']) {
+    await page.goto(`/prd${route}`);
+    await expect(fullGuideDownloadLink(page), route).toHaveCount(0);
+  }
+
+  const noClipboard = await browser.newContext();
+  const noClipboardPage = await noClipboard.newPage();
+  await noClipboardPage.addInitScript(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: undefined,
+    });
+  });
+  await noClipboardPage.goto(`http://localhost:${Number(process.env.PREVIEW_PORT ?? 4411)}${GUIDE}`);
+  await expect(fullGuideDownloadLink(noClipboardPage)).toHaveCount(1);
+  await expect(
+    noClipboardPage.locator('.doc__page-actions > :is(a, button)'),
+  ).toHaveText([FULL_GUIDE_LABEL, 'Print this page']);
+  await expect(downloadLink(noClipboardPage)).toHaveCount(1);
+  await noClipboard.close();
+
+  const noScript = await browser.newContext({ javaScriptEnabled: false });
+  const noScriptPage = await noScript.newPage();
+  await noScriptPage.goto(
+    `http://localhost:${Number(process.env.PREVIEW_PORT ?? 4411)}${GUIDE}`,
+  );
+  await expect(fullGuideDownloadLink(noScriptPage)).toHaveCount(1);
+  await expect(noScriptPage.locator('.doc__page-actions > :is(a, button)')).toHaveText([
+    FULL_GUIDE_LABEL,
+  ]);
+  await expect(downloadLink(noScriptPage)).toHaveCount(1);
+  await expect(noScriptPage.locator('.doc__body')).not.toBeEmpty();
+  await noScript.close();
+});
+
 test('downloads exact local bytes without navigation or state access and retries the same file', async ({
   browserName,
   page,
@@ -221,8 +317,32 @@ test('downloads exact local bytes without navigation or state access and retries
     href: location.href,
     historyLength: history.length,
   }));
+  const originalBody = await page.locator('.doc__body').innerHTML();
+  const originalTocs = await page.locator('.toc').allInnerTexts();
   const href = await downloadLink(page).getAttribute('href');
   trackRequests = true;
+
+  const expectedFullGuide = await fullGuideResponseBytes();
+  const firstGuidePending = page.waitForEvent('download');
+  await fullGuideDownloadLink(page).click();
+  const firstGuide = await firstGuidePending;
+  expect(firstGuide.suggestedFilename()).toBe(GUIDE_DOWNLOAD_FILENAME);
+  expect(new URL(firstGuide.url()).origin).toBe(new URL(page.url()).origin);
+  expect(new URL(firstGuide.url()).pathname).toBe(FULL_GUIDE_DOWNLOAD);
+  const firstGuideBytes = await downloadBytes(firstGuide);
+  expect(firstGuideBytes).toEqual(expectedFullGuide);
+
+  const retryGuidePending = page.waitForEvent('download');
+  await fullGuideDownloadLink(page).click();
+  const retryGuide = await retryGuidePending;
+  expect(retryGuide.suggestedFilename()).toBe(GUIDE_DOWNLOAD_FILENAME);
+  expect(retryGuide.url()).toBe(firstGuide.url());
+  expect(await downloadBytes(retryGuide)).toEqual(firstGuideBytes);
+  expect(
+    await page.evaluate(() => (window as InstrumentedWindow).__clipboardAttempts),
+  ).toBe(0);
+  expect(await page.locator('.doc__body').innerHTML()).toBe(originalBody);
+  expect(await page.locator('.toc').allInnerTexts()).toEqual(originalTocs);
 
   const firstPending = page.waitForEvent('download');
   await downloadLink(page).click();
@@ -232,6 +352,7 @@ test('downloads exact local bytes without navigation or state access and retries
   expect(new URL(first.url()).pathname).toBe(DOWNLOAD);
   const firstBytes = await downloadBytes(first);
   expect(firstBytes).toEqual(Buffer.from(EXPECTED_MARKDOWN, 'utf8'));
+  expect(firstBytes).not.toEqual(firstGuideBytes);
 
   await copyButton(page).click();
   await expect
@@ -273,15 +394,22 @@ test('downloads exact local bytes without navigation or state access and retries
     clipboardAttempts: 1,
   });
   // Chromium and WebKit handle native attachments outside the page request
-  // stream; Firefox exposes the two intentional download GETs here.
+  // stream; Firefox exposes the four intentional download GETs here.
   if (browserName === 'firefox') {
-    expect(observedRequests).toHaveLength(2);
+    expect(observedRequests).toHaveLength(4);
+    const paths = observedRequests.map((observed) => new URL(observed.url).pathname);
+    expect(paths).toEqual([
+      FULL_GUIDE_DOWNLOAD,
+      FULL_GUIDE_DOWNLOAD,
+      DOWNLOAD,
+      DOWNLOAD,
+    ]);
     for (const observed of observedRequests) {
       const url = new URL(observed.url);
       expect(observed.method).toBe('GET');
       expect(observed.body).toBeNull();
       expect(url.origin).toBe(new URL(page.url()).origin);
-      expect(url.pathname).toBe(DOWNLOAD);
+      expect([FULL_GUIDE_DOWNLOAD, DOWNLOAD]).toContain(url.pathname);
     }
   } else {
     expect(observedRequests).toEqual([]);
@@ -524,6 +652,8 @@ test('print keeps all checks and hides the progressive UI', async ({ page }) => 
   await expect(copyButton(page)).toHaveCount(1);
   await expect(copyButton(page)).toBeHidden();
   await expect(downloadLink(page)).toBeHidden();
+  await expect(fullGuideDownloadLink(page)).toBeHidden();
+  await expect(page.locator('.doc__page-actions')).toBeHidden();
   await expect(page.locator('.guide-checklist-status')).toBeHidden();
   const items = checklist(page).locator(':scope > li.task-list-item');
   await expect(items).toHaveCount(7);
@@ -531,7 +661,7 @@ test('print keeps all checks and hides the progressive UI', async ({ page }) => 
 });
 
 for (const width of [320, 390, 1280]) {
-  test(`both actions wrap safely across preferences at ${width}px`, async ({
+  test(`all Guide actions wrap safely across preferences at ${width}px`, async ({
     page,
   }) => {
     await stubClipboard(page);
@@ -544,46 +674,55 @@ for (const width of [320, 390, 1280]) {
         await page
           .locator('select[data-reader-text-size-control]')
           .selectOption(textSize);
-        const geometry = await page
-          .locator('.guide-checklist-action')
-          .evaluate((action) => {
-            const targets = Array.from(
-              action.querySelectorAll<HTMLElement>('button, a'),
-              (target) => {
-                const rect = target.getBoundingClientRect();
-                return {
-                  label: target.textContent?.trim() ?? '',
-                  left: rect.left,
-                  right: rect.right,
-                  top: rect.top,
-                  bottom: rect.bottom,
-                  width: rect.width,
-                  height: rect.height,
-                  clipped:
-                    target.scrollWidth > target.clientWidth ||
-                    target.scrollHeight > target.clientHeight,
-                };
-              },
-            );
-            const [first, second] = targets;
-            return {
-              targets,
-              overlap:
-                first && second
-                  ? first.left < second.right &&
-                    second.left < first.right &&
-                    first.top < second.bottom &&
-                    second.top < first.bottom
-                  : true,
-              scrollWidth: document.documentElement.scrollWidth,
-              viewport: innerWidth,
-            };
-          });
+        const geometry = await page.evaluate(() => {
+          const targets = Array.from(
+            document.querySelectorAll<HTMLElement>(
+              '.doc__page-actions > :is(button, a), .guide-checklist-action > :is(button, a)',
+            ),
+            (target) => {
+              const rect = target.getBoundingClientRect();
+              return {
+                label: target.textContent?.trim() ?? '',
+                left: rect.left,
+                right: rect.right,
+                top: rect.top,
+                bottom: rect.bottom,
+                width: rect.width,
+                height: rect.height,
+                clipped:
+                  target.scrollWidth > target.clientWidth ||
+                  target.scrollHeight > target.clientHeight,
+              };
+            },
+          );
+          const overlap = targets.some((first, firstIndex) =>
+            targets.slice(firstIndex + 1).some(
+              (second) =>
+                first.left < second.right &&
+                second.left < first.right &&
+                first.top < second.bottom &&
+                second.top < first.bottom,
+            ),
+          );
+          return {
+            targets,
+            overlap,
+            scrollWidth: document.documentElement.scrollWidth,
+            viewport: innerWidth,
+          };
+        });
 
         expect(
           geometry.targets,
           `${width}px ${theme} ${textSize} controls`,
-        ).toHaveLength(2);
+        ).toHaveLength(5);
+        expect(geometry.targets.map(({ label }) => label)).toEqual([
+          'Copy page link',
+          FULL_GUIDE_LABEL,
+          'Print this page',
+          RESET_LABEL,
+          'Download checklist (.md)',
+        ]);
         expect(
           geometry.overlap,
           `${width}px ${theme} ${textSize} overlap`,

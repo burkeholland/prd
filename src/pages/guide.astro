@@ -7,6 +7,10 @@ import {
   extractHandoffChecklistItems,
   HANDOFF_CHECKLIST_DOWNLOAD_PATH,
 } from '../lib/handoff-checklist';
+import {
+  GUIDE_DOWNLOAD_FILENAME,
+  GUIDE_DOWNLOAD_PATH,
+} from '../lib/guide-download';
 import { DOC_ROUTES } from '../lib/site';
 
 const route = DOC_ROUTES['/guide'];
@@ -19,6 +23,11 @@ const checklistItems = extractHandoffChecklistItems(guideSource);
   title={route.label}
   description={entry?.data.description}
   entry={entry}
+  headerAction={{
+    href: withBase(GUIDE_DOWNLOAD_PATH),
+    label: 'Download full guide (.md)',
+    download: GUIDE_DOWNLOAD_FILENAME,
+  }}
 >
   <div
     class="guide-checklist-action"
