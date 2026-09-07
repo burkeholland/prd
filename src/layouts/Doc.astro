@@ -40,20 +40,20 @@ const hasToc = toc.length > 0;
       <slot name="header">
         <h1>{title}</h1>
         {description && <p class="doc__description">{description}</p>}
-        {
-          headerAction && (
-            <p class="doc__page-actions doc__print-action">
-              <a
-                class="doc__page-action-button doc__page-action-link"
-                href={headerAction.href}
-                download={headerAction.download}
-              >
-                {headerAction.label}
-              </a>
-            </p>
-          )
-        }
       </slot>
+      {
+        headerAction && (
+          <p class="doc__page-actions doc__print-action">
+            <a
+              class="doc__page-action-button doc__page-action-link"
+              href={headerAction.href}
+              download={headerAction.download}
+            >
+              {headerAction.label}
+            </a>
+          </p>
+        )
+      }
     </header>
 
     {

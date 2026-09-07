@@ -18,9 +18,21 @@ const headings = PRD_TEMPLATE.sections.map(({ id, title }) => ({
 // Copy the serializer's complete sections, including their Markdown headings.
 const blankSections = serializeBlankPrdMarkdown().split(/(?=^## )/m).slice(1).map((text) => text.trimEnd());
 const aliases = Object.entries(PRD_TEMPLATE_ALIASES);
+const guideDownload = {
+  label: 'Download guide (.md)',
+  href: withBase('/downloads/prd-template-guide.md'),
+  download: 'prd-template-guide.md',
+} as const;
 ---
 
-<Doc label={route.label} title={title} description={description} entry={entry} headings={headings}>
+<Doc
+  label={route.label}
+  title={title}
+  description={description}
+  entry={entry}
+  headings={headings}
+  headerAction={guideDownload}
+>
   <Fragment slot="header">
     <h1>{title}</h1>
     {description && <p class="doc__description">{description}</p>}
