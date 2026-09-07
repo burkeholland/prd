@@ -143,6 +143,21 @@ const copyInvariantState = (page: Page) =>
   page.evaluate(() => {
     const testWindow = window as InstrumentedWindow;
     const selection = getSelection();
+    const nodePath = (node: Node | null) => {
+      const path: number[] = [];
+      let current = node;
+      while (current && current !== document) {
+        const parent = current.parentNode;
+        if (!parent) break;
+        path.push(Array.prototype.indexOf.call(parent.childNodes, current));
+        current = parent;
+      }
+      return path.reverse();
+    };
+    const endpoint = (node: Node | null, offset: number) => ({
+      path: nodePath(node),
+      offset,
+    });
     const download = document.querySelector<HTMLAnchorElement>(
       'a.history-download',
     );
@@ -172,8 +187,24 @@ const copyInvariantState = (page: Page) =>
       scroll: { x: scrollX, y: scrollY },
       selection: {
         text: selection?.toString(),
-        anchorOffset: selection?.anchorOffset,
-        focusOffset: selection?.focusOffset,
+        rangeCount: selection?.rangeCount,
+        anchor: endpoint(
+          selection?.anchorNode ?? null,
+          selection?.anchorOffset ?? 0,
+        ),
+        focus: endpoint(
+          selection?.focusNode ?? null,
+          selection?.focusOffset ?? 0,
+        ),
+        ranges: selection
+          ? Array.from({ length: selection.rangeCount }, (_, index) => {
+              const range = selection.getRangeAt(index);
+              return {
+                start: endpoint(range.startContainer, range.startOffset),
+                end: endpoint(range.endContainer, range.endOffset),
+              };
+            })
+          : [],
       },
     };
   });
@@ -381,86 +412,107 @@ test('a pending write suppresses duplicate activations until settlement', async 
     .toEqual(['Revision 8 link copied.', 'Revision 8 link copied.']);
 });
 
-test('rejection restores selection and scroll without any other side effect', async ({
-  page,
-}) => {
-  await installInstrumentation(page, 'reject');
-  const diagnostics = diagnosticsFor(page);
-  const requests: string[] = [];
-  const downloads: string[] = [];
-  let trackRequests = false;
-  page.on('request', (request) => {
-    if (trackRequests) {
-      requests.push(
-        `${request.method()} ${request.url()} ${request.postData() ?? ''}`,
+for (const activation of ['pointer', 'Enter', 'Space'] as const) {
+  test(`rejected ${activation} activation restores selection, scroll, and action focus`, async ({
+    page,
+  }) => {
+    await installInstrumentation(page, 'reject');
+    const diagnostics = diagnosticsFor(page);
+    const requests: string[] = [];
+    const downloads: string[] = [];
+    let trackRequests = false;
+    page.on('request', (request) => {
+      if (trackRequests) {
+        requests.push(
+          `${request.method()} ${request.url()} ${request.postData() ?? ''}`,
+        );
+      }
+    });
+    page.on('download', (download) => downloads.push(download.url()));
+
+    await page.goto(to(`/history/3/?cache=rejection-${activation}#existing`));
+    await page.waitForLoadState('networkidle');
+    const button = copyButton(page, 3);
+    await page.evaluate((keyboardActivation) => {
+      localStorage.setItem('revision-link-test', 'local value');
+      sessionStorage.setItem('revision-link-test', 'session value');
+      document.documentElement.dataset.theme = 'dark';
+      document.documentElement.dataset.textSize = 'large';
+
+      const copyAction = document.querySelector('.revision__copy-link');
+      if (!(copyAction instanceof HTMLButtonElement)) {
+        throw new Error('Expected the revision copy action.');
+      }
+      if (keyboardActivation) copyAction.focus({ preventScroll: true });
+
+      const target = document.querySelector(
+        '.revision__diff td:nth-child(4)',
       );
+      const text = target?.firstChild;
+      if (!(text instanceof Text) || text.length < 12) {
+        throw new Error('Expected selectable revision text.');
+      }
+      const range = document.createRange();
+      range.setStart(text, 2);
+      range.setEnd(text, 12);
+      const selection = getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      window.scrollTo(0, 60);
+      (window as InstrumentedWindow).__storageWrites = 0;
+    }, activation !== 'pointer');
+    await watchAnnouncements(page);
+    const before = await copyInvariantState(page);
+    expect(before.scroll.y).toBeGreaterThan(0);
+    expect(before.selection).toMatchObject({
+      text: expect.any(String),
+      rangeCount: 1,
+      anchor: { offset: 2 },
+      focus: { offset: 12 },
+      ranges: [{ start: { offset: 2 }, end: { offset: 12 } }],
+    });
+    expect(before.selection.text).toHaveLength(10);
+    if (activation === 'pointer') {
+      await expect(button).not.toBeFocused();
+    } else {
+      await expect(button).toBeFocused();
     }
-  });
-  page.on('download', (download) => downloads.push(download.url()));
+    trackRequests = true;
 
-  await page.goto(to('/history/3/?cache=rejection#existing'));
-  await page.waitForLoadState('networkidle');
-  const button = copyButton(page, 3);
-  await page.evaluate(() => {
-    localStorage.setItem('revision-link-test', 'local value');
-    sessionStorage.setItem('revision-link-test', 'session value');
-    document.documentElement.dataset.theme = 'dark';
-    document.documentElement.dataset.textSize = 'large';
+    if (activation === 'pointer') {
+      await button.click();
+    } else {
+      await button.press(activation);
+    }
 
-    const target = document.querySelector(
-      '.revision__diff td:nth-child(4)',
+    await expect(copyStatus(page)).toHaveText(
+      'Revision 3 link could not be copied.',
     );
-    const text = target?.firstChild;
-    if (!(text instanceof Text) || text.length < 12) {
-      throw new Error('Expected selectable revision text.');
-    }
-    const range = document.createRange();
-    range.setStart(text, 2);
-    range.setEnd(text, 12);
-    const selection = getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-    window.scrollTo(0, 60);
-    (
-      document.querySelector('.revision__copy-link') as HTMLButtonElement
-    ).focus({ preventScroll: true });
-    (window as InstrumentedWindow).__storageWrites = 0;
-  });
-  await watchAnnouncements(page);
-  const before = await copyInvariantState(page);
-  expect(before.scroll.y).toBeGreaterThan(0);
-  expect(before.selection.text).toHaveLength(10);
-  trackRequests = true;
-
-  await button.click();
-
-  await expect(copyStatus(page)).toHaveText(
-    'Revision 3 link could not be copied.',
-  );
-  await expect(button).toBeFocused();
-  await expect(button).not.toHaveAttribute('aria-busy');
-  expect(
-    await page.evaluate(
-      () => (window as InstrumentedWindow).__clipboardWrites,
-    ),
-  ).toEqual([canonicalHref(3)]);
-  expect(
-    await page.evaluate(
-      () => (window as InstrumentedWindow).__clipboardSuccesses,
-    ),
-  ).toBe(0);
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () => (window as InstrumentedWindow).__announcements,
+    await expect(button).toBeFocused();
+    await expect(button).not.toHaveAttribute('aria-busy');
+    expect(
+      await page.evaluate(
+        () => (window as InstrumentedWindow).__clipboardWrites,
       ),
-    )
-    .toEqual(['Revision 3 link could not be copied.']);
-  expect(await copyInvariantState(page)).toEqual(before);
-  expect(requests).toEqual([]);
-  expect(downloads).toEqual([]);
-  expect(diagnostics).toEqual([]);
-});
+    ).toEqual([canonicalHref(3)]);
+    expect(
+      await page.evaluate(
+        () => (window as InstrumentedWindow).__clipboardSuccesses,
+      ),
+    ).toBe(0);
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => (window as InstrumentedWindow).__announcements,
+        ),
+      )
+      .toEqual(['Revision 3 link could not be copied.']);
+    expect(await copyInvariantState(page)).toEqual(before);
+    expect(requests).toEqual([]);
+    expect(downloads).toEqual([]);
+    expect(diagnostics).toEqual([]);
+  });
+}
 
 test('clipboard-absent and JavaScript-disabled revisions retain all existing content', async ({
   browser,

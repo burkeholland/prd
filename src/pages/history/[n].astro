@@ -274,11 +274,15 @@ const description =
         copyStatus.textContent = `Revision ${revisionNumber} link copied.`;
       } catch {
         copyButton.textContent = 'Copy failed';
-        copyButton.focus({ preventScroll: true });
-        if (state.selection) {
+        const restoreSelection = () => {
+          if (!state.selection) return;
           state.selection.removeAllRanges();
           for (const range of state.selectedRanges) state.selection.addRange(range);
-        }
+        };
+        restoreSelection();
+        if (copyButton.isConnected) copyButton.focus({ preventScroll: true });
+        // WebKit clears a document selection when a button receives focus.
+        restoreSelection();
         window.scrollTo(state.scrollX, state.scrollY);
         copyStatus.textContent = `Revision ${revisionNumber} link could not be copied.`;
       } finally {
