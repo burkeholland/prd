@@ -677,7 +677,7 @@ test('the history page lists every gist revision, badges the published one, and 
   const values = page.locator('svg.size-chart text.size-chart__value');
   await expect(values).toHaveCount(2);
   await expect(values).toHaveText([kb(Math.max(...bytes)), kb(Math.min(...bytes))]);
-  await expect(page.locator('script')).toHaveCount(0);
+  await expect(page.locator('main script'), 'the static chart has no page-specific script').toHaveCount(0);
 });
 
 test('the history page tells the story in numbers from the data and labels whose counts are whose', async ({ page }) => {

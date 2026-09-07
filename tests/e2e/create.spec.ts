@@ -364,6 +364,7 @@ test('Continue draft follows current non-contiguous values and its visibility ne
 
   await page.locator('.site-nav a').last().focus();
   await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
   await expect(action).toBeFocused();
   await sectionField(page, 2).fill('Section 3 is now complete.');
   await sectionField(page, 4).fill(' \t ');
@@ -379,6 +380,7 @@ test('Continue draft follows current non-contiguous values and its visibility ne
   await expect(action).toBeHidden();
 
   await page.locator('.site-nav a').last().focus();
+  await page.keyboard.press('Tab');
   await page.keyboard.press('Tab');
   await expect(page.locator('#document-title')).toBeFocused();
 
