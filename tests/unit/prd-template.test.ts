@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createBlankPrdTemplateState,
+  createPrdTemplateDocument,
   PRD_TEMPLATE,
   PRD_TEMPLATE_SECTIONS,
   serializeBlankPrdMarkdown,
@@ -97,6 +98,43 @@ describe('serializePrdMarkdown', () => {
     }
     expect(markdown).not.toContain('\r');
     expect(markdown).not.toContain('{Product summary and desired outcome}');
+  });
+
+  it('omits blank and whitespace-only sections while retaining filled sections in canonical order', () => {
+    const document = createPrdTemplateDocument({
+      title: '  Focused\r\n requirements  ',
+      values: {
+        'acceptance-recovery': '  Recovery details.  ',
+        'context-problem': 'Problem line one.\r\nProblem line two.',
+        'scope-non-goals': ' \t\r\n ',
+        'goals-success': 'Success details.',
+      },
+    }, { includeBlankSections: false });
+
+    expect(document.title).toBe('Focused requirements');
+    expect(document.sections.map((section) => section.id)).toEqual([
+      'context-problem',
+      'goals-success',
+      'acceptance-recovery',
+    ]);
+    expect(document.sections.map((section) => section.body)).toEqual([
+      'Problem line one.\nProblem line two.',
+      'Success details.',
+      'Recovery details.',
+    ]);
+  });
+
+  it('serializes a normalized title without section headings when all sections are omitted', () => {
+    const markdown = serializePrdMarkdown({
+      title: ' \r\n ',
+      values: {
+        'summary-outcome': '',
+        'context-problem': ' \t\r\n ',
+      },
+    }, { includeBlankSections: false });
+
+    expect(markdown).toBe(`# ${PRD_TEMPLATE.defaultTitle}\n`);
+    expect(headings(markdown, 2)).toEqual([]);
   });
 
   it('never interpolates null or undefined values into completed Markdown', () => {

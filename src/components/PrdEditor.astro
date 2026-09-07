@@ -96,6 +96,10 @@ const blankDownloads = [
       <section id="downloads" class="editor-downloads" aria-labelledby="download-heading">
         <h2 id="download-heading">Download your PRD</h2>
         <p class="editor-group-label">Current draft</p>
+        <label class="editor-export-option" for="include-blank-sections">
+          <input id="include-blank-sections" type="checkbox" checked />
+          <span>Include blank sections</span>
+        </label>
         <div class="editor-download-actions">
           <button
             id="copy-markdown"
@@ -254,6 +258,7 @@ const blankDownloads = [
   const backupFileInput = document.querySelector('#backup-file');
   const downloadStatus = document.querySelector('#download-status');
   const copyMarkdownButton = document.querySelector('#copy-markdown');
+  const includeBlankSectionsInput = document.querySelector('#include-blank-sections');
   const downloadButtons = Array.from(
     document.querySelectorAll<HTMLButtonElement>('[data-export-format]'),
   );
@@ -275,6 +280,7 @@ const blankDownloads = [
     !(backupFileInput instanceof HTMLInputElement) ||
     !(downloadStatus instanceof HTMLParagraphElement) ||
     !(copyMarkdownButton instanceof HTMLButtonElement) ||
+    !(includeBlankSectionsInput instanceof HTMLInputElement) ||
     downloadButtons.length !== 3
   ) {
     throw new Error('The PRD editor markup is incomplete.');
@@ -698,19 +704,22 @@ const blankDownloads = [
     format: PrdExportFormat,
     state: PrdEditorState,
   ): Promise<Uint8Array> => {
+    const options = {
+      includeBlankSections: includeBlankSectionsInput.checked,
+    };
     switch (format) {
       case 'md':
-        return exportPrdMarkdown(state);
+        return exportPrdMarkdown(state, options);
       case 'docx': {
         const { exportPrdDocx } = await import('../lib/prd-export-docx');
-        return exportPrdDocx(state);
+        return exportPrdDocx(state, options);
       }
       case 'pdf': {
         const [{ generatePrdPdf }, fonts] = await Promise.all([
           import('../lib/prd-export-pdf'),
           loadPdfFonts(),
         ]);
-        return (await generatePrdPdf(state, fonts)).bytes;
+        return (await generatePrdPdf(state, fonts, options)).bytes;
       }
     }
   };
@@ -744,7 +753,9 @@ const blankDownloads = [
       return;
     }
 
-    const markdown = new TextDecoder().decode(exportPrdMarkdown(readState()));
+    const markdown = new TextDecoder().decode(exportPrdMarkdown(readState(), {
+      includeBlankSections: includeBlankSectionsInput.checked,
+    }));
     copyMarkdownButton.disabled = true;
     copyMarkdownButton.setAttribute('aria-busy', 'true');
     try {
@@ -1225,6 +1236,25 @@ const blankDownloads = [
 
   .editor-download-actions {
     display: grid;
+  }
+
+  .editor-export-option {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    min-height: 2rem;
+    width: fit-content;
+    max-width: 100%;
+    color: var(--text);
+    cursor: pointer;
+  }
+
+  .editor-export-option input {
+    flex: 0 0 auto;
+    width: 1rem;
+    height: 1rem;
+    margin: 0;
+    accent-color: var(--accent);
   }
 
   .editor-download-status,
