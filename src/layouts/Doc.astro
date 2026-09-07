@@ -64,27 +64,79 @@ const hasToc = toc.length > 0;
 
 <script>
   const header = document.querySelector<HTMLElement>('article.doc > header.doc__header');
+  const canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+  const clipboard = navigator.clipboard;
+  const canCopy = canonical && typeof clipboard?.writeText === 'function';
+  const canPrint = typeof window.print === 'function';
 
-  if (header && typeof window.print === 'function') {
+  if (header && (canCopy || canPrint)) {
     const action = document.createElement('p');
-    action.className = 'doc__print-action';
+    action.className = 'doc__page-actions doc__print-action';
 
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'doc__print-button';
-    button.textContent = 'Print this page';
-    action.append(button);
+    if (canCopy) {
+      const RESET_LABEL = 'Copy page link';
+      const RESET_DELAY = 1500;
+      const copyButton = document.createElement('button');
+      copyButton.type = 'button';
+      copyButton.className = 'doc__page-action-button doc__copy-button';
+      copyButton.textContent = RESET_LABEL;
+      copyButton.setAttribute('aria-busy', 'false');
+
+      const status = document.createElement('span');
+      status.className = 'doc__page-status';
+      status.setAttribute('role', 'status');
+      status.setAttribute('aria-live', 'polite');
+      status.setAttribute('aria-atomic', 'true');
+
+      let resetTimer: ReturnType<typeof setTimeout> | undefined;
+      copyButton.addEventListener('click', async () => {
+        if (copyButton.getAttribute('aria-busy') === 'true') return;
+
+        clearTimeout(resetTimer);
+        copyButton.setAttribute('aria-busy', 'true');
+        copyButton.textContent = 'Copying link';
+        delete copyButton.dataset.state;
+        status.textContent = '';
+
+        try {
+          await clipboard.writeText(canonical.href);
+          copyButton.textContent = 'Link copied';
+          copyButton.dataset.state = 'copied';
+          status.textContent = 'Page link copied.';
+        } catch {
+          copyButton.textContent = 'Copy failed';
+          status.textContent = 'Page link could not be copied.';
+        } finally {
+          copyButton.setAttribute('aria-busy', 'false');
+          resetTimer = setTimeout(() => {
+            copyButton.textContent = RESET_LABEL;
+            delete copyButton.dataset.state;
+          }, RESET_DELAY);
+        }
+      });
+
+      action.append(copyButton, status);
+    }
+
+    if (canPrint) {
+      const printButton = document.createElement('button');
+      printButton.type = 'button';
+      printButton.className = 'doc__page-action-button doc__print-button';
+      printButton.textContent = 'Print this page';
+      action.append(printButton);
+
+      const restoreFocus = () => {
+        if (printButton.isConnected) printButton.focus({ preventScroll: true });
+      };
+
+      printButton.addEventListener('click', () => {
+        restoreFocus();
+        window.addEventListener('afterprint', restoreFocus, { once: true });
+        window.print();
+        restoreFocus();
+      });
+    }
+
     header.append(action);
-
-    const restoreFocus = () => {
-      if (button.isConnected) button.focus({ preventScroll: true });
-    };
-
-    button.addEventListener('click', () => {
-      restoreFocus();
-      window.addEventListener('afterprint', restoreFocus, { once: true });
-      window.print();
-      restoreFocus();
-    });
   }
 </script>
