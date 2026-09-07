@@ -183,8 +183,9 @@ const blankDownloads = [
           </div>
         </div>
         <p id="backup-help" class="editor-backup-help">
-          A JSON backup reopens your editable draft, here or in another browser.
-          Downloads and imports stay on your device. Import limit: 5 MiB.
+          A JSON backup reopens your editable draft with all 13 fields preserved
+          exactly, here or in another browser. Downloads and imports stay on your
+          device. Import limit: 5 MiB.
         </p>
         <div class="editor-actions editor-backup-actions">
           <button id="download-backup" class="editor-button" type="button" aria-describedby="backup-help">
@@ -195,6 +196,28 @@ const blankDownloads = [
           </button>
         </div>
         <input id="backup-file" type="file" accept=".json,application/json" hidden />
+        <div class="editor-markdown-import">
+          <h3>Convert finished Markdown</h3>
+          <p id="markdown-import-help" class="editor-backup-help">
+            Markdown import converts a finished document that uses the 12 section
+            headings into editable fields. Use JSON when you need an exact backup.
+            Import limit: 5 MiB.
+          </p>
+          <button
+            id="import-markdown"
+            class="editor-button"
+            type="button"
+            aria-describedby="markdown-import-help"
+          >
+            Import Markdown
+          </button>
+          <input
+            id="markdown-file"
+            type="file"
+            accept=".md,text/markdown,text/plain"
+            hidden
+          />
+        </div>
       </section>
     </aside>
 
@@ -233,6 +256,7 @@ const blankDownloads = [
     type PrdEditorState,
     type PrdEditorStorage,
   } from '../lib/prd-editor-state';
+  import { readPrdMarkdownFile } from '../lib/prd-import-markdown';
   import {
     exportPrdMarkdown,
     prdBytesResponseBody,
@@ -257,6 +281,8 @@ const blankDownloads = [
   const downloadBackupButton = document.querySelector('#download-backup');
   const importBackupButton = document.querySelector('#import-backup');
   const backupFileInput = document.querySelector('#backup-file');
+  const importMarkdownButton = document.querySelector('#import-markdown');
+  const markdownFileInput = document.querySelector('#markdown-file');
   const downloadStatus = document.querySelector('#download-status');
   const copyMarkdownButton = document.querySelector('#copy-markdown');
   const includeBlankSectionsInput = document.querySelector('#include-blank-sections');
@@ -279,6 +305,8 @@ const blankDownloads = [
     !(downloadBackupButton instanceof HTMLButtonElement) ||
     !(importBackupButton instanceof HTMLButtonElement) ||
     !(backupFileInput instanceof HTMLInputElement) ||
+    !(importMarkdownButton instanceof HTMLButtonElement) ||
+    !(markdownFileInput instanceof HTMLInputElement) ||
     !(downloadStatus instanceof HTMLParagraphElement) ||
     !(copyMarkdownButton instanceof HTMLButtonElement) ||
     !(includeBlankSectionsInput instanceof HTMLInputElement) ||
@@ -485,12 +513,19 @@ const blankDownloads = [
     return true;
   };
 
+  type SaveMode = 'automatic' | 'explicit' | 'backup-import' | 'markdown-import';
+  const isImportMode = (
+    mode: SaveMode,
+  ): mode is 'backup-import' | 'markdown-import' =>
+    mode === 'backup-import' || mode === 'markdown-import';
+  const importedDocumentName = (mode: 'backup-import' | 'markdown-import') =>
+    mode === 'backup-import' ? 'Draft backup' : 'Markdown';
   const writeDraft = (
     expectedRaw: string | null | undefined,
-    mode: 'automatic' | 'explicit' | 'import',
+    mode: SaveMode,
   ) => {
-    const failureMessage = mode === 'import'
-      ? 'Draft backup imported into the editor, but not saved in this browser. You can keep editing; download a draft backup before leaving.'
+    const failureMessage = isImportMode(mode)
+      ? `${importedDocumentName(mode)} imported into the editor, but not saved in this browser. You can keep editing; download a draft backup before leaving.`
       : 'Draft could not be saved in this browser. You can still edit, but copy your work before leaving.';
     if (!storage) {
       showStatus(
@@ -503,8 +538,8 @@ const blankDownloads = [
 
     const result = savePrdEditorDraft(storage, readState(), expectedRaw);
     if (result.status === 'conflict') {
-      showConflict(result.raw, mode === 'import'
-        ? 'Draft backup imported into the editor, but not saved. Saving is paused because the saved draft changed in another tab. Download a draft backup before choosing which copy to keep.'
+      showConflict(result.raw, isImportMode(mode)
+        ? `${importedDocumentName(mode)} imported into the editor, but not saved. Saving is paused because the saved draft changed in another tab. Download a draft backup before choosing which copy to keep.`
         : 'Saving is paused because the saved draft changed again. Your text is unchanged. Review the latest saved draft and choose again.');
       return;
     }
@@ -521,8 +556,8 @@ const blankDownloads = [
     safeStateSignature = stateSignature();
     importedDraftAtRisk = false;
     clearConflict();
-    const lead = mode === 'import'
-      ? 'Draft backup imported and saved'
+    const lead = isImportMode(mode)
+      ? `${importedDocumentName(mode)} imported and saved`
       : mode === 'automatic' ? 'Draft saved automatically' : 'Draft saved';
     showStatus(
       `${lead} in this browser at ${formatSavedAt(result.payload.savedAt)}.`,
@@ -530,18 +565,18 @@ const blankDownloads = [
     );
   };
 
-  const persistDraft = (mode: 'automatic' | 'explicit' | 'import') => {
+  const persistDraft = (mode: SaveMode) => {
     const ready = checkForChanges();
     if (conflict) {
-      if (mode === 'import' && observedRaw !== undefined) {
-        showConflict(observedRaw, 'Draft backup imported into the editor, but not saved. Saving is paused because the saved draft changed in another tab. Download a draft backup before choosing which copy to keep.');
+      if (isImportMode(mode) && observedRaw !== undefined) {
+        showConflict(observedRaw, `${importedDocumentName(mode)} imported into the editor, but not saved. Saving is paused because the saved draft changed in another tab. Download a draft backup before choosing which copy to keep.`);
       }
       return;
     }
     if (!ready) {
-      if (mode === 'import') {
+      if (isImportMode(mode)) {
         showStatus(
-          'Draft backup imported into the editor, but not saved in this browser. You can keep editing; download a draft backup before leaving.',
+          `${importedDocumentName(mode)} imported into the editor, but not saved in this browser. You can keep editing; download a draft backup before leaving.`,
           'error',
         );
       }
@@ -834,18 +869,91 @@ const blankDownloads = [
   });
 
   let importInProgress = false;
+  const importButtons = [importBackupButton, importMarkdownButton];
+  const importInputs = [backupFileInput, markdownFileInput];
+  const beginImport = (activeButton: HTMLButtonElement) => {
+    if (importInProgress) return false;
+    importInProgress = true;
+    for (const button of importButtons) button.disabled = true;
+    for (const input of importInputs) input.disabled = true;
+    activeButton.setAttribute('aria-busy', 'true');
+    return true;
+  };
+  const finishImport = () => {
+    for (const input of importInputs) {
+      input.value = '';
+      input.disabled = false;
+    }
+    for (const button of importButtons) {
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+    }
+    importInProgress = false;
+  };
+  const chooseImportFile = (input: HTMLInputElement) => {
+    if (importInProgress) return;
+    input.value = '';
+    input.click();
+  };
   importBackupButton.addEventListener('click', () => {
-    backupFileInput.value = '';
-    backupFileInput.click();
+    chooseImportFile(backupFileInput);
   });
+  importMarkdownButton.addEventListener('click', () => {
+    chooseImportFile(markdownFileInput);
+  });
+  for (const input of importInputs) {
+    input.addEventListener('cancel', () => {
+      input.value = '';
+    });
+  }
+
+  const replaceWithImportedState = (
+    importedState: PrdEditorState,
+    mode: 'backup-import' | 'markdown-import',
+  ) => {
+    const label = mode === 'backup-import' ? 'backup' : 'Markdown document';
+    checkForChanges();
+    if (conflict) {
+      showDownloadStatus('Import paused because the saved draft changed in another tab. Your draft is unchanged. Resolve the saved draft choice, then import again.', 'error');
+      return;
+    }
+    // Read after the asynchronous file read so confirmation covers the latest edits.
+    if (hasLocalContent() && !window.confirm(
+      mode === 'backup-import'
+        ? 'Replace the current draft with this backup? All 13 current fields and the draft saved in this browser will be replaced. Download a backup first if you want to keep both.'
+        : 'Replace all 13 current fields with this Markdown document? Markdown is converted into editable fields and the current browser-saved draft is replaced. Download a JSON backup first if you want to keep both.',
+    )) {
+      showDownloadStatus(
+        mode === 'backup-import'
+          ? 'Import canceled. Your draft is unchanged.'
+          : `Import canceled. Your draft is unchanged; the ${label} was not imported.`,
+        'canceled',
+      );
+      return;
+    }
+
+    checkForChanges();
+    if (conflict) {
+      showDownloadStatus('Import paused because the saved draft changed during confirmation. Your draft is unchanged. Resolve the saved draft choice, then import again.', 'error');
+      return;
+    }
+    cancelAutoSave();
+    applyState(importedState);
+    updateCompletion();
+    importedDraftAtRisk = true;
+    syncLeaveWarning();
+    showDownloadStatus('', 'idle');
+    persistDraft(mode);
+    titleInput.focus();
+  };
 
   backupFileInput.addEventListener('change', async () => {
     const file = backupFileInput.files?.[0];
-    if (!file || importInProgress) return;
-    importInProgress = true;
-    importBackupButton.disabled = true;
-    backupFileInput.disabled = true;
-    importBackupButton.setAttribute('aria-busy', 'true');
+    if (!file) {
+      backupFileInput.value = '';
+      return;
+    }
+    if (!beginImport(importBackupButton)) return;
     try {
       const result = await readPrdEditorBackup(file);
       if (result.status !== 'valid') {
@@ -872,38 +980,75 @@ const blankDownloads = [
         return;
       }
 
-      checkForChanges();
-      if (conflict) {
-        showDownloadStatus('Import paused because the saved draft changed in another tab. Your draft is unchanged. Resolve the saved draft choice, then import again.', 'error');
-        return;
-      }
-      // Read after the asynchronous file read so confirmation covers the latest edits.
-      if (hasLocalContent() && !window.confirm(
-        'Replace the current draft with this backup? This replaces all fields and the draft saved in this browser. Download a backup first if you want to keep both.',
-      )) {
-        showDownloadStatus('Import canceled. Your draft is unchanged.', 'canceled');
+      replaceWithImportedState(result.payload.state, 'backup-import');
+    } finally {
+      finishImport();
+    }
+  });
+
+  markdownFileInput.addEventListener('change', async () => {
+    const file = markdownFileInput.files?.[0];
+    if (!file) {
+      markdownFileInput.value = '';
+      return;
+    }
+    if (!beginImport(importMarkdownButton)) return;
+    try {
+      const result = await readPrdMarkdownFile(file);
+      if (result.status !== 'valid') {
+        let message: string;
+        switch (result.status) {
+          case 'too-large':
+            message = 'This file is too large. Choose a Markdown file of 5 MiB or less.';
+            break;
+          case 'unsupported-file':
+            message = 'Choose a Markdown (.md) or UTF-8 plain-text file.';
+            break;
+          case 'unreadable':
+            message = 'This file could not be read. Choose it again or try another copy.';
+            break;
+          case 'invalid-utf8':
+            message = 'This file is not valid UTF-8. Save it as UTF-8 and try again.';
+            break;
+          case 'invalid':
+            switch (result.reason) {
+              case 'missing-title':
+                message = 'Add one "# " document title as the first nonblank line.';
+                break;
+              case 'multiple-titles':
+                message = 'Keep exactly one "# " document title in the file.';
+                break;
+              case 'preamble-before-title':
+                message = 'Remove nonblank text before the "# " document title.';
+                break;
+              case 'empty-title':
+                message = 'Add document title text after the first "# " heading.';
+                break;
+              case 'unknown-section':
+                message = `The H2 heading "${result.heading}" is not one of the 12 section headings. Rename or remove it.`;
+                break;
+              case 'duplicate-section':
+                message = `Remove the duplicate "${result.heading}" section heading.`;
+                break;
+              case 'out-of-order-section':
+                message = `"${result.heading}" is out of order. Keep the 12 section headings in their template order.`;
+                break;
+              case 'content-before-section':
+                message = 'Move the text after the title under one of the 12 section headings.';
+                break;
+              case 'no-sections':
+                message = 'No canonical section heading was found. Use the 12 template headings, or import a title-only document.';
+                break;
+            }
+            break;
+        }
+        showDownloadStatus(`${message} Your draft is unchanged.`, 'error');
         return;
       }
 
-      checkForChanges();
-      if (conflict) {
-        showDownloadStatus('Import paused because the saved draft changed during confirmation. Your draft is unchanged. Resolve the saved draft choice, then import again.', 'error');
-        return;
-      }
-      cancelAutoSave();
-      applyState(result.payload.state);
-      updateCompletion();
-      importedDraftAtRisk = true;
-      syncLeaveWarning();
-      showDownloadStatus('', 'idle');
-      persistDraft('import');
-      titleInput.focus();
+      replaceWithImportedState(result.state, 'markdown-import');
     } finally {
-      backupFileInput.value = '';
-      backupFileInput.disabled = false;
-      importBackupButton.disabled = false;
-      importBackupButton.removeAttribute('aria-busy');
-      importInProgress = false;
+      finishImport();
     }
   });
 
@@ -1294,6 +1439,7 @@ const blankDownloads = [
   .editor-backup-help {
     color: var(--text-muted);
     font-size: 0.92rem;
+    overflow-wrap: anywhere;
   }
 
   .editor-actions {
@@ -1327,6 +1473,19 @@ const blankDownloads = [
     font-size: 0.85rem;
     font-weight: 500;
     background: transparent;
+  }
+
+  .editor-markdown-import {
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 0.25rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .editor-markdown-import .editor-button {
+    width: 100%;
+    text-align: left;
   }
 
   .editor-button--primary {
