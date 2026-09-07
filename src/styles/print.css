@@ -11,7 +11,9 @@
 
   /* Palette: black on white whatever the OS colour scheme says. */
   :root,
-  :root[data-theme] {
+  :root:not([data-theme]),
+  :root[data-theme],
+  :root[data-text-size] {
     color-scheme: light;
     --bg: #fff;
     --surface: #fff;
@@ -45,7 +47,8 @@
     display: none !important;
   }
 
-  html {
+  html,
+  :root[data-text-size] {
     font-size: 11pt;
     scroll-behavior: auto;
   }

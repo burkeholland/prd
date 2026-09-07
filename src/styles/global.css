@@ -66,6 +66,10 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
+:root[data-text-size="large"] {
+  font-size: 20px;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -219,11 +223,13 @@ samp {
   border-bottom-color: var(--accent);
 }
 
-.theme-control {
+.theme-control,
+.reader-text-size-control {
   min-width: 0;
 }
 
-.theme-control__label {
+.theme-control__label,
+.reader-text-size-control__label {
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -232,7 +238,8 @@ samp {
   white-space: nowrap;
 }
 
-.theme-control select {
+.theme-control select,
+.reader-text-size-control select {
   min-width: 6.25rem;
   min-height: 32px;
   max-width: 100%;

@@ -417,9 +417,14 @@ test('Continue draft follows current non-contiguous values and its visibility ne
   );
   await page.reload();
   const action = page.getByRole('button', { name: 'Continue draft', exact: true });
+  const theme = page.locator('select[data-theme-control]');
+  const textSize = page.locator('select[data-reader-text-size-control]');
 
   await page.locator('.site-nav a').last().focus();
   await page.keyboard.press('Tab');
+  await expect(theme).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(textSize).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(action).toBeFocused();
   await sectionField(page, 2).fill('Section 3 is now complete.');
@@ -437,6 +442,9 @@ test('Continue draft follows current non-contiguous values and its visibility ne
 
   await page.locator('.site-nav a').last().focus();
   await page.keyboard.press('Tab');
+  await expect(theme).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(textSize).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(page.locator('#document-title')).toBeFocused();
 
