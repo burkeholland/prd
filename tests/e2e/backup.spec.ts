@@ -325,7 +325,7 @@ for (const failure of ['access', 'write'] as const) {
     await choose(page, backupBytes(imported));
     await expectFields(page, imported);
     await expect(page.locator('#save-status')).toContainText('imported into the editor, but not saved in this browser');
-    await expect(page.locator('#document-title')).toBeEditable();
+    await expect(page.locator('#document-title')).toBeFocused();
     if (failure === 'write') expect(await stored(page)).toBe(before);
     expect((await download(page)).payload.state).toEqual(imported);
     let warned = false;
