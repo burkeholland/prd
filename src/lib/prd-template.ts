@@ -143,6 +143,7 @@ export interface PrdTemplateStateInput {
 
 export interface SerializePrdMarkdownOptions {
   readonly blankPlaceholders?: boolean;
+  readonly includeBlankSections?: boolean;
 }
 
 export interface PrdTemplateDocumentSection {
@@ -192,17 +193,23 @@ export const createBlankPrdTemplateState = (
 export const createPrdTemplateDocument = (
   state: PrdTemplateStateInput,
   options: SerializePrdMarkdownOptions = {},
-): PrdTemplateDocument => ({
-  title: normalizePrdTitle(state.title),
-  sections: PRD_TEMPLATE.sections.map((section) => {
+): PrdTemplateDocument => {
+  const sections = PRD_TEMPLATE.sections.map((section) => {
     const value = normalizePrdSectionValue(state.values?.[section.id]);
     return {
       id: section.id,
       title: section.title,
       body: value || (options.blankPlaceholders ? `{${section.title}}` : ''),
     };
-  }),
-});
+  });
+
+  return {
+    title: normalizePrdTitle(state.title),
+    sections: options.includeBlankSections === false
+      ? sections.filter((section) => section.body.length > 0)
+      : sections,
+  };
+};
 
 export const serializePrdMarkdown = (
   state: PrdTemplateStateInput,

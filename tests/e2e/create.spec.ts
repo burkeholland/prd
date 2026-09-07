@@ -184,6 +184,12 @@ test('renders one editor with the canonical heading, 12 optional section fields,
 
   await expect(page.locator('[data-export-format]')).toHaveCount(3);
   await expect(page.getByRole('button', { name: 'Copy Markdown', exact: true })).toHaveCount(1);
+  const includeBlankSections = page.getByRole('checkbox', {
+    name: 'Include blank sections',
+    exact: true,
+  });
+  await expect(includeBlankSections).toHaveCount(1);
+  await expect(includeBlankSections).toBeChecked();
   await expect(page.locator('.editor-downloads .editor-blank-links a[download]')).toHaveCount(3);
   await expect(page.locator('#download-heading')).toHaveText('Download your PRD');
   await expect(page.locator('.editor-downloads h3')).toHaveText('Or start with a blank file');
@@ -462,6 +468,7 @@ test('keyboard flow reaches every field and action, and outline links focus thei
   const requiredBeforeBlankDownloads = [
     'document-title',
     ...PRD_TEMPLATE_SECTIONS.map((section) => `section-input-${section.id}`),
+    'include-blank-sections',
     'copy-markdown',
     'download-md',
     'download-docx',

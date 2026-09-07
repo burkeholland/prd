@@ -18,6 +18,7 @@ import {
 import { exportPrdDocx } from '../../src/lib/prd-export-docx';
 import { generatePrdPdf } from '../../src/lib/prd-export-pdf';
 import {
+  PRD_TEMPLATE,
   PRD_TEMPLATE_SECTIONS,
   type PrdTemplateSectionId,
   type PrdTemplateState,
@@ -44,6 +45,34 @@ const FILLED_STATE: PrdTemplateState = {
   title: 'Launch: Café / Q4 2026?',
   values: VALUES,
 };
+
+const MIXED_STATE: PrdTemplateState = {
+  title: '  Focused export  ',
+  values: Object.fromEntries(
+    PRD_TEMPLATE_SECTIONS.map((section, index) => [
+      section.id,
+      index === 1
+        ? 'First retained section.'
+        : index === 6
+          ? 'Second retained section.\r\nWith another line.'
+          : index === 10
+            ? 'Third retained section.'
+            : index === 4
+              ? ' \t\r\n '
+              : '',
+    ]),
+  ) as Record<PrdTemplateSectionId, string>,
+};
+const MIXED_SECTION_TITLES = [1, 6, 10].map(
+  (index) => PRD_TEMPLATE_SECTIONS[index]!.title,
+);
+const TITLE_ONLY_STATE: PrdTemplateState = {
+  title: ' \r\n ',
+  values: Object.fromEntries(
+    PRD_TEMPLATE_SECTIONS.map((section) => [section.id, ' \t ']),
+  ) as Record<PrdTemplateSectionId, string>,
+};
+const OMIT_BLANK_SECTIONS = { includeBlankSections: false } as const;
 
 const xmlText = (xml: string): string =>
   xml
@@ -95,6 +124,27 @@ describe('PRD export names and Markdown', () => {
     expect(markdown).toContain('- Deuxième item\n1. Ordered item');
     expect(markdown).not.toContain('\r');
   });
+
+  it('emits only filled sections in canonical order when blank sections are omitted', () => {
+    const markdown = new TextDecoder().decode(
+      exportPrdMarkdown(MIXED_STATE, OMIT_BLANK_SECTIONS),
+    );
+
+    expect(markdown.match(/^# /gm)).toHaveLength(1);
+    expect(Array.from(markdown.matchAll(/^## (.+)$/gm), (match) => match[1])).toEqual(
+      MIXED_SECTION_TITLES,
+    );
+    expect(markdown).toContain('Second retained section.\nWith another line.');
+    expect(markdown).not.toContain(PRD_TEMPLATE_SECTIONS[4]!.title);
+  });
+
+  it('emits a normalized title and no headings for an otherwise blank document', () => {
+    const markdown = new TextDecoder().decode(
+      exportPrdMarkdown(TITLE_ONLY_STATE, OMIT_BLANK_SECTIONS),
+    );
+
+    expect(markdown).toBe(`# ${PRD_TEMPLATE.defaultTitle}\n`);
+  });
 });
 
 describe('Word export', () => {
@@ -129,6 +179,32 @@ describe('Word export', () => {
 
     const core = await zip.file('docProps/core.xml')!.async('text');
     expect(core.match(/2000-01-01T00:00:00.000Z/g)).toHaveLength(2);
+  });
+
+  it('contains only filled headings in canonical order and supports title-only output', async () => {
+    const mixedZip = await JSZip.loadAsync(
+      await exportPrdDocx(MIXED_STATE, OMIT_BLANK_SECTIONS),
+    );
+    const mixedXml = await mixedZip.file('word/document.xml')!.async('text');
+    const mixedText = xmlText(mixedXml);
+
+    expect(mixedXml.match(/w:pStyle w:val="Heading1"/g)).toHaveLength(1);
+    expect(mixedXml.match(/w:pStyle w:val="Heading2"/g)).toHaveLength(3);
+    let previousIndex = -1;
+    for (const title of MIXED_SECTION_TITLES) {
+      const index = mixedText.indexOf(title);
+      expect(index).toBeGreaterThan(previousIndex);
+      previousIndex = index;
+    }
+    expect(mixedText).not.toContain(PRD_TEMPLATE_SECTIONS[4]!.title);
+
+    const titleOnlyZip = await JSZip.loadAsync(
+      await exportPrdDocx(TITLE_ONLY_STATE, OMIT_BLANK_SECTIONS),
+    );
+    const titleOnlyXml = await titleOnlyZip.file('word/document.xml')!.async('text');
+    expect(titleOnlyXml.match(/w:pStyle w:val="Heading1"/g)).toHaveLength(1);
+    expect(titleOnlyXml.match(/w:pStyle w:val="Heading2"/g)).toBeNull();
+    expect(xmlText(titleOnlyXml)).toContain(PRD_TEMPLATE.defaultTitle);
   });
 });
 
@@ -185,5 +261,35 @@ describe('PDF export', () => {
     await expect(
       generatePrdPdf({ ...FILLED_STATE, title: 'Launch 🚀' }, { regular, bold }),
     ).rejects.toThrow('PDF heading font cannot render U+1F680');
+  });
+
+  it('outlines only filled sections in canonical order and supports title-only output', async () => {
+    const [regular, bold] = await Promise.all([font(400), font(700)]);
+    const mixed = await generatePrdPdf(
+      MIXED_STATE,
+      { regular, bold },
+      OMIT_BLANK_SECTIONS,
+    );
+    const mixedPdf = await PDFDocument.load(mixed.bytes);
+
+    expect(pdfOutlineTitles(mixedPdf)).toEqual([
+      'Focused export',
+      ...MIXED_SECTION_TITLES,
+    ]);
+    expect(
+      mixed.layout.filter((line) => line.role === 'section').map((line) => line.text),
+    ).toEqual(MIXED_SECTION_TITLES);
+
+    const titleOnly = await generatePrdPdf(
+      TITLE_ONLY_STATE,
+      { regular, bold },
+      OMIT_BLANK_SECTIONS,
+    );
+    const titleOnlyPdf = await PDFDocument.load(titleOnly.bytes);
+    expect(titleOnlyPdf.getPageCount()).toBe(1);
+    expect(pdfOutlineTitles(titleOnlyPdf)).toEqual([PRD_TEMPLATE.defaultTitle]);
+    expect(titleOnly.layout.filter((line) => line.role === 'section')).toEqual([]);
+    expect(titleOnly.layout.filter((line) => line.role === 'title').map((line) => line.text))
+      .toEqual([PRD_TEMPLATE.defaultTitle]);
   });
 });

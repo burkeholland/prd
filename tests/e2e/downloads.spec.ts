@@ -345,6 +345,183 @@ test('all 13 draft values download as parseable Markdown, Word, and PDF without 
   });
 });
 
+test('unchecked current-draft exports omit blank sections and remain valid with only a normalized title', async ({
+  page,
+}) => {
+  await installClipboardStub(page);
+  await page.goto(CREATE_PATH);
+  const option = page.getByRole('checkbox', {
+    name: 'Include blank sections',
+    exact: true,
+  });
+  await expect(option).toBeChecked();
+
+  await page.locator('#document-title').fill('  Focused export  ');
+  const retainedIndexes = [1, 6, 10];
+  for (const [index, section] of PRD_TEMPLATE_SECTIONS.entries()) {
+    const value = retainedIndexes.includes(index)
+      ? `Retained value ${index}\nSecond line ${index}.`
+      : index === 4
+        ? ' \t\n '
+        : '';
+    await page.locator(`#section-input-${section.id}`).fill(value);
+  }
+  await option.uncheck();
+  const retainedTitles = retainedIndexes.map(
+    (index) => PRD_TEMPLATE_SECTIONS[index]!.title,
+  );
+
+  const { download: markdownDownload } = await clickDownload(page, '#download-md');
+  const markdown = decodeMarkdown(await bytesFrom(markdownDownload));
+  expect(Array.from(markdown.matchAll(/^# (.+)$/gm), (match) => match[1])).toEqual([
+    'Focused export',
+  ]);
+  expect(Array.from(markdown.matchAll(/^## (.+)$/gm), (match) => match[1])).toEqual(
+    retainedTitles,
+  );
+  expect(markdown).not.toContain(PRD_TEMPLATE_SECTIONS[4]!.title);
+
+  await page.getByRole('button', {
+    name: 'Copy Markdown',
+    exact: true,
+  }).click();
+  expect(await clipboardWrites(page)).toEqual([markdown]);
+
+  const { download: wordDownload } = await clickDownload(page, '#download-docx');
+  const word = await parseDocx(await bytesFrom(wordDownload));
+  expect(word.title).toEqual(['Focused export']);
+  expect(word.sections).toEqual(retainedTitles);
+  for (const index of retainedIndexes) {
+    expect(word.text).toContain(`Retained value ${index}`);
+    expect(word.text).toContain(`Second line ${index}.`);
+  }
+
+  const { download: pdfDownload } = await clickDownload(page, '#download-pdf');
+  const pdf = await parsePdf(await bytesFrom(pdfDownload));
+  expect(pdf.title).toBe('Focused export');
+  expect(pdf.outline).toEqual(['Focused export', ...retainedTitles]);
+
+  await page.locator('#document-title').fill(' \t ');
+  for (const section of PRD_TEMPLATE_SECTIONS) {
+    await page.locator(`#section-input-${section.id}`).fill(' \t\n ');
+  }
+
+  const { download: titleMarkdownDownload } = await clickDownload(page, '#download-md');
+  const titleMarkdown = decodeMarkdown(await bytesFrom(titleMarkdownDownload));
+  expect(titleMarkdown).toBe(`# ${PRD_TEMPLATE.defaultTitle}\n`);
+
+  const { download: titleWordDownload } = await clickDownload(page, '#download-docx');
+  const titleWord = await parseDocx(await bytesFrom(titleWordDownload));
+  expect(titleWord.title).toEqual([PRD_TEMPLATE.defaultTitle]);
+  expect(titleWord.sections).toEqual([]);
+
+  const { download: titlePdfDownload } = await clickDownload(page, '#download-pdf');
+  const titlePdf = await parsePdf(await bytesFrom(titlePdfDownload));
+  expect(titlePdf.title).toBe(PRD_TEMPLATE.defaultTitle);
+  expect(titlePdf.outline).toEqual([PRD_TEMPLATE.defaultTitle]);
+  expect(titlePdf.pages).toBeGreaterThan(0);
+});
+
+test('keyboard toggling changes no draft data or storage and preserves an active conflict', async ({
+  context,
+  page,
+}) => {
+  await page.goto(CREATE_PATH);
+  const state = copyFixture('Preference neutrality');
+  await fillDraft(page, state);
+  await page.locator('#save-draft').click();
+  const savedBeforeToggle = await storedDraft(page);
+  const fieldsBeforeToggle = await currentFields(page);
+  const { download: backupBeforeDownload } = await clickDownload(page, '#download-backup');
+  const backupBefore = JSON.parse(
+    decodeMarkdown(await bytesFrom(backupBeforeDownload)),
+  );
+
+  await page.evaluate(() => {
+    const mutations = { set: 0, remove: 0, clear: 0 };
+    const setItem = Storage.prototype.setItem;
+    const removeItem = Storage.prototype.removeItem;
+    const clear = Storage.prototype.clear;
+    Storage.prototype.setItem = function (...args) {
+      mutations.set += 1;
+      return setItem.apply(this, args);
+    };
+    Storage.prototype.removeItem = function (...args) {
+      mutations.remove += 1;
+      return removeItem.apply(this, args);
+    };
+    Storage.prototype.clear = function (...args) {
+      mutations.clear += 1;
+      return clear.apply(this, args);
+    };
+    Object.assign(window, { __prdStorageMutations: mutations });
+  });
+
+  const option = page.getByRole('checkbox', {
+    name: 'Include blank sections',
+    exact: true,
+  });
+  await option.focus();
+  await page.keyboard.press('Space');
+  await expect(option).not.toBeChecked();
+  await page.waitForTimeout(450);
+  expect(await storedDraft(page)).toBe(savedBeforeToggle);
+  expect(await currentFields(page)).toEqual(fieldsBeforeToggle);
+  expect(await page.evaluate(() =>
+    (window as typeof window & {
+      __prdStorageMutations: { set: number; remove: number; clear: number };
+    }).__prdStorageMutations,
+  )).toEqual({ set: 0, remove: 0, clear: 0 });
+
+  const { download: backupAfterDownload } = await clickDownload(page, '#download-backup');
+  const backupAfter = JSON.parse(
+    decodeMarkdown(await bytesFrom(backupAfterDownload)),
+  );
+  expect(backupAfter.version).toBe(1);
+  expect(backupAfter.state).toEqual(backupBefore.state);
+  expect([
+    backupAfter.state.title,
+    ...Object.values(backupAfter.state.values),
+  ]).toHaveLength(13);
+  expect([
+    backupAfter.state.title,
+    ...Object.values(backupAfter.state.values),
+  ].every((value) => typeof value === 'string')).toBe(true);
+
+  const other = await context.newPage();
+  await other.goto('/prd/create/');
+  await fillDraft(other, copyFixture('Newer saved copy'));
+  await other.locator('#save-draft').click();
+  const newerSavedDraft = await storedDraft(other);
+  await expect(page.locator('#draft-conflict')).toBeVisible();
+  const conflictFields = await currentFields(page);
+  await page.evaluate(() => {
+    const mutations = (window as typeof window & {
+      __prdStorageMutations: { set: number; remove: number; clear: number };
+    }).__prdStorageMutations;
+    mutations.set = 0;
+    mutations.remove = 0;
+    mutations.clear = 0;
+  });
+
+  await option.focus();
+  await page.keyboard.press('Space');
+  await expect(option).toBeChecked();
+  expect(await storedDraft(page)).toBe(newerSavedDraft);
+  expect(await currentFields(page)).toEqual(conflictFields);
+  expect(await page.evaluate(() =>
+    (window as typeof window & {
+      __prdStorageMutations: { set: number; remove: number; clear: number };
+    }).__prdStorageMutations,
+  )).toEqual({ set: 0, remove: 0, clear: 0 });
+  await expect(page.locator('#draft-conflict')).toBeVisible();
+  await expect(page.locator('#save-status')).toHaveAttribute(
+    'data-state',
+    'conflict',
+  );
+  await other.close();
+});
+
 test('a generation failure is explicit and leaves the current draft intact', async ({
   page,
 }) => {
@@ -372,11 +549,17 @@ test('a generation failure is explicit and leaves the current draft intact', asy
   expect((await bytesFrom(retry)).subarray(0, 5)).toEqual(Buffer.from('%PDF-'));
 });
 
-test('both editor routes expose one Copy Markdown action and exactly three document downloads', async ({
+test('both editor routes expose one export preference, one Copy Markdown action, and exactly three document downloads', async ({
   page,
 }) => {
   for (const path of ['/prd/', '/prd/create/']) {
     await page.goto(path);
+    const option = page.getByRole('checkbox', {
+      name: 'Include blank sections',
+      exact: true,
+    });
+    await expect(option, path).toHaveCount(1);
+    await expect(option, path).toBeChecked();
     await expect(
       page.getByRole('button', { name: 'Copy Markdown', exact: true }),
       path,
@@ -680,21 +863,21 @@ test('copy uses this tab live values without changing saved bytes or resolving a
   await other.close();
 });
 
-test('all current-draft actions remain at least 32px and overflow-free at supported widths', async ({
+test('all current-draft controls remain at least 32px and overflow-free at supported widths', async ({
   page,
 }) => {
   for (const width of [320, 390, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(CREATE_PATH);
-    const actions = page.locator(
-      '.editor-download-actions .editor-button:visible',
+    const controls = page.locator(
+      '.editor-download-actions .editor-button:visible, .editor-export-option:visible',
     );
-    await expect(actions).toHaveCount(4);
-    const boxes = await actions.evaluateAll((buttons) =>
-      buttons.map((button) => {
-        const box = button.getBoundingClientRect();
+    await expect(controls).toHaveCount(5);
+    const boxes = await controls.evaluateAll((elements) =>
+      elements.map((element) => {
+        const box = element.getBoundingClientRect();
         return {
-          name: button.textContent?.trim(),
+          name: element.textContent?.trim(),
           height: box.height,
           width: box.width,
           left: box.left,
