@@ -61,6 +61,7 @@ test('revision 13 shows one diff table, hunks, the line-ending note and is noind
     'href',
     'https://burkeholland.github.io/prd/history/13/',
   );
+  await expect(page.locator('meta[property="og:url"]')).toHaveCount(0);
 
   // Previous / All revisions / Next are a list rendered twice — under the header and after the diff —
   // with the same hrefs in each; source and download actions stay together above the first nav.
