@@ -139,6 +139,45 @@ const diagnosticsFor = (page: Page) => {
   return diagnostics;
 };
 
+const copyInvariantState = (page: Page) =>
+  page.evaluate(() => {
+    const testWindow = window as InstrumentedWindow;
+    const selection = getSelection();
+    const download = document.querySelector<HTMLAnchorElement>(
+      'a.history-download',
+    );
+    return {
+      url: location.href,
+      historyLength: window.history.length,
+      historyMutations: testWindow.__historyMutations,
+      storageWrites: testWindow.__storageWrites,
+      localStorage: Object.entries(localStorage).sort(),
+      sessionStorage: Object.entries(sessionStorage).sort(),
+      revisionHtml: document.querySelector(
+        '.revision__diff, .revision__first',
+      )?.innerHTML,
+      navigation: Array.from(
+        document.querySelectorAll<HTMLAnchorElement>(
+          '.revision__nav a, .site-nav a',
+        ),
+        (link) => ({ href: link.href, text: link.textContent }),
+      ),
+      download: {
+        href: download?.getAttribute('href'),
+        filename: download?.getAttribute('download'),
+      },
+      theme: document.documentElement.dataset.theme,
+      textSize: document.documentElement.dataset.textSize,
+      printCalls: testWindow.__printCalls,
+      scroll: { x: scrollX, y: scrollY },
+      selection: {
+        text: selection?.toString(),
+        anchorOffset: selection?.anchorOffset,
+        focusOffset: selection?.focusOffset,
+      },
+    };
+  });
+
 expect(history.count).toBe(16);
 expect(history.revisions.map(({ n }) => n)).toEqual(
   Array.from({ length: 16 }, (_, index) => index + 1),
@@ -211,6 +250,18 @@ test('pointer, Enter, and Space each write and announce once', async ({
   page,
 }) => {
   await installInstrumentation(page);
+  const diagnostics = diagnosticsFor(page);
+  const requests: string[] = [];
+  const downloads: string[] = [];
+  let trackRequests = false;
+  page.on('request', (request) => {
+    if (trackRequests) {
+      requests.push(
+        `${request.method()} ${request.url()} ${request.postData() ?? ''}`,
+      );
+    }
+  });
+  page.on('download', (download) => downloads.push(download.url()));
   const representatives = [
     { activation: 'pointer', n: 1 },
     { activation: 'Enter', n: 8 },
@@ -218,9 +269,15 @@ test('pointer, Enter, and Space each write and announce once', async ({
   ] as const;
 
   for (const { activation, n } of representatives) {
+    trackRequests = false;
+    requests.length = 0;
+    downloads.length = 0;
     await page.goto(to(`/history/${n}/?cache=${activation}#old-fragment`));
+    await page.waitForLoadState('networkidle');
     const button = copyButton(page, n);
     await watchAnnouncements(page);
+    const before = await copyInvariantState(page);
+    trackRequests = true;
 
     if (activation === 'pointer') {
       await button.click();
@@ -249,7 +306,12 @@ test('pointer, Enter, and Space each write and announce once', async ({
         ),
       )
       .toEqual([`Revision ${n} link copied.`]);
+    trackRequests = false;
+    expect(await copyInvariantState(page)).toEqual(before);
+    expect(requests).toEqual([]);
+    expect(downloads).toEqual([]);
   }
+  expect(diagnostics).toEqual([]);
 });
 
 test('a pending write suppresses duplicate activations until settlement', async ({
@@ -319,45 +381,6 @@ test('a pending write suppresses duplicate activations until settlement', async 
     .toEqual(['Revision 8 link copied.', 'Revision 8 link copied.']);
 });
 
-const rejectionState = (page: Page) =>
-  page.evaluate(() => {
-    const testWindow = window as InstrumentedWindow;
-    const selection = getSelection();
-    const download = document.querySelector<HTMLAnchorElement>(
-      'a.history-download',
-    );
-    return {
-      url: location.href,
-      historyLength: window.history.length,
-      historyMutations: testWindow.__historyMutations,
-      storageWrites: testWindow.__storageWrites,
-      localStorage: Object.entries(localStorage).sort(),
-      sessionStorage: Object.entries(sessionStorage).sort(),
-      revisionHtml: document.querySelector(
-        '.revision__diff, .revision__first',
-      )?.innerHTML,
-      navigation: Array.from(
-        document.querySelectorAll<HTMLAnchorElement>(
-          '.revision__nav a, .site-nav a',
-        ),
-        (link) => ({ href: link.href, text: link.textContent }),
-      ),
-      download: {
-        href: download?.getAttribute('href'),
-        filename: download?.getAttribute('download'),
-      },
-      theme: document.documentElement.dataset.theme,
-      textSize: document.documentElement.dataset.textSize,
-      printCalls: testWindow.__printCalls,
-      scroll: { x: scrollX, y: scrollY },
-      selection: {
-        text: selection?.toString(),
-        anchorOffset: selection?.anchorOffset,
-        focusOffset: selection?.focusOffset,
-      },
-    };
-  });
-
 test('rejection restores selection and scroll without any other side effect', async ({
   page,
 }) => {
@@ -404,7 +427,7 @@ test('rejection restores selection and scroll without any other side effect', as
     (window as InstrumentedWindow).__storageWrites = 0;
   });
   await watchAnnouncements(page);
-  const before = await rejectionState(page);
+  const before = await copyInvariantState(page);
   expect(before.scroll.y).toBeGreaterThan(0);
   expect(before.selection.text).toHaveLength(10);
   trackRequests = true;
@@ -433,7 +456,7 @@ test('rejection restores selection and scroll without any other side effect', as
       ),
     )
     .toEqual(['Revision 3 link could not be copied.']);
-  expect(await rejectionState(page)).toEqual(before);
+  expect(await copyInvariantState(page)).toEqual(before);
   expect(requests).toEqual([]);
   expect(downloads).toEqual([]);
   expect(diagnostics).toEqual([]);
@@ -470,6 +493,14 @@ test('clipboard-absent and JavaScript-disabled revisions retain all existing con
         page.locator('.revision__actions > a.history-download'),
       ).toHaveCount(1);
       await expect(page.locator('.revision__nav')).toHaveCount(2);
+      const expectedNavigation = [
+        ...(revision.n > 1 ? ['Previous'] : []),
+        'All revisions',
+        ...(revision.n < history.count ? ['Next'] : []),
+      ];
+      for (const navigation of await page.locator('.revision__nav').all()) {
+        await expect(navigation.locator('a')).toHaveText(expectedNavigation);
+      }
       await expect(
         page.locator('.revision__diff, .revision__first'),
       ).toHaveCount(1);
