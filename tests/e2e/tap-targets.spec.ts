@@ -107,7 +107,7 @@ test('768×1024: the "On this page" summary is thumb-sized without growing the c
 
   for (const [path, count] of [
     ['/guide/', 10],
-    ['/walkthrough/', 18],
+    ['/walkthrough/', 19],
   ] as const) {
     await page.goto(to(path));
     await page.locator('details.toc--inline > summary').click();
