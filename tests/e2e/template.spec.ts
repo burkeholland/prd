@@ -39,6 +39,7 @@ test('/template/ renders canonical headings, prompts, helper questions, and copy
   expect(await page.locator('main .prose pre code').allTextContents()).toEqual(blankSections);
   const buttons = page.locator('button.copy-button');
   await expect(buttons).toHaveCount(sections.length);
+  await expect(page.getByRole('button', { name: 'Copy blank Markdown', exact: true })).toHaveCount(1);
   expect(await buttons.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label')))).toEqual(
     sections.map(({ title }) => `Copy the ${title} section`),
   );
@@ -159,6 +160,7 @@ for (const width of [320, 390, 1280]) {
     await page.setViewportSize({ width, height: 844 });
     await page.goto(to('/template/'));
     await expect(page.locator('button.copy-button')).toHaveCount(sections.length);
+    await expect(page.getByRole('button', { name: 'Copy blank Markdown', exact: true })).toHaveCount(1);
     if (width < 960) await page.locator('.toc--inline summary').click();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     const actions = await page.locator('main a, main button, main summary').evaluateAll((nodes) =>
@@ -198,6 +200,7 @@ test.describe('without JavaScript', () => {
     await expect(page.locator('.template-prompt')).toHaveText(sections.map(({ prompt }) => prompt));
     expect(await page.locator('main pre code').allTextContents()).toEqual(blankSections);
     await expect(page.locator('button.copy-button')).toHaveCount(0);
+    await expect(page.locator('button.template-copy-all')).toHaveCount(0);
     await expect(page.locator('.doc__header a.button')).toHaveAttribute('href', to('/'));
     for (const format of ['md', 'docx', 'pdf']) {
       const path = to(`/downloads/prd-template.${format}`);
@@ -218,5 +221,6 @@ test('other pages expose no template Copy buttons', async ({ page }) => {
   for (const path of ['/', '/sample/', '/guide/', '/walkthrough/']) {
     await page.goto(to(path));
     await expect(page.locator('button.copy-button'), `${path} copy buttons`).toHaveCount(0);
+    await expect(page.locator('button.template-copy-all'), `${path} full-template copy buttons`).toHaveCount(0);
   }
 });
