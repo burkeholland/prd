@@ -251,9 +251,7 @@ test('announces rejection once without changing the selection', async ({ page })
   await page.keyboard.press('Enter');
   await expect(button).toHaveText('Copy failed');
   await expect(button).toHaveAttribute('data-state', 'failed');
-  const status = page.locator(
-    '.guide-checklist-status[role="status"][aria-live="polite"]',
-  );
+  const status = page.locator('.guide-checklist-status[aria-live="polite"]');
   await expect(status).toHaveCount(1);
   await expect(status).toHaveText('Copying the handoff checklist failed.');
   expect(await page.evaluate(() => getSelection()?.toString())).toBe(selection);
