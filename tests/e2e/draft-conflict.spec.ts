@@ -264,8 +264,11 @@ for (const action of ['load-saved-draft', 'keep-this-draft']) {
     expect(await beforeUnloadPrevented(page)).toBe(true);
 
     const latestBlank = PRD_TEMPLATE_SECTIONS[4];
-    const latest = fixture(' Latest\r\nsaved copy ');
-    latest.values[latestBlank.id] = '\r\n \t';
+    const latestBase = fixture(' Latest\r\nsaved copy ');
+    const latest: PrdEditorState = {
+      ...latestBase,
+      values: { ...latestBase.values, [latestBlank.id]: '\r\n \t' },
+    };
     const latestRaw = rawDraft(latest);
     await put(other, latestRaw);
     page.once('dialog', async (dialog) => {
@@ -274,8 +277,11 @@ for (const action of ['load-saved-draft', 'keep-this-draft']) {
       await dialog.accept();
     });
     await page.locator(`#${action}`).click();
-    const local = fixture('Unsaved local copy');
-    local.values[localBlank.id] = ' \t ';
+    const localBase = fixture('Unsaved local copy');
+    const local: PrdEditorState = {
+      ...localBase,
+      values: { ...localBase.values, [localBlank.id]: ' \t ' },
+    };
     const chosen = action === 'load-saved-draft' ? latest : local;
     expect((await backup(page)).state).toEqual(chosen);
     const resolved = await stored(page);
