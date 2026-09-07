@@ -776,24 +776,29 @@ test('at 390px the history table stacks each revision — number, date, note, co
       if (typeof right === 'number') expect(right, `revision ${box.n} ${name} right edge`).toBeLessThanOrEqual(390);
     }
   }
-  // Thumb-sized controls: the whole "Revision n" label is the link, ≥ 32 px tall and ≥ 90 px wide;
-  // Diff and GitHub are each ≥ 32 px tall with clear space between their two hit areas.
+  // Thumb-sized controls: the whole "Revision n" label is the link, while Diff, Markdown and
+  // GitHub are separate ≥ 32 px targets.
   const taps = await rows.evaluateAll((nodes) =>
     nodes.map((row) => {
       const size = (el: Element | null) => {
         const box = el!.getBoundingClientRect();
         return { w: box.width, h: box.height, x: box.x, right: box.right };
       };
-      const [diff, github] = [...row.querySelectorAll('.history__view a')].map(size);
-      return { n: row.querySelector('th a')?.textContent?.trim() ?? '', link: size(row.querySelector('th a')), diff, github };
+      const view = [...row.querySelectorAll('.history__view a')].map(size);
+      return { n: row.querySelector('th a')?.textContent?.trim() ?? '', link: size(row.querySelector('th a')), view };
     }),
   );
   for (const tap of taps) {
     expect(tap.link.h, `revision ${tap.n} link height`).toBeGreaterThanOrEqual(32);
     expect(tap.link.w, `revision ${tap.n} link width`).toBeGreaterThanOrEqual(90);
-    expect(tap.diff.h, `revision ${tap.n} Diff height`).toBeGreaterThanOrEqual(32);
-    expect(tap.github.h, `revision ${tap.n} GitHub height`).toBeGreaterThanOrEqual(32);
-    expect(tap.github.x - tap.diff.right, `revision ${tap.n} gap between Diff and GitHub`).toBeGreaterThanOrEqual(8);
+    expect(tap.view).toHaveLength(3);
+    for (const link of tap.view) {
+      expect(link.h, `revision ${tap.n} view link height`).toBeGreaterThanOrEqual(32);
+      expect(link.w, `revision ${tap.n} view link width`).toBeGreaterThanOrEqual(32);
+    }
+    for (let index = 1; index < tap.view.length; index += 1) {
+      expect(tap.view[index]!.x - tap.view[index - 1]!.right, `revision ${tap.n} view link gap`).toBeGreaterThanOrEqual(4);
+    }
   }
   // Nothing on the page is set under 14 px: timestamps and the chart's labels are 0.85rem.
   for (const selector of ['.history__time', 'text.size-chart__label', 'text.size-chart__value']) {
@@ -857,7 +862,7 @@ test('the history table stacks below 1120px and is a real table with thumb-sized
       expect(box.width, `${width} revision ${i + 1} link width ("Revision n")`).toBeGreaterThanOrEqual(90);
     }
     const viewLinks = await boxes('.history__view a');
-    expect(viewLinks.length, 'Diff and GitHub links').toBe(revisionLinks.length * 2);
+    expect(viewLinks.length, 'Diff, Markdown and GitHub links').toBe(revisionLinks.length * 3);
     for (const [i, box] of viewLinks.entries()) {
       expect(box.height, `${width} view link ${i} height`).toBeGreaterThanOrEqual(32);
       expect(box.width, `${width} view link ${i} width`).toBeGreaterThanOrEqual(32);
@@ -867,8 +872,8 @@ test('the history table stacks below 1120px and is a real table with thumb-sized
   await expectStacked(1024, 768); // iPad landscape: the real table would need ≈ 1000 px on Linux fonts, the container is 956
 
   // Desktop: the eight-column table fits its container (1088 px against ≈ 925 px on Windows fonts, ≈ 1000 on
-  // Linux), and the links stay thumb-sized without widening the number column or letting the Diff and
-  // GitHub hit areas touch.
+  // Linux), and the links stay thumb-sized without widening the number column or letting the View
+  // links touch.
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto(to('/history/'));
   expect(await scrollWidth(), '1280 scrollWidth').toBe(1280);
@@ -884,8 +889,8 @@ test('the history table stacks below 1120px and is a real table with thumb-sized
   const rows = await table.locator('tbody tr').evaluateAll((nodes) =>
     nodes.map((row) => {
       const rect = (el: Element | null) => el!.getBoundingClientRect().toJSON() as DOMRect;
-      const [diff, github] = Array.from(row.querySelectorAll('.history__view a'), rect);
-      return { th: rect(row.querySelector('th')), link: rect(row.querySelector('th a')), diff, github };
+      const view = Array.from(row.querySelectorAll('.history__view a'), rect);
+      return { th: rect(row.querySelector('th')), link: rect(row.querySelector('th a')), view };
     }),
   );
   const intersects = (a: DOMRect, b: DOMRect) => !(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top);
@@ -893,9 +898,19 @@ test('the history table stacks below 1120px and is a real table with thumb-sized
   expect(rows[0].th.width, '1280 number column width').toBeLessThanOrEqual(48);
   for (const [i, row] of rows.entries()) {
     expect(row.link.height, `1280 revision ${i + 1} link height`).toBeGreaterThanOrEqual(32);
-    expect(row.diff.height, `1280 revision ${i + 1} Diff height`).toBeGreaterThanOrEqual(32);
-    expect(row.github.height, `1280 revision ${i + 1} GitHub height`).toBeGreaterThanOrEqual(32);
-    expect(intersects(row.diff, row.github), `1280 revision ${i + 1} Diff and GitHub hit areas overlap`).toBe(false);
+    expect(row.view).toHaveLength(3);
+    for (const [linkIndex, link] of row.view.entries()) {
+      expect(link.height, `1280 revision ${i + 1} view link ${linkIndex} height`).toBeGreaterThanOrEqual(32);
+      expect(link.width, `1280 revision ${i + 1} view link ${linkIndex} width`).toBeGreaterThanOrEqual(32);
+    }
+    for (let first = 0; first < row.view.length; first += 1) {
+      for (let second = first + 1; second < row.view.length; second += 1) {
+        expect(
+          intersects(row.view[first]!, row.view[second]!),
+          `1280 revision ${i + 1} view links ${first} and ${second} overlap`,
+        ).toBe(false);
+      }
+    }
   }
 
   // The edge: the stack up to 1119 px, the real table from 1120, where the container is 1052 px.

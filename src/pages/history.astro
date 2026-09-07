@@ -3,6 +3,11 @@ import Base from '../layouts/Base.astro';
 import { SITE } from '../lib/site';
 import { withBase } from '../lib/base';
 import { barScale, describeDelta, kb, rows, summary } from '../lib/history';
+import {
+  assertHistorySnapshotCoverage,
+  historyDownloadFilename,
+  historyDownloadPath,
+} from '../lib/history-downloads';
 import { noteFor } from '../lib/history-notes';
 // Written by scripts/fetch-gist-history.mjs: one entry per gist revision, oldest → newest.
 import history from '../../content/gist/history.json';
@@ -20,6 +25,7 @@ const snapshots = Object.fromEntries(
   Object.entries(files).map(([path, text]) => [`history/${path.split('/').pop()}`, text]),
 );
 
+assertHistorySnapshotCoverage(history, snapshots);
 const list = rows(history, snapshots, meta.revision);
 // Hand-written sentence per revision (content/gist/history-notes.json), keyed by the commit sha;
 // rows carry only `n`, so look the sha up here.
@@ -195,9 +201,18 @@ const baseline = (row: (typeof list)[number]) => list.indexOf(row) * ROW_HEIGHT 
                     {noteOf(row.n) && <p class="history__note">{noteOf(row.n)}</p>}
                   </td>
                   <td role="cell" class="history__view">
-                    <a href={withBase(`/history/${row.n}/`)} aria-label={`Diff of revision ${row.n}`}>Diff</a>
-                    {' · '}
-                    <a href={row.url} rel="noopener" title={`Revision ${row.n} on GitHub`}>GitHub</a>
+                    <span class="history__view-links">
+                      <a href={withBase(`/history/${row.n}/`)} aria-label={`Diff of revision ${row.n}`}>Diff</a>
+                      <a
+                        class="history-download"
+                        href={withBase(historyDownloadPath(row))}
+                        download={historyDownloadFilename(row)}
+                        aria-label={`Download revision ${row.n} as Markdown`}
+                      >
+                        Markdown
+                      </a>
+                      <a href={row.url} rel="noopener" title={`Revision ${row.n} on GitHub`}>GitHub</a>
+                    </span>
                   </td>
                 </tr>
               ))

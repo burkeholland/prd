@@ -928,21 +928,20 @@ table.history tbody th a {
   margin: -0.4em -0.75em;
 }
 
-/* Diff · GitHub as thumb-sized controls: ≥ 32 px tall via padding pulled back vertically with
-   negative margins, and real horizontal padding, so the two hit areas keep the separator's
-   width between them. The end links drop their outer padding to stay flush with the row. */
+/* Diff, Markdown and GitHub remain distinct thumb-sized targets and may wrap within the View cell. */
+.history__view-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
 .history__view a {
-  display: inline-block;
-  padding: 0.5em 0.75em;
-  margin: -0.5em 0;
-}
-
-.history__view a:first-child {
-  margin-left: -0.75em;
-}
-
-.history__view a:last-child {
-  margin-right: -0.75em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  padding-inline: 0.2rem;
 }
 
 /* < 1120 px: no sideways scroll. Each row becomes a stacked block — "Revision n · date" on one
@@ -1080,5 +1079,5 @@ table.history tbody th a {
 }
 
 .history__view {
-  white-space: nowrap;
+  min-width: 11rem;
 }

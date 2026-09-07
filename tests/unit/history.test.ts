@@ -15,6 +15,12 @@ import {
   type HistoryDocument,
   type HistoryRevision,
 } from '../../src/lib/history';
+import {
+  assertHistorySnapshotCoverage,
+  historyDownloadFilename,
+  historyDownloadPath,
+  historyDownloadStem,
+} from '../../src/lib/history-downloads';
 
 const CRLF = (...lines: string[]) => lines.join('\r\n');
 const LF = (...lines: string[]) => lines.join('\n');
@@ -166,6 +172,34 @@ describe('rows', () => {
     expect(splitTimestamp('2026-08-31T13:11:39+02:00')).toEqual({ date: '2026-08-31', time: '11:11 UTC' });
   });
 
+  describe('history Markdown downloads', () => {
+    const bytes = new TextEncoder().encode(DRAFT).byteLength;
+    const item = revision(1, {
+      version: 'a'.repeat(40),
+      short: 'aaaaaaa',
+      file: 'history/01-aaaaaaa.md',
+      bytes,
+    });
+    const doc = document([item]);
+    const snapshots = { [item.file]: DRAFT };
+
+    it('creates stable readable URL and filename values', () => {
+      expect(historyDownloadStem(item)).toBe('revision-1-aaaaaaa');
+      expect(historyDownloadPath(item)).toBe('/history/revision-1-aaaaaaa.md');
+      expect(historyDownloadFilename(item)).toBe('build-the-urlist-revision-1-aaaaaaa.md');
+    });
+
+    it('requires exact metadata-to-snapshot coverage and byte counts', () => {
+      expect(() => assertHistorySnapshotCoverage(doc, snapshots)).not.toThrow();
+      expect(() => assertHistorySnapshotCoverage(doc, {})).toThrow(/missing: history\/01-aaaaaaa\.md/);
+      expect(() => assertHistorySnapshotCoverage(doc, { ...snapshots, 'history/02-bbbbbbb.md': 'extra' })).toThrow(
+        /extra: history\/02-bbbbbbb\.md/,
+      );
+      expect(() => assertHistorySnapshotCoverage(doc, { [item.file]: `${DRAFT}x` })).toThrow(/metadata records/);
+      expect(() => assertHistorySnapshotCoverage({ ...doc, count: 2 }, snapshots)).toThrow(/count 2/);
+    });
+  });
+
   it('flags the current revision and the rows GitHub reports counts for', () => {
     expect(list.map((row) => row.isCurrent)).toEqual([false, false, true]);
     expect(list.map((row) => row.hasCounts)).toEqual([true, false, true]);
@@ -254,11 +288,19 @@ describe('the real gist history', () => {
   it.skipIf(!available)('loads every snapshot and derives one row per revision', () => {
     const history = JSON.parse(readFileSync(HISTORY, 'utf8')) as HistoryDocument;
     const meta = JSON.parse(readFileSync(META, 'utf8')) as { revision: string };
+    const snapshotBytes = Object.fromEntries(
+      history.revisions.map((rev) => [rev.file, readFileSync(resolve('content/gist', rev.file))]),
+    );
     const snapshots = Object.fromEntries(
-      history.revisions.map((rev) => [rev.file, readFileSync(resolve('content/gist', rev.file), 'utf8')]),
+      Object.entries(snapshotBytes).map(([file, bytes]) => [file, bytes.toString('utf8')]),
     );
 
+    assertHistorySnapshotCoverage(history, snapshotBytes);
     const list = rows(history, snapshots, meta.revision);
+    const downloadPaths = history.revisions.map(historyDownloadPath);
+    expect(history.count).toBe(16);
+    expect(new Set(downloadPaths).size).toBe(16);
+    expect(downloadPaths.every((path) => /^\/history\/revision-\d+-[0-9a-f]{7}\.md$/.test(path))).toBe(true);
     expect(list).toHaveLength(history.count);
     expect(list.map((row) => row.n)).toEqual(history.revisions.map((rev) => rev.n));
 

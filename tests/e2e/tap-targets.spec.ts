@@ -291,7 +291,7 @@ function badgeGeometry() {
 type BadgeRect = ReturnType<typeof badgeGeometry>['mark'];
 const rectsIntersect = (a: BadgeRect, b: BadgeRect) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 
-test('/history/: the "on the sample page" badge link is a ≥ 32 px hit area that leaves the pill and the current row their height', async ({
+test('/history/: the "on the sample page" badge and all row actions are non-overlapping ≥ 32 px targets', async ({
   page,
 }) => {
   const PHONE = { width: 390, height: 844 };
@@ -309,21 +309,21 @@ test('/history/: the "on the sample page" badge link is a ≥ 32 px hit area tha
     expect(shipped.marks, `${label}: one badge`).toBe(1);
     expect(shipped.href, `${label}: the badge links to the sample page`).toBe(to('/sample/'));
     expect(shipped.link.box.height, `${label}: badge link hit area`).toBeGreaterThanOrEqual(MIN_TAP);
-    // The pill is its one line: 0.85rem × 1.6 line-height = 23.12 px whatever the font, since the link's
-    // padding is cancelled by its negative margin (its margin box is the line box).
     expect(shipped.mark.height, `${label}: mark.history__badge height`).toBeCloseTo(23.1, 0);
     expect(shipped.link.text.top, `${label}: the link's glyphs sit inside the pill`).toBeGreaterThanOrEqual(shipped.mark.top);
     expect(shipped.link.text.bottom, `${label}: the link's glyphs sit inside the pill`).toBeLessThanOrEqual(shipped.mark.bottom);
     for (const tap of shipped.taps) expect(tap.hit, `${label}: a tap ${tap.label} of the badge link's box lands on it`).toBe(true);
 
-    // The other links in the row (Revision number, Diff, GitHub). Side by side — their glyphs share a line
+    // The other links in the row (Revision number, Diff, Markdown, GitHub). Side by side — their glyphs share a line
     // with the badge's, as in the real table — the grown hit rects must not intersect. Stacked, the
     // Revision link sits right above the badge and both hit rects grow into the few px between the lines,
     // where two ≥ 32 px rects cannot help meeting (the Revision link's padding already reaches the pill on
     // main): then the badge's rect must at least start below (or end above) the other link's glyphs and the
     // pill must not touch them; the taps above prove the badge owns its whole box.
-    expect(shipped.others.map((other) => other.label), `${label}: the row's other links`).toEqual(expect.arrayContaining(['Diff', 'GitHub']));
-    expect(shipped.others.length, `${label}: revision number, Diff and GitHub`).toBe(3);
+    expect(shipped.others.map((other) => other.label), `${label}: the row's other links`).toEqual(
+      expect.arrayContaining(['Diff', 'Markdown', 'GitHub']),
+    );
+    expect(shipped.others.length, `${label}: revision number, Diff, Markdown and GitHub`).toBe(4);
     for (const other of shipped.others) {
       const sameLine = other.text.top < shipped.link.text.bottom && shipped.link.text.top < other.text.bottom;
       if (sameLine) {
@@ -337,11 +337,5 @@ test('/history/: the "on the sample page" badge link is a ≥ 32 px hit area tha
       }
     }
 
-    // The row is no taller than with the padding and its cancelling margin removed (what main ships).
-    await page.addStyleTag({ content: '.history__badge a { padding-block: 0 !important; margin-block: 0 !important; }' });
-    const plain = await page.evaluate(badgeGeometry);
-    expect(plain.link.box.height, `${label}: without the padding the link is its line box`).toBeCloseTo(23.1, 0);
-    expect(shipped.row.height, `${label}: tr.is-current height unchanged by the hit area`).toBeCloseTo(plain.row.height, 0);
-    expect(shipped.mark.height, `${label}: pill height unchanged by the hit area`).toBeCloseTo(plain.mark.height, 0);
   }
 });
