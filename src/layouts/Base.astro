@@ -14,16 +14,26 @@ import { READER_TEXT_SIZE_STORAGE_KEY } from '../lib/reader-text-size';
 interface Props {
   title: string;
   description?: string;
-  /** Pages that must not be indexed or shared (the 404 page and the per-revision diff pages under /history/): emits `robots: noindex`, no canonical, no `og:url`. */
+  /** Pages that must not be indexed or shared emit `robots: noindex` and no `og:url`. */
   noindex?: boolean;
+  /** Opt a noindex page into its canonical link when that URL is still a useful public artifact. */
+  canonical?: boolean;
 }
 
-const { title, description = SITE.tagline, noindex = false } = Astro.props;
+const {
+  title,
+  description = SITE.tagline,
+  noindex = false,
+  canonical: canonicalOverride,
+} = Astro.props;
 
 if (!Astro.site) {
   throw new Error('astro.config.mjs must set `site`: canonical URLs and the social preview need an absolute origin.');
 }
-const canonical = noindex ? undefined : canonicalUrl(Astro.url.pathname, Astro.site);
+const canonical =
+  (canonicalOverride ?? !noindex)
+    ? canonicalUrl(Astro.url.pathname, Astro.site)
+    : undefined;
 const card = socialCard(Astro.url.pathname, import.meta.env.BASE_URL);
 const ogImage = new URL(withBase(card.file), Astro.site).href;
 ---

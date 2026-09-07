@@ -57,7 +57,10 @@ test('revision 13 shows one diff table, hunks, the line-ending note and is noind
   await expect(page.locator('p.summary')).toContainText('lines of text vs revision 12');
 
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex');
-  await expect(page.locator('link[rel="canonical"]')).toHaveCount(0);
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+    'href',
+    'https://burkeholland.github.io/prd/history/13/',
+  );
 
   // Previous / All revisions / Next are a list rendered twice — under the header and after the diff —
   // with the same hrefs in each; source and download actions stay together above the first nav.
@@ -91,14 +94,17 @@ test('the last revision carries the badge that links to the sample page', async 
   await expect(page.locator('a', { hasText: 'Next' })).toHaveCount(0);
 });
 
-test('every revision page responds 200 and ships no page-specific script', async ({ page, request }) => {
+test('every revision page responds 200 and progressively ships its revision-link action', async ({ page, request }) => {
   for (let n = 1; n <= count; n++) {
     const response = await request.get(to(`/history/${n}/`));
     expect(response.status(), `/history/${n}/ status`).toBe(200);
   }
   for (const n of [1, 3, 13].filter((n) => n <= count)) {
     await page.goto(to(`/history/${n}/`));
-    await expect(page.locator('main script'), `/history/${n}/ page-specific scripts`).toHaveCount(0);
+    await expect(
+      page.getByRole('button', { name: `Copy revision ${n} link`, exact: true }),
+      `/history/${n}/ revision-link action`,
+    ).toHaveCount(1);
   }
 });
 
@@ -115,8 +121,8 @@ function actionGeometry() {
   const plain = (r: DOMRect) => ({ x: r.x, y: r.y, width: r.width, height: r.height, top: r.top, bottom: r.bottom, left: r.left, right: r.right });
   const box = (el: Element) => plain(el.getBoundingClientRect());
   const actions = document.querySelector('.revision__actions')!;
-  const links = Array.from(actions.querySelectorAll('a'), (a) => {
-    const target = box(a);
+  const links = Array.from(actions.querySelectorAll('a, button'), (action) => {
+    const target = box(action);
     const probes: [number, number][] = [
       [target.left + target.width / 2, target.top + target.height / 2],
       [target.left + target.width / 2, target.top + 1],
@@ -125,9 +131,9 @@ function actionGeometry() {
       [target.right - 1, target.top + target.height / 2],
     ];
     return {
-      label: a.textContent?.trim() ?? '',
+      label: action.textContent?.trim() ?? '',
       box: target,
-      tapsHit: probes.every(([x, y]) => document.elementFromPoint(x, y)?.closest('a') === a),
+      tapsHit: probes.every(([x, y]) => document.elementFromPoint(x, y)?.closest('a, button') === action),
     };
   });
   return {
@@ -184,14 +190,25 @@ test('at 390px the diff drops the line numbers for a ≥ 320 px text column, and
   for (const height of geometry.linkHeights) expect(height, 'nav link tap target').toBeGreaterThanOrEqual(32);
 
   const actions390 = await page.evaluate(actionGeometry);
-  expect(actions390.links.map((link) => link.label)).toEqual(['View on GitHub', 'Download Markdown']);
+  expect(actions390.links.map((link) => link.label)).toEqual([
+    'View on GitHub',
+    'Download Markdown',
+    'Copy revision link',
+  ]);
   for (const link of actions390.links) {
     expect(link.box.width, `"${link.label}" width at 390`).toBeGreaterThanOrEqual(32);
     expect(link.box.height, `"${link.label}" height at 390`).toBeGreaterThanOrEqual(32);
     expect(link.box.bottom, `"${link.label}" clear of the nav`).toBeLessThan(actions390.navTop);
     expect(link.tapsHit, `taps on "${link.label}" at 390`).toBe(true);
   }
-  expect(intersects(actions390.links[0]!.box, actions390.links[1]!.box), 'revision actions overlap at 390').toBe(false);
+  for (let first = 0; first < actions390.links.length; first += 1) {
+    for (let second = first + 1; second < actions390.links.length; second += 1) {
+      expect(
+        intersects(actions390.links[first]!.box, actions390.links[second]!.box),
+        'revision actions overlap at 390',
+      ).toBe(false);
+    }
+  }
 
   // Back at desktop width the four columns are back, the number columns at their 3.6em (measured on
   // the header cell: WebKit gives a <col> no getBoundingClientRect box).
@@ -220,6 +237,7 @@ test('revision actions are non-overlapping ≥ 32 px targets at phone, tablet an
     expect(geometry.links.map((link) => link.label)).toEqual([
       'View on GitHub',
       'Download Markdown',
+      'Copy revision link',
       'the version on the sample page',
     ]);
     for (const link of geometry.links) {
