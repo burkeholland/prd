@@ -657,7 +657,7 @@ test('stubbed clipboard copy succeeds twice through the existing live region wit
   const liveRegions = page.locator(
     '[role="status"][aria-live="polite"][aria-atomic="true"]',
   );
-  await expect(liveRegions).toHaveCount(2);
+  await expect(liveRegions).toHaveCount(3);
 
   const first = copyFixture('First copy');
   const second = copyFixture('Second copy');

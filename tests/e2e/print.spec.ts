@@ -326,6 +326,8 @@ for (const path of ['/', '/create/']) {
     }
     expect(requests, 'printing does not transmit draft data or fetch resources').toEqual([]);
     await page.keyboard.press('Tab');
+    await expect(page.locator('#copy-section-context-problem')).toBeFocused();
+    await page.keyboard.press('Tab');
     await expect(page.locator('.editor-section textarea').nth(1)).toBeFocused();
     await page.locator('.editor-outline a').last().click();
     await expect(page.locator('.editor-section textarea').last()).toBeFocused();

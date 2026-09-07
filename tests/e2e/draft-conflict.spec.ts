@@ -615,7 +615,7 @@ test('conflict actions are compact, keyboard reachable, overflow-free and absent
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
   }
   await expect(page.locator('#conflict-help')).toContainText('Download a draft backup first');
-  await expect(page.locator('[aria-live="polite"]')).toHaveCount(2);
+  await expect(page.locator('[aria-live="polite"]')).toHaveCount(3);
   await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
   await page.emulateMedia({ media: 'print' });
   await expect(page.locator('#draft-conflict')).toBeHidden();
