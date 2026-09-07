@@ -62,6 +62,90 @@ const checklistItems = extractHandoffChecklistItems(guideSource);
 <script>
   import { serializeHandoffChecklist } from '../lib/handoff-checklist';
 
+  const fullGuideActions = document.querySelector<HTMLElement>(
+    '.doc__page-actions',
+  );
+  const fullGuideDownload =
+    fullGuideActions?.querySelector<HTMLAnchorElement>(
+      '.doc__page-action-link[download]',
+    );
+  const fullGuideClipboard = navigator.clipboard;
+
+  if (
+    fullGuideActions &&
+    fullGuideDownload &&
+    new URL(fullGuideDownload.href).origin === location.origin &&
+    typeof window.fetch === 'function' &&
+    typeof fullGuideClipboard?.writeText === 'function'
+  ) {
+    const FULL_GUIDE_RESET_LABEL = 'Copy full guide';
+    const FULL_GUIDE_RESET_DELAY = 2000;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'doc__page-action-button guide-full-copy';
+    button.textContent = FULL_GUIDE_RESET_LABEL;
+
+    const status = document.createElement('span');
+    status.className = 'guide-full-copy-status';
+    status.setAttribute('role', 'status');
+    status.setAttribute('aria-live', 'polite');
+    status.setAttribute('aria-atomic', 'true');
+
+    fullGuideDownload.before(button, status);
+
+    let copying = false;
+    let resetTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const showResult = (
+      label: 'Copied guide' | 'Copy failed',
+      state: 'copied' | 'failed',
+      message: string,
+    ) => {
+      button.textContent = label;
+      button.dataset.state = state;
+      status.textContent = message;
+      resetTimer = setTimeout(() => {
+        button.textContent = FULL_GUIDE_RESET_LABEL;
+        delete button.dataset.state;
+      }, FULL_GUIDE_RESET_DELAY);
+    };
+
+    button.addEventListener('click', async () => {
+      if (copying) return;
+
+      if (document.activeElement !== button) {
+        button.focus({ preventScroll: true });
+      }
+      copying = true;
+      button.setAttribute('aria-disabled', 'true');
+      button.setAttribute('aria-busy', 'true');
+      button.textContent = 'Copying guide';
+      delete button.dataset.state;
+      clearTimeout(resetTimer);
+      status.textContent = '';
+
+      try {
+        const response = await window.fetch(fullGuideDownload.href);
+        if (!response.ok) {
+          throw new Error(`Guide download returned ${response.status}`);
+        }
+        const markdown = await response.text();
+        await fullGuideClipboard.writeText(markdown);
+        showResult('Copied guide', 'copied', 'Full guide copied.');
+      } catch {
+        showResult(
+          'Copy failed',
+          'failed',
+          'Copy failed. Use Download full guide (.md) instead.',
+        );
+      } finally {
+        copying = false;
+        button.removeAttribute('aria-disabled');
+        button.removeAttribute('aria-busy');
+      }
+    });
+  }
+
   const RESET_LABEL = 'Copy handoff checklist';
   const RESET_DELAY = 2000;
   const action = document.querySelector<HTMLElement>(
@@ -218,7 +302,36 @@ const checklistItems = extractHandoffChecklistItems(guideSource);
     border: 0;
   }
 
+  .guide-full-copy {
+    box-sizing: border-box;
+    inline-size: 9rem;
+    max-width: 100%;
+  }
+
+  .guide-full-copy[aria-busy='true'] {
+    cursor: wait;
+  }
+
+  .guide-full-copy[data-state='copied'] {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .guide-full-copy-status {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
   @media print {
+    .guide-full-copy,
+    .guide-full-copy-status,
     .guide-checklist-action,
     .guide-checklist-status {
       display: none !important;

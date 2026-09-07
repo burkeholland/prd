@@ -20,6 +20,7 @@ const GUIDE = '/prd/guide/';
 const DOWNLOAD = '/prd/downloads/prd-handoff-checklist.md';
 const FULL_GUIDE_DOWNLOAD = `/prd${GUIDE_DOWNLOAD_PATH}`;
 const FULL_GUIDE_LABEL = 'Download full guide (.md)';
+const FULL_GUIDE_COPY_LABEL = 'Copy full guide';
 const RESET_LABEL = 'Copy handoff checklist';
 const GUIDE_SOURCE = readFileSync(resolve('content/guide.md'), 'utf8');
 const GUIDE_CONTENT = parseFrontmatter(GUIDE_SOURCE);
@@ -39,6 +40,7 @@ type InstrumentedWindow = typeof window & {
   __historyChanges: number;
   __storageReads: number;
   __storageWrites: number;
+  __fullGuideFeedback?: Array<{ label: string; at: number }>;
 };
 
 const copyButton = (page: Page) =>
@@ -49,6 +51,12 @@ const downloadLink = (page: Page) =>
 
 const fullGuideDownloadLink = (page: Page) =>
   page.getByRole('link', { name: FULL_GUIDE_LABEL, exact: true });
+
+const fullGuideCopyButton = (page: Page) =>
+  page.locator('button.guide-full-copy');
+
+const fullGuideCopyStatus = (page: Page) =>
+  page.locator('.guide-full-copy-status');
 
 const checklist = (page: Page) =>
   page.locator('#before-you-hand-it-off ~ ul').first();
@@ -79,6 +87,7 @@ const stubClipboard = async (
     const testWindow = window as InstrumentedWindow;
     testWindow.__clipboardAttempts = 0;
     testWindow.__clipboardWrites = [];
+    let shouldHold = mode === 'pending';
 
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
@@ -88,7 +97,8 @@ const stubClipboard = async (
           if (mode === 'reject') {
             throw new DOMException('Not allowed', 'NotAllowedError');
           }
-          if (mode === 'pending') {
+          if (shouldHold) {
+            shouldHold = false;
             await new Promise<void>((resolve) => {
               testWindow.__finishClipboard = resolve;
             });
@@ -179,6 +189,209 @@ test('serves deterministic complete Guide bytes at the stable route', async ({
   expect(firstBytes.at(-2)).not.toBe(0x0a);
 });
 
+test('copies the exact full Guide response once for pointer, Enter, and Space activation', async ({
+  page,
+}) => {
+  await stubClipboard(page);
+  const requests: Array<{ method: string; url: string; body: string | null }> = [];
+  let trackRequests = false;
+  page.on('request', (request) => {
+    if (!trackRequests) return;
+    requests.push({
+      method: request.method(),
+      url: request.url(),
+      body: request.postData(),
+    });
+  });
+
+  await page.goto(GUIDE);
+  await page.waitForLoadState('networkidle');
+  const button = fullGuideCopyButton(page);
+  const expected = (await fullGuideResponseBytes()).toString('utf8');
+  await expect(button).toHaveCount(1);
+  await expect(button).toHaveAttribute('type', 'button');
+  await expect(button).toHaveText(FULL_GUIDE_COPY_LABEL);
+  await expect(fullGuideCopyStatus(page)).toHaveCount(1);
+  await expect(fullGuideCopyStatus(page)).toHaveAttribute('role', 'status');
+  await expect(fullGuideCopyStatus(page)).toHaveAttribute('aria-live', 'polite');
+  await expect(fullGuideCopyStatus(page)).toHaveAttribute('aria-atomic', 'true');
+  trackRequests = true;
+
+  for (const [index, activation] of ['click', 'Enter', 'Space'].entries()) {
+    await button.focus();
+    if (activation === 'click') {
+      await button.click();
+    } else {
+      await page.keyboard.press(activation);
+    }
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => (window as InstrumentedWindow).__clipboardWrites.length,
+        ),
+      )
+      .toBe(index + 1);
+    await expect(button).toHaveText('Copied guide');
+    await expect(button).toHaveAttribute('data-state', 'copied');
+    await expect(button).toBeFocused();
+    await expect(fullGuideCopyStatus(page)).toHaveText('Full guide copied.');
+  }
+
+  const writes = await page.evaluate(
+    () => (window as InstrumentedWindow).__clipboardWrites,
+  );
+  expect(writes).toEqual([expected, expected, expected]);
+  for (const write of writes) {
+    expect(Buffer.from(write, 'utf8')).toEqual(Buffer.from(expected, 'utf8'));
+  }
+  expect(requests).toHaveLength(3);
+  for (const observed of requests) {
+    expect(observed.method).toBe('GET');
+    expect(observed.body).toBeNull();
+    expect(new URL(observed.url).origin).toBe(new URL(page.url()).origin);
+    expect(new URL(observed.url).pathname).toBe(FULL_GUIDE_DOWNLOAD);
+  }
+});
+
+test('holds full Guide feedback for two seconds and then resets', async ({
+  page,
+}) => {
+  await stubClipboard(page);
+  await page.goto(GUIDE);
+
+  const button = fullGuideCopyButton(page);
+  await button.evaluate((element) => {
+    const testWindow = window as InstrumentedWindow;
+    testWindow.__fullGuideFeedback = [];
+    new MutationObserver(() => {
+      testWindow.__fullGuideFeedback?.push({
+        label: element.textContent ?? '',
+        at: performance.now(),
+      });
+    }).observe(element, {
+      attributes: true,
+      childList: true,
+      subtree: true,
+    });
+  });
+  await button.click();
+  await expect(button).toHaveText('Copied guide');
+  await expect(button).toHaveText(FULL_GUIDE_COPY_LABEL, { timeout: 3000 });
+  await expect(button).not.toHaveAttribute('data-state');
+  const feedback = await page.evaluate(
+    () => (window as InstrumentedWindow).__fullGuideFeedback ?? [],
+  );
+  const copiedAt = feedback.find(({ label }) => label === 'Copied guide')?.at;
+  const resetAt = feedback.findLast(
+    ({ label }) => label === FULL_GUIDE_COPY_LABEL,
+  )?.at;
+  expect(copiedAt).toBeDefined();
+  expect(resetAt).toBeDefined();
+  expect(resetAt! - copiedAt!).toBeGreaterThanOrEqual(2000);
+  expect(resetAt! - copiedAt!).toBeLessThanOrEqual(2250);
+});
+
+test('blocks only duplicate full Guide copies while its Clipboard write is pending', async ({
+  page,
+}) => {
+  await stubClipboard(page, 'pending');
+  await page.goto(GUIDE);
+
+  const button = fullGuideCopyButton(page);
+  await button.click({ noWaitAfter: true });
+  await expect(button).toBeDisabled();
+  await expect(button).toHaveAttribute('aria-disabled', 'true');
+  await expect(button).toHaveAttribute('aria-busy', 'true');
+  await expect(button).toHaveText('Copying guide');
+  await button.dispatchEvent('click');
+  await button.dispatchEvent('click');
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as InstrumentedWindow).__clipboardAttempts),
+    )
+    .toBe(1);
+
+  await expect(page.locator('.doc__copy-button')).toBeEnabled();
+  await expect(page.locator('.doc__section-link-button').first()).toBeEnabled();
+  await expect(copyButton(page)).toBeEnabled();
+  await expect(fullGuideDownloadLink(page)).toBeEnabled();
+  await expect(downloadLink(page)).toBeEnabled();
+  await expect(
+    page.getByRole('button', { name: 'Print this page', exact: true }),
+  ).toBeEnabled();
+
+  await page.evaluate(() => (window as InstrumentedWindow).__finishClipboard?.());
+  await expect(button).toBeEnabled();
+  await expect(button).not.toHaveAttribute('aria-disabled');
+  await expect(button).not.toHaveAttribute('aria-busy');
+  await expect(button).toHaveText('Copied guide');
+  expect(
+    await page.evaluate(() => (window as InstrumentedWindow).__clipboardWrites),
+  ).toHaveLength(1);
+});
+
+test('a rejected full Guide write preserves focus, selection, scroll, and the download fallback', async ({
+  page,
+}) => {
+  await stubClipboard(page, 'reject');
+  const requests: string[] = [];
+  let trackRequests = false;
+  page.on('request', (request) => {
+    if (trackRequests) requests.push(`${request.method()} ${request.url()}`);
+  });
+  await page.goto(GUIDE);
+  await page.waitForLoadState('networkidle');
+
+  const button = fullGuideCopyButton(page);
+  const download = fullGuideDownloadLink(page);
+  const href = await download.getAttribute('href');
+  await button.scrollIntoViewIfNeeded();
+  await button.focus();
+  await page.evaluate(() => {
+    const text = document.querySelector('.doc__body p')?.firstChild;
+    if (!text) throw new Error('Guide selection target is missing');
+    const range = document.createRange();
+    range.setStart(text, 0);
+    range.setEnd(text, Math.min(12, text.textContent?.length ?? 0));
+    const selection = getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  const before = await page.evaluate(() => ({
+    selection: getSelection()?.toString(),
+    scrollX,
+    scrollY,
+    href: location.href,
+    historyLength: history.length,
+  }));
+  trackRequests = true;
+
+  await page.keyboard.press('Enter');
+  await expect(button).toHaveText('Copy failed');
+  await expect(button).toHaveAttribute('data-state', 'failed');
+  await expect(button).toBeFocused();
+  await expect(fullGuideCopyStatus(page)).toHaveText(
+    'Copy failed. Use Download full guide (.md) instead.',
+  );
+  await expect(download).toHaveAttribute('href', href!);
+  expect(
+    await page.evaluate(() => (window as InstrumentedWindow).__clipboardAttempts),
+  ).toBe(1);
+  expect(
+    await page.evaluate(() => (window as InstrumentedWindow).__clipboardWrites),
+  ).toEqual([]);
+  expect(
+    await page.evaluate(() => ({
+      selection: getSelection()?.toString(),
+      scrollX,
+      scrollY,
+      href: location.href,
+      historyLength: history.length,
+    })),
+  ).toEqual(before);
+  expect(requests).toEqual([`GET ${new URL(FULL_GUIDE_DOWNLOAD, page.url()).href}`]);
+});
+
 test('renders one full Guide header download only on Guide in every capability mode', async ({
   browser,
   page,
@@ -190,6 +403,7 @@ test('renders one full Guide header download only on Guide in every capability m
   await expect(link).toHaveAttribute('download', GUIDE_DOWNLOAD_FILENAME);
   await expect(page.locator('.doc__page-actions > :is(a, button)')).toHaveText([
     'Copy page link',
+    FULL_GUIDE_COPY_LABEL,
     FULL_GUIDE_LABEL,
     'Print this page',
   ]);
@@ -607,7 +821,28 @@ test('does not render the enhancement when clipboard writing is unavailable', as
   await expect(downloadLink(page)).toHaveAttribute('href', DOWNLOAD);
   await expect(page.locator('.guide-checklist-status')).toHaveCount(0);
   await expect(copyButton(page)).toHaveCount(0);
+  await expect(fullGuideCopyButton(page)).toHaveCount(0);
+  await expect(fullGuideCopyStatus(page)).toHaveCount(0);
   await expect(checklist(page).locator(':scope > li.task-list-item')).toHaveCount(7);
+});
+
+test('does not render the full Guide enhancement when fetch is unavailable', async ({
+  page,
+}) => {
+  await stubClipboard(page);
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'fetch', {
+      configurable: true,
+      value: undefined,
+    });
+  });
+  await page.goto(GUIDE);
+
+  await expect(fullGuideCopyButton(page)).toHaveCount(0);
+  await expect(fullGuideCopyStatus(page)).toHaveCount(0);
+  await expect(fullGuideDownloadLink(page)).toBeVisible();
+  await expect(page.locator('.doc__copy-button')).toHaveCount(1);
+  await expect(copyButton(page)).toHaveCount(1);
 });
 
 test.describe('without JavaScript', () => {
@@ -623,6 +858,8 @@ test.describe('without JavaScript', () => {
     await expect(download).toHaveAttribute('href', DOWNLOAD);
     await expect(page.getByRole('button', { name: RESET_LABEL })).toHaveCount(0);
     await expect(page.locator('.guide-checklist-status')).toHaveCount(0);
+    await expect(fullGuideCopyButton(page)).toHaveCount(0);
+    await expect(fullGuideCopyStatus(page)).toHaveCount(0);
     const items = checklist(page).locator(':scope > li.task-list-item');
     await expect(items).toHaveCount(7);
     for (const item of await items.all()) await expect(item).toBeVisible();
@@ -651,6 +888,8 @@ test('print keeps all checks and hides the progressive UI', async ({ page }) => 
 
   await expect(copyButton(page)).toHaveCount(1);
   await expect(copyButton(page)).toBeHidden();
+  await expect(fullGuideCopyButton(page)).toHaveCount(1);
+  await expect(fullGuideCopyButton(page)).toBeHidden();
   await expect(downloadLink(page)).toBeHidden();
   await expect(fullGuideDownloadLink(page)).toBeHidden();
   await expect(page.locator('.doc__page-actions')).toBeHidden();
@@ -715,9 +954,10 @@ for (const width of [320, 390, 1280]) {
         expect(
           geometry.targets,
           `${width}px ${theme} ${textSize} controls`,
-        ).toHaveLength(5);
+        ).toHaveLength(6);
         expect(geometry.targets.map(({ label }) => label)).toEqual([
           'Copy page link',
+          FULL_GUIDE_COPY_LABEL,
           FULL_GUIDE_LABEL,
           'Print this page',
           RESET_LABEL,
