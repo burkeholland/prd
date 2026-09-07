@@ -140,6 +140,7 @@ test('copies the seven rendered handoff checks in order with one terminal newlin
 });
 
 test('downloads exact local bytes without navigation or state access and retries the same file', async ({
+  browserName,
   page,
   request,
 }) => {
@@ -271,9 +272,20 @@ test('downloads exact local bytes without navigation or state access and retries
     storageWrites: 0,
     clipboardAttempts: 1,
   });
-  // Chromium handles attachment requests outside the page request stream. Any
-  // entry here is therefore an unrelated side effect of either action.
-  expect(observedRequests).toEqual([]);
+  // Chromium and WebKit handle native attachments outside the page request
+  // stream; Firefox exposes the two intentional download GETs here.
+  if (browserName === 'firefox') {
+    expect(observedRequests).toHaveLength(2);
+    for (const observed of observedRequests) {
+      const url = new URL(observed.url);
+      expect(observed.method).toBe('GET');
+      expect(observed.body).toBeNull();
+      expect(url.origin).toBe(new URL(page.url()).origin);
+      expect(url.pathname).toBe(DOWNLOAD);
+    }
+  } else {
+    expect(observedRequests).toEqual([]);
+  }
   expect(diagnostics).toEqual([]);
 });
 
