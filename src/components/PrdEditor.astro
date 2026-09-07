@@ -365,12 +365,47 @@ const blankDownloads = [
   let baseline: string | null | undefined;
   let conflict = false;
   let observedRaw: string | null | undefined;
-  let storageReadFailed = false;
+  let storageReadFailed = !storage;
   let autoSaveTimer: number | undefined;
   const cancelAutoSave = () => {
     if (autoSaveTimer !== undefined) window.clearTimeout(autoSaveTimer);
     autoSaveTimer = undefined;
   };
+  const stateSignature = () => JSON.stringify(readState());
+  let safeStateSignature = stateSignature();
+  let importedDraftAtRisk = false;
+  let leaveWarningRegistered = false;
+  let leaveAttempted = false;
+  const hasAtRiskLocalCopy = () => {
+    const current = readState();
+    const hasContent = [current.title, ...Object.values(current.values)]
+      .some((value) => value.length > 0);
+    return importedDraftAtRisk ||
+      JSON.stringify(current) !== safeStateSignature ||
+      (conflict && hasContent);
+  };
+  const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+    if (!hasAtRiskLocalCopy()) {
+      syncLeaveWarning();
+      return;
+    }
+    leaveAttempted = true;
+    cancelAutoSave();
+    persistDraft('automatic');
+    if (!hasAtRiskLocalCopy()) return;
+    event.preventDefault();
+    event.returnValue = true;
+    window.setTimeout(() => {
+      leaveAttempted = false;
+    }, 0);
+  };
+  function syncLeaveWarning() {
+    const shouldWarn = hasAtRiskLocalCopy();
+    if (shouldWarn === leaveWarningRegistered) return;
+    leaveWarningRegistered = shouldWarn;
+    if (shouldWarn) window.addEventListener('beforeunload', handleBeforeUnload);
+    else window.removeEventListener('beforeunload', handleBeforeUnload);
+  }
   const conflictMessage =
     'Saving is paused because the saved draft changed in another tab. Your text is unchanged. Use Draft controls to load the saved draft or keep this draft.';
   const showConflict = (raw: string | null, message = conflictMessage) => {
@@ -381,6 +416,7 @@ const blankDownloads = [
     saveButton.setAttribute('aria-disabled', 'true');
     startOverButton.setAttribute('aria-disabled', 'true');
     showStatus(message, 'conflict');
+    syncLeaveWarning();
   };
   const clearConflict = () => {
     conflict = false;
@@ -389,6 +425,7 @@ const blankDownloads = [
     conflictControls.hidden = true;
     saveButton.removeAttribute('aria-disabled');
     startOverButton.removeAttribute('aria-disabled');
+    syncLeaveWarning();
   };
   const showReadFailure = () => {
     cancelAutoSave();
@@ -397,6 +434,7 @@ const blankDownloads = [
       'Saving is paused because this browser could not read local draft storage. Your text is unchanged. Download a draft backup before leaving; try again when storage is available.',
       conflict ? 'conflict' : 'error',
     );
+    syncLeaveWarning();
   };
   const checkForChanges = () => {
     if (!storage) {
@@ -434,6 +472,7 @@ const blankDownloads = [
         failureMessage,
         'error',
       );
+      syncLeaveWarning();
       return;
     }
 
@@ -449,10 +488,13 @@ const blankDownloads = [
         conflict ? `${failureMessage} Saving is still paused; choose again to retry.` : failureMessage,
         conflict ? 'conflict' : 'error',
       );
+      syncLeaveWarning();
       return;
     }
 
     baseline = result.raw;
+    safeStateSignature = stateSignature();
+    importedDraftAtRisk = false;
     clearConflict();
     const lead = mode === 'import'
       ? 'Draft backup imported and saved'
@@ -518,6 +560,8 @@ const blankDownloads = [
         break;
     }
   }
+  safeStateSignature = stateSignature();
+  syncLeaveWarning();
 
   updateCompletion();
   editor.hidden = false;
@@ -528,7 +572,12 @@ const blankDownloads = [
     }
     updateCompletion();
     cancelAutoSave();
-    if (conflict || storageReadFailed) return;
+    syncLeaveWarning();
+    if (conflict) return;
+    if (storageReadFailed) {
+      showReadFailure();
+      return;
+    }
     showStatus('Unsaved changes. Saving in this browser.', 'pending');
     autoSaveTimer = window.setTimeout(() => {
       autoSaveTimer = undefined;
@@ -593,6 +642,8 @@ const blankDownloads = [
     applyState(current.status === 'empty' ? createBlankPrdEditorState() : current.payload.state);
     updateCompletion();
     baseline = current.raw;
+    safeStateSignature = stateSignature();
+    importedDraftAtRisk = false;
     clearConflict();
     showStatus(current.status === 'empty'
       ? 'The saved draft was removed. An empty draft is now loaded.'
@@ -812,6 +863,8 @@ const blankDownloads = [
       cancelAutoSave();
       applyState(result.payload.state);
       updateCompletion();
+      importedDraftAtRisk = true;
+      syncLeaveWarning();
       showDownloadStatus('', 'idle');
       persistDraft('import');
       titleInput.focus();
@@ -845,6 +898,9 @@ const blankDownloads = [
     originalValues.clear();
     form.reset();
     updateCompletion();
+    safeStateSignature = stateSignature();
+    importedDraftAtRisk = false;
+    syncLeaveWarning();
     showStatus('Local draft removed. All fields are clear.', 'cleared');
     titleInput.focus();
   });
@@ -875,7 +931,8 @@ const blankDownloads = [
   }
 
   window.addEventListener('pagehide', () => {
-    if (autoSaveTimer === undefined) return;
+    if (leaveAttempted || !hasAtRiskLocalCopy()) return;
+    leaveAttempted = true;
     cancelAutoSave();
     persistDraft('automatic');
   });

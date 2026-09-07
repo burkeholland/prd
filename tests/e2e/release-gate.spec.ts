@@ -1,10 +1,37 @@
-import { expect, test } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
+import { expect, test, type Page } from '@playwright/test';
 import { PRD_EDITOR_STORAGE_KEY } from '../../src/lib/prd-editor-state';
 
 const BASE = '/prd';
 const to = (path: string) => `${BASE}${path}`;
 const pausedStorageMessage =
   'Saving is paused because this browser could not read local draft storage. Your text is unchanged. Download a draft backup before leaving; try again when storage is available.';
+const fieldValues = [
+  ' \tAt-risk local title  ',
+  ...Array.from(
+    { length: 12 },
+    (_, index) => ` \tAt-risk local field ${index + 1}\nExact value ${index + 1}  `,
+  ),
+];
+const fields = (page: Page) =>
+  page.locator('#prd-editor-form input, #prd-editor-form textarea');
+const currentFields = (page: Page) =>
+  fields(page).evaluateAll((nodes) =>
+    nodes.map((node) => (node as HTMLInputElement | HTMLTextAreaElement).value)
+  );
+const downloadBackup = async (page: Page) => {
+  const pending = page.waitForEvent('download');
+  await page.locator('#download-backup').click();
+  const path = await (await pending).path();
+  if (!path) throw new Error('Missing draft backup');
+  return JSON.parse(await readFile(path, 'utf8'));
+};
+const beforeUnloadPrevented = (page: Page) =>
+  page.evaluate(() => {
+    const event = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
 
 test('localStorage access failure leaves the editor usable and announces that persistence is unavailable', async ({
   page,
@@ -38,6 +65,89 @@ test('localStorage access failure leaves the editor usable and announces that pe
   await expect(page.locator('#download-backup')).toBeEnabled();
 });
 
+test('edited storage-access failure warns on leave, preserves all fields on cancel, and protects saved bytes on departure', async ({
+  page,
+  context,
+}) => {
+  const protectedRaw = '{"protected":"newer exact bytes"}';
+  const storagePage = await context.newPage();
+  await storagePage.goto(to('/create/'));
+  await storagePage.evaluate(
+    ({ key, raw }) => localStorage.setItem(key, raw),
+    { key: PRD_EDITOR_STORAGE_KEY, raw: protectedRaw },
+  );
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      get() {
+        throw new DOMException('Storage disabled', 'SecurityError');
+      },
+    });
+  });
+  await page.goto(to('/'));
+  for (let index = 0; index < fieldValues.length; index += 1) {
+    await fields(page).nth(index).fill(fieldValues[index]!);
+  }
+  const statusBefore = await page.locator('#save-status').textContent();
+  let dialogs = 0;
+  page.on('dialog', async (dialog) => {
+    expect(dialog.type()).toBe('beforeunload');
+    dialogs += 1;
+    if (dialogs === 1) await dialog.dismiss();
+    else await dialog.accept();
+  });
+
+  await page.getByRole('link', { name: 'Example', exact: true }).click();
+
+  await expect(page).toHaveURL(to('/'));
+  expect(dialogs).toBe(1);
+  expect(await currentFields(page)).toEqual(fieldValues);
+  await expect(page.locator('#save-status')).toHaveText(statusBefore ?? '');
+  expect(await storagePage.evaluate(
+    (key) => localStorage.getItem(key),
+    PRD_EDITOR_STORAGE_KEY,
+  )).toBe(protectedRaw);
+  expect((await downloadBackup(page)).state).toEqual({
+    title: fieldValues[0],
+    values: Object.fromEntries(
+      await page.locator('textarea').evaluateAll((nodes) =>
+        nodes.map((node) => [(node as HTMLTextAreaElement).name, (node as HTMLTextAreaElement).value]),
+      ),
+    ),
+  });
+
+  await page.getByRole('link', { name: 'Example', exact: true }).click();
+
+  await expect(page).toHaveURL(to('/sample/'));
+  expect(dialogs).toBe(2);
+  expect(await storagePage.evaluate(
+    (key) => localStorage.getItem(key),
+    PRD_EDITOR_STORAGE_KEY,
+  )).toBe(protectedRaw);
+  await storagePage.close();
+});
+
+test('the leave listener is absent for an unavailable blank editor and tracks only live unsaved risk', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      get() {
+        throw new DOMException('Storage disabled', 'SecurityError');
+      },
+    });
+  });
+  await page.goto(to('/'));
+  expect(await beforeUnloadPrevented(page)).toBe(false);
+
+  await page.locator('#document-title').fill('Temporary local value');
+  expect(await beforeUnloadPrevented(page)).toBe(true);
+
+  await page.locator('#document-title').fill('');
+  expect(await beforeUnloadPrevented(page)).toBe(false);
+});
+
 test('a localStorage read failure is explicit and leaves every field editable', async ({
   page,
 }) => {
@@ -52,8 +162,8 @@ test('a localStorage read failure is explicit and leaves every field editable', 
   }, PRD_EDITOR_STORAGE_KEY);
   await page.goto(to('/'));
 
-  await expect(page.locator('#save-status')).toHaveText(
-    'This browser could not read local draft storage. You can still edit this document.',
+  await expect(page.locator('#save-status')).toContainText(
+    'could not read local draft storage',
   );
   await expect(page.locator('#save-status')).toHaveAttribute('data-state', 'error');
   const title = page.locator('#document-title');
@@ -71,6 +181,70 @@ test('a localStorage read failure is explicit and leaves every field editable', 
   await expect(title).toBeEditable();
   await expect(title).toHaveValue('Read failure keeps this local title');
   await expect(page.locator('#download-backup')).toBeEnabled();
+
+  let warned = false;
+  page.once('dialog', async (dialog) => {
+    expect(dialog.type()).toBe('beforeunload');
+    warned = true;
+    await dialog.dismiss();
+  });
+  await page.getByRole('link', { name: 'Example', exact: true }).click();
+  expect(warned).toBe(true);
+  await expect(page).toHaveURL(to('/'));
+  expect((await downloadBackup(page)).state.title).toBe(
+    'Read failure keeps this local title',
+  );
+});
+
+test('a write failure after editing warns and cancel keeps an exportable in-memory copy', async ({
+  page,
+}) => {
+  await page.goto(to('/'));
+  await page.evaluate((key) => {
+    const set = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (storageKey, value) {
+      if (this === localStorage && storageKey === key) {
+        throw new DOMException('Storage full', 'QuotaExceededError');
+      }
+      return set.call(this, storageKey, value);
+    };
+  }, PRD_EDITOR_STORAGE_KEY);
+  await page.locator('#document-title').fill('Unsaved after write failure');
+  await page.locator('#save-draft').click();
+  await expect(page.locator('#save-status')).toContainText(
+    'Draft could not be saved',
+  );
+  let warned = false;
+  page.once('dialog', async (dialog) => {
+    expect(dialog.type()).toBe('beforeunload');
+    warned = true;
+    await dialog.dismiss();
+  });
+
+  await page.getByRole('link', { name: 'Example', exact: true }).click();
+
+  expect(warned).toBe(true);
+  await expect(page).toHaveURL(to('/'));
+  await expect(page.locator('#document-title')).toHaveValue(
+    'Unsaved after write failure',
+  );
+  expect((await downloadBackup(page)).state.title).toBe(
+    'Unsaved after write failure',
+  );
+});
+
+test('successful save and restored draft have no active leave warning', async ({
+  page,
+}) => {
+  await page.goto(to('/'));
+  await page.locator('#document-title').fill('Safely saved');
+  await page.locator('#save-draft').click();
+  expect(await beforeUnloadPrevented(page)).toBe(false);
+
+  await page.reload();
+
+  await expect(page.locator('#save-status')).toHaveAttribute('data-state', 'restored');
+  expect(await beforeUnloadPrevented(page)).toBe(false);
 });
 
 test('the two live regions have unique identities and report save and download outcomes accurately', async ({

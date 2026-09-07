@@ -57,6 +57,75 @@ const chooseBackup = (page: Page, state: PrdEditorState) =>
 const missStorageEvents = (page: Page) => page.addInitScript(() => {
   window.addEventListener('storage', (event) => event.stopImmediatePropagation(), true);
 });
+const beforeUnloadPrevented = (page: Page) =>
+  page.evaluate(() => {
+    const event = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+
+test('an active stale conflict warns without post-conflict typing and protects both copies across cancel and departure', async ({
+  page,
+  context,
+}) => {
+  const other = await openPair(page, context);
+  await page.locator('#document-title').click();
+  const newer = rawDraft(fixture('Newer saved copy'));
+  await put(other, newer);
+  await expectConflict(page);
+  const localFields = await fields(page);
+  const status = await page.locator('#save-status').textContent();
+  let dialogs = 0;
+  page.on('dialog', async (dialog) => {
+    expect(dialog.type()).toBe('beforeunload');
+    dialogs += 1;
+    if (dialogs === 1) await dialog.dismiss();
+    else await dialog.accept();
+  });
+
+  await page.getByRole('link', { name: 'Example', exact: true }).click();
+
+  await expect(page).toHaveURL('/prd/');
+  expect(dialogs).toBe(1);
+  expect(await fields(page)).toEqual(localFields);
+  expect(await stored(other)).toBe(newer);
+  await expect(page.locator('#save-status')).toHaveText(status ?? '');
+  await expect(page.locator('#draft-conflict')).toBeVisible();
+  expect((await backup(page)).state).toEqual(fixture('Original saved draft'));
+
+  await page.getByRole('link', { name: 'Example', exact: true }).click();
+
+  await expect(page).toHaveURL('/prd/sample/');
+  expect(dialogs).toBe(2);
+  expect(await stored(other)).toBe(newer);
+});
+
+test('a truly blank unchanged tab does not warn when another tab saves a draft', async ({
+  page,
+  context,
+}) => {
+  await page.goto('/prd/');
+  await put(page, null);
+  await page.reload();
+  await page.locator('#document-title').click();
+  const other = await context.newPage();
+  await other.goto('/prd/create/');
+  await put(other, rawDraft(fixture('External saved copy')));
+  await expectConflict(page);
+  expect(await fields(page)).toEqual(Array(13).fill(''));
+  expect(await beforeUnloadPrevented(page)).toBe(false);
+  let dialogs = 0;
+  page.on('dialog', async (dialog) => {
+    dialogs += 1;
+    await dialog.accept();
+  });
+
+  await page.getByRole('link', { name: 'Example', exact: true }).click();
+
+  await expect(page).toHaveURL('/prd/sample/');
+  expect(dialogs).toBe(0);
+  expect(await stored(other)).toBe(rawDraft(fixture('External saved copy')));
+});
 
 for (const path of ['/prd/', '/prd/create/']) {
   for (const flush of ['debounce', 'pagehide']) {
@@ -156,6 +225,7 @@ test('Continue draft preserves an active conflict and follows the newly loaded s
   await expect(page.locator('#save-status')).toHaveText(before.status ?? '');
   await expect(page.locator('#save-status')).toHaveAttribute('data-state', 'conflict');
   await expect(page.locator('#completion-count')).toHaveText(before.completion ?? '');
+  expect(await beforeUnloadPrevented(page)).toBe(true);
 
   page.once('dialog', (dialog) => dialog.accept());
   await page.locator('#load-saved-draft').click();
@@ -185,6 +255,7 @@ for (const action of ['load-saved-draft', 'keep-this-draft']) {
     expect(await fields(page)).toEqual(before);
     expect(await stored(page)).toBe(saved);
     await expectConflict(page);
+    expect(await beforeUnloadPrevented(page)).toBe(true);
 
     const latest = fixture(' Latest\r\nsaved copy ');
     const latestRaw = rawDraft(latest);
@@ -206,6 +277,7 @@ for (const action of ['load-saved-draft', 'keep-this-draft']) {
     await expect(page.getByRole('button', { name: 'Keep this draft', exact: true })).toHaveCount(0);
     await page.clock.runFor(1000);
     expect(await stored(page)).toBe(resolved);
+    expect(await beforeUnloadPrevented(page)).toBe(false);
     await page.reload();
     expect((await backup(page)).state).toEqual(chosen);
     await page.locator('#document-title').fill('Ordinary saves resumed');
@@ -531,6 +603,7 @@ test('conflict actions are compact, keyboard reachable, overflow-free and absent
   await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
   expect(await fields(page)).toEqual(before);
   await expectConflict(page);
+  expect(await beforeUnloadPrevented(page)).toBe(true);
 });
 
 test('all document formats remain available during conflict with supported Latin font text', async ({ page, context }) => {
@@ -553,6 +626,7 @@ test('all document formats remain available during conflict with supported Latin
   expect(await fields(page)).toEqual(before);
   expect(await stored(page)).toBe(newer);
   await expectConflict(page);
+  expect(await beforeUnloadPrevented(page)).toBe(true);
 });
 
 for (const path of ['/prd/', '/prd/create/']) {
@@ -590,4 +664,5 @@ test('a failed removal preserves fields and a later confirmed retry clears them'
   await page.locator('#start-over').click();
   expect(await fields(page)).toEqual(Array(13).fill(''));
   expect(await stored(page)).toBeNull();
+  expect(await beforeUnloadPrevented(page)).toBe(false);
 });

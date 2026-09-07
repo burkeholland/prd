@@ -71,6 +71,10 @@ import is saved in the current browser; if browser storage is unavailable, the
 imported draft remains editable and the status tells you to download a backup
 before leaving.
 
+The browser may show its standard warning when leaving an unsaved local copy.
+Download a draft backup because browsers cannot guarantee a warning for every
+mobile close or crash.
+
 Use **Continue draft** beside the progress count to jump to the first blank section.
 
 If another tab changes or removes the saved draft, saving and Start over pause
