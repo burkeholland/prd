@@ -270,6 +270,7 @@ const description =
 
       try {
         await revisionClipboard.writeText(revisionCanonical.href);
+        if (copyButton.isConnected) copyButton.focus({ preventScroll: true });
         copyButton.textContent = 'Revision link copied';
         copyStatus.textContent = `Revision ${revisionNumber} link copied.`;
       } catch {
