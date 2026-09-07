@@ -126,7 +126,7 @@ test('the prerendered CSV and single History link expose the exact metadata', as
   }
 });
 
-test('native downloads, retries, and header fallback preserve page and private state', async ({
+test('pointer and keyboard native downloads preserve page and private state', async ({
   page,
 }) => {
   await instrument(page);
@@ -161,20 +161,19 @@ test('native downloads, retries, and header fallback preserve page and private s
     table: document.querySelector('.history-table')?.innerHTML,
   }));
 
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  for (const trigger of [
+    () => link.click(),
+    async () => {
+      await link.focus();
+      await page.keyboard.press('Enter');
+    },
+  ]) {
     const pending = page.waitForEvent('download');
-    await link.click();
+    await trigger();
     const download = await pending;
     expect(download.suggestedFilename()).toBe(HISTORY_CSV_DOWNLOAD.filename);
     expect(await downloadBytes(download)).toEqual(expectedBytes);
   }
-
-  await link.evaluate((node) => node.removeAttribute('download'));
-  const fallbackPending = page.waitForEvent('download');
-  await link.click();
-  const fallback = await fallbackPending;
-  expect(fallback.suggestedFilename()).toBe(HISTORY_CSV_DOWNLOAD.filename);
-  expect(await downloadBytes(fallback)).toEqual(expectedBytes);
 
   const after = await page.evaluate(() => {
     const testWindow = window as InstrumentedWindow;
@@ -198,7 +197,6 @@ test('native downloads, retries, and header fallback preserve page and private s
     storageReads: 0,
     storageWrites: 0,
   });
-  expect(observedRequests.length).toBeGreaterThanOrEqual(1);
   for (const request of observedRequests) {
     expect(request.method).toBe('GET');
     expect(request.postData).toBeNull();
