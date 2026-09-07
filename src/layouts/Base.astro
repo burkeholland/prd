@@ -2,10 +2,12 @@
 import '../styles/global.css';
 import '../styles/print.css';
 import Nav from '../components/Nav.astro';
+import ThemeControl from '../components/ThemeControl.astro';
 import Footer from '../components/Footer.astro';
 import { SITE } from '../lib/site';
 import { withBase } from '../lib/base';
 import { canonicalUrl, OG_IMAGE, socialCard } from '../lib/seo';
+import { THEME_STORAGE_KEY } from '../lib/theme';
 
 interface Props {
   title: string;
@@ -29,6 +31,16 @@ const ogImage = new URL(withBase(card.file), Astro.site).href;
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script is:inline define:vars={{ themeStorageKey: THEME_STORAGE_KEY }}>
+      try {
+        const savedTheme = window.localStorage.getItem(themeStorageKey);
+        if (savedTheme === 'light' || savedTheme === 'dark') {
+          document.documentElement.dataset.theme = savedTheme;
+        }
+      } catch {
+        // System remains the truthful default when storage is unavailable.
+      }
+    </script>
     <meta name="color-scheme" content="light dark" />
     <title>{title}</title>
     <meta name="description" content={description} />
@@ -60,6 +72,7 @@ const ogImage = new URL(withBase(card.file), Astro.site).href;
       <div class="container site-header__inner">
         <a class="brand" href={withBase('/')}>{SITE.name}</a>
         <Nav current={Astro.url.pathname} />
+        <ThemeControl />
       </div>
     </header>
     <main id="main" class="container" tabindex="-1">

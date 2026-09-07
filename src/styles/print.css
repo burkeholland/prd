@@ -10,7 +10,8 @@
   }
 
   /* Palette: black on white whatever the OS colour scheme says. */
-  :root {
+  :root,
+  :root[data-theme] {
     color-scheme: light;
     --bg: #fff;
     --surface: #fff;

@@ -1,7 +1,7 @@
 /* PRD Template global styles. No frameworks, no web fonts, no external requests. */
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
 
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, "Cascadia Code", Consolas, monospace;
@@ -23,8 +23,23 @@
   --radius: 8px;
 }
 
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #141614;
+  --surface: #1c1f1d;
+  --surface-raised: #202422;
+  --border: #343935;
+  --text: #e7e8e2;
+  --text-muted: #a2a59d;
+  --accent: #3ddc97;
+  --accent-soft: #1b3129;
+  --accent-contrast: #0b1f17;
+  --code-bg: #1b1e1c;
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
+    color-scheme: dark;
     --bg: #141614;
     --surface: #1c1f1d;
     --surface-raised: #202422;
@@ -202,6 +217,31 @@ samp {
 .site-nav a[aria-current="page"] {
   color: var(--text);
   border-bottom-color: var(--accent);
+}
+
+.theme-control {
+  min-width: 0;
+}
+
+.theme-control__label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+  white-space: nowrap;
+}
+
+.theme-control select {
+  min-width: 6.25rem;
+  min-height: 32px;
+  max-width: 100%;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  background: var(--surface-raised);
+  font: inherit;
 }
 
 @media (max-width: 767.98px) {
@@ -660,9 +700,13 @@ main:focus {
 /* github-light paints markdown list markers ("1.") #E36209: 3.5:1 on the white code background.
    Darken that one token in light mode (5.6:1); dark mode keeps the theme's own colour below. */
 @media (prefers-color-scheme: light) {
-  .astro-code span[style*="#E36209" i] {
+  :root:not([data-theme]) .astro-code span[style*="#E36209" i] {
     color: #a35200 !important;
   }
+}
+
+:root[data-theme="light"] .astro-code span[style*="#E36209" i] {
+  color: #a35200 !important;
 }
 
 .prose table {
@@ -689,14 +733,23 @@ main:focus {
 /* Shiki dual themes: Astro emits the dark palette as custom properties. */
 
 @media (prefers-color-scheme: dark) {
-  .astro-code,
-  .astro-code span {
+  :root:not([data-theme]) .astro-code,
+  :root:not([data-theme]) .astro-code span {
     color: var(--shiki-dark) !important;
     background-color: var(--shiki-dark-bg) !important;
     font-style: var(--shiki-dark-font-style) !important;
     font-weight: var(--shiki-dark-font-weight) !important;
     text-decoration: var(--shiki-dark-text-decoration) !important;
   }
+}
+
+:root[data-theme="dark"] .astro-code,
+:root[data-theme="dark"] .astro-code span {
+  color: var(--shiki-dark) !important;
+  background-color: var(--shiki-dark-bg) !important;
+  font-style: var(--shiki-dark-font-style) !important;
+  font-weight: var(--shiki-dark-font-weight) !important;
+  text-decoration: var(--shiki-dark-text-decoration) !important;
 }
 
 /* history ---------------------------------------------------------------

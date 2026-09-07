@@ -34,7 +34,7 @@ export default defineConfig({
   ],
   markdown: {
     shikiConfig: {
-      // Both themes are emitted; global.css switches them with prefers-color-scheme.
+      // Both themes are emitted; global.css follows the saved reader preference or the system scheme.
       themes: { light: 'github-light', dark: 'github-dark' },
     },
     // Block-level images (the gist's screenshots) become lazy-loaded, captioned figures; then

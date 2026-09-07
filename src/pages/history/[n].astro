@@ -203,9 +203,13 @@ const description =
   }
 
   @media (prefers-color-scheme: dark) {
-    .revision {
+    :root:not([data-theme]) .revision {
       --del: #f97066;
     }
+  }
+
+  :root[data-theme="dark"] .revision {
+    --del: #f97066;
   }
 
   .revision__header {

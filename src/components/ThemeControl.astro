@@ -1,0 +1,60 @@
+<div class="theme-control" data-theme-picker hidden></div>
+
+<script>
+  import {
+    isThemePreference,
+    THEME_PREFERENCES,
+    THEME_STORAGE_KEY,
+    type ThemePreference,
+  } from '../lib/theme';
+
+  const picker = document.querySelector<HTMLElement>('[data-theme-picker]');
+
+  if (picker) {
+    const label = document.createElement('label');
+    label.className = 'theme-control__label';
+
+    const labelText = document.createElement('span');
+    labelText.textContent = 'Theme';
+
+    const select = document.createElement('select');
+    select.name = 'theme';
+    select.dataset.themeControl = '';
+
+    const labels: Record<ThemePreference, string> = {
+      system: 'System',
+      light: 'Light',
+      dark: 'Dark',
+    };
+    for (const preference of THEME_PREFERENCES) {
+      const option = document.createElement('option');
+      option.value = preference;
+      option.textContent = labels[preference];
+      select.append(option);
+    }
+
+    const initial = document.documentElement.dataset.theme;
+    select.value = isThemePreference(initial) && initial !== 'system' ? initial : 'system';
+
+    select.addEventListener('change', () => {
+      if (!isThemePreference(select.value)) return;
+
+      const preference = select.value;
+      if (preference === 'system') {
+        delete document.documentElement.dataset.theme;
+      } else {
+        document.documentElement.dataset.theme = preference;
+      }
+
+      try {
+        window.localStorage.setItem(THEME_STORAGE_KEY, preference);
+      } catch {
+        // The selected theme still applies to this page when storage is unavailable.
+      }
+    });
+
+    label.append(labelText, select);
+    picker.append(label);
+    picker.hidden = false;
+  }
+</script>
