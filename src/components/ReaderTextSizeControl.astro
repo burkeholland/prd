@@ -1,0 +1,64 @@
+<div class="reader-text-size-control" data-reader-text-size-picker hidden></div>
+
+<script>
+  import {
+    isReaderTextSizePreference,
+    READER_TEXT_SIZE_PREFERENCES,
+    READER_TEXT_SIZE_STORAGE_KEY,
+    type ReaderTextSizePreference,
+  } from '../lib/reader-text-size';
+
+  const picker = document.querySelector<HTMLElement>(
+    '[data-reader-text-size-picker]',
+  );
+
+  if (picker) {
+    const label = document.createElement('label');
+    label.className = 'reader-text-size-control__label';
+
+    const labelText = document.createElement('span');
+    labelText.textContent = 'Text size';
+
+    const select = document.createElement('select');
+    select.name = 'reader-text-size';
+    select.dataset.readerTextSizeControl = '';
+
+    const labels: Record<ReaderTextSizePreference, string> = {
+      default: 'Default',
+      large: 'Large',
+    };
+    for (const preference of READER_TEXT_SIZE_PREFERENCES) {
+      const option = document.createElement('option');
+      option.value = preference;
+      option.textContent = labels[preference];
+      select.append(option);
+    }
+
+    const initial = document.documentElement.dataset.textSize;
+    select.value = isReaderTextSizePreference(initial) ? initial : 'default';
+
+    select.addEventListener('change', () => {
+      if (!isReaderTextSizePreference(select.value)) return;
+
+      const preference = select.value;
+      if (preference === 'default') {
+        delete document.documentElement.dataset.textSize;
+      } else {
+        document.documentElement.dataset.textSize = preference;
+      }
+
+      try {
+        window.localStorage.setItem(
+          READER_TEXT_SIZE_STORAGE_KEY,
+          preference,
+        );
+      } catch {
+        // The selected size still applies to this page when storage is unavailable.
+      }
+    });
+
+    label.append(labelText, select);
+    picker.append(label);
+    picker.hidden = false;
+  }
+</script>
