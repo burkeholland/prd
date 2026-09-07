@@ -615,6 +615,10 @@ test('the workbench keeps the editor primary on desktop and remains linear and u
           'main a[href], main button, main input, main textarea',
         ),
       ).filter((target) => target.getClientRects().length > 0);
+      const effectiveTarget = (target: HTMLElement) =>
+        target instanceof HTMLInputElement && target.type === 'checkbox'
+          ? target.labels?.[0] ?? target
+          : target;
       return {
         scrollWidth: document.documentElement.scrollWidth,
         viewport: window.innerWidth,
@@ -624,14 +628,14 @@ test('the workbench keeps the editor primary on desktop and remains linear and u
         undersized: targets
           .map((target) => ({
             id: target.id || target.textContent?.trim() || target.tagName,
-            height: target.getBoundingClientRect().height,
+            height: effectiveTarget(target).getBoundingClientRect().height,
           }))
           .filter((target) => target.height < 32),
         outside: targets
           .map((target) => ({
             id: target.id || target.textContent?.trim() || target.tagName,
-            left: target.getBoundingClientRect().left,
-            right: target.getBoundingClientRect().right,
+            left: effectiveTarget(target).getBoundingClientRect().left,
+            right: effectiveTarget(target).getBoundingClientRect().right,
           }))
           .filter((target) => target.left < 0 || target.right > window.innerWidth + 0.5),
       };
