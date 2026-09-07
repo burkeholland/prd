@@ -328,6 +328,8 @@ for (const path of ['/', '/create/']) {
     await page.keyboard.press('Tab');
     await expect(page.locator('#copy-section-context-problem')).toBeFocused();
     await page.keyboard.press('Tab');
+    await expect(page.locator('#download-section-context-problem')).toBeFocused();
+    await page.keyboard.press('Tab');
     await expect(page.locator('.editor-section textarea').nth(1)).toBeFocused();
     await page.locator('.editor-outline a').last().click();
     await expect(page.locator('.editor-section textarea').last()).toBeFocused();
