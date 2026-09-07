@@ -52,10 +52,28 @@ test('all historical Markdown URLs and both link placements match their snapshot
   }
 });
 
-test('both placements download every snapshot without JavaScript or external requests', async ({ browser }) => {
+type ObservedRequest = { method: string; postData: string | null; url: string };
+
+const expectPrivateDownloads = (
+  downloadUrls: string[],
+  observedRequests: ObservedRequest[],
+  origin: string,
+) => {
+  expect(downloadUrls).toHaveLength(16);
+  for (const url of downloadUrls) {
+    expect(new URL(url).origin).toBe(origin);
+  }
+  for (const request of observedRequests) {
+    expect(new URL(request.url).origin, request.url).toBe(origin);
+    expect(request.method).toBe('GET');
+    expect(request.postData).toBeNull();
+  }
+};
+
+test('all index links download their snapshots without JavaScript or external requests', async ({ browser }) => {
   const context = await browser.newContext({ javaScriptEnabled: false });
   const page = await context.newPage();
-  const observedRequests: { method: string; postData: string | null; url: string }[] = [];
+  const observedRequests: ObservedRequest[] = [];
   const downloadUrls: string[] = [];
   context.on('request', (request) => {
     observedRequests.push({
@@ -76,6 +94,23 @@ test('both placements download every snapshot without JavaScript or external req
     expect(await downloadBytes(download)).toEqual(snapshot(revision.file));
   }
 
+  expectPrivateDownloads(downloadUrls, observedRequests, new URL(page.url()).origin);
+  await context.close();
+});
+
+test('all revision-page links download their snapshots without JavaScript or external requests', async ({ browser }) => {
+  const context = await browser.newContext({ javaScriptEnabled: false });
+  const page = await context.newPage();
+  const observedRequests: ObservedRequest[] = [];
+  const downloadUrls: string[] = [];
+  context.on('request', (request) => {
+    observedRequests.push({
+      method: request.method(),
+      postData: request.postData(),
+      url: request.url(),
+    });
+  });
+
   for (const revision of history.revisions) {
     await page.goto(to(`/history/${revision.n}/`));
     const pending = page.waitForEvent('download');
@@ -86,16 +121,7 @@ test('both placements download every snapshot without JavaScript or external req
     expect(await downloadBytes(download)).toEqual(snapshot(revision.file));
   }
 
-  expect(downloadUrls).toHaveLength(32);
-  const origin = new URL(page.url()).origin;
-  for (const url of downloadUrls) {
-    expect(new URL(url).origin).toBe(origin);
-  }
-  for (const request of observedRequests) {
-    expect(new URL(request.url).origin, request.url).toBe(origin);
-    expect(request.method).toBe('GET');
-    expect(request.postData).toBeNull();
-  }
+  expectPrivateDownloads(downloadUrls, observedRequests, new URL(page.url()).origin);
   await context.close();
 });
 
