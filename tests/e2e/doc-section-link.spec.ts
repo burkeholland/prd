@@ -238,6 +238,15 @@ test('every action copies its canonical absolute URL plus one encoded heading fr
     trackRequests = false;
     await page.goto(to(`${path}?cache=task-2985#old-fragment`));
     await page.waitForLoadState('networkidle');
+    const lazyImages = page.locator('.doc__body img[loading="lazy"]');
+    for (let index = 0; index < (await lazyImages.count()); index += 1) {
+      const image = lazyImages.nth(index);
+      await image.scrollIntoViewIfNeeded();
+      await expect
+        .poll(() => image.evaluate((node: HTMLImageElement) => node.complete))
+        .toBe(true);
+    }
+    await page.waitForLoadState('networkidle');
     const expected = await expectedSectionUrls(page);
     expect(expected).toHaveLength(expectedCount);
     expect(expected.every((url) => url.startsWith('https://'))).toBe(true);
