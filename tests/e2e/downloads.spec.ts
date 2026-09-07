@@ -1,5 +1,11 @@
 import { readFile } from 'node:fs/promises';
-import { expect, test, type Download, type Page } from '@playwright/test';
+import {
+  expect,
+  test,
+  type BrowserContext,
+  type Download,
+  type Page,
+} from '@playwright/test';
 import JSZip from 'jszip';
 import {
   PDFDict,
@@ -9,8 +15,14 @@ import {
   PDFString,
 } from 'pdf-lib';
 import {
+  exportPrdMarkdown,
   PRD_EXPORT_MIME_TYPES,
 } from '../../src/lib/prd-export';
+import {
+  createBlankPrdEditorState,
+  PRD_EDITOR_STORAGE_KEY,
+  type PrdEditorState,
+} from '../../src/lib/prd-editor-state';
 import {
   PRD_TEMPLATE,
   PRD_TEMPLATE_SECTIONS,
@@ -102,6 +114,74 @@ const parsePdf = async (bytes: Buffer) => {
 };
 
 const sectionTitles = PRD_TEMPLATE_SECTIONS.map((section) => section.title);
+
+const copyFixture = (label: string): PrdEditorState => {
+  const blank = createBlankPrdEditorState();
+  const state = {
+    title: `${label}: Café launch`,
+    values: { ...blank.values },
+  };
+  for (const [index, section] of PRD_TEMPLATE_SECTIONS.entries()) {
+    state.values[section.id] =
+      `${label} section ${index + 1}\n\n- ${section.title}\n- Distinctive value ${index + 1}`;
+  }
+  return state;
+};
+
+const fillDraft = async (page: Page, state: PrdEditorState) => {
+  await page.locator('#document-title').fill(state.title);
+  for (const section of PRD_TEMPLATE_SECTIONS) {
+    await page
+      .locator(`#section-input-${section.id}`)
+      .fill(state.values[section.id]);
+  }
+};
+
+const currentFields = (page: Page) =>
+  page
+    .locator('#prd-editor-form input, #prd-editor-form textarea')
+    .evaluateAll((fields) =>
+      fields.map((field) => (field as HTMLInputElement).value),
+    );
+
+const storedDraft = (page: Page) =>
+  page.evaluate(
+    (key) => localStorage.getItem(key),
+    PRD_EDITOR_STORAGE_KEY,
+  );
+
+const decodeMarkdown = (bytes: Uint8Array | Buffer) =>
+  new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+
+const canonicalMarkdown = (state: PrdEditorState) =>
+  decodeMarkdown(exportPrdMarkdown(state));
+
+const normalizePlatformNewlines = (value: string) =>
+  value.replace(/\r\n/g, '\n');
+
+const installClipboardStub = (target: Page | BrowserContext) =>
+  target.addInitScript(() => {
+    const testWindow = window as typeof window & {
+      __prdClipboardWrites: string[];
+    };
+    testWindow.__prdClipboardWrites = [];
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText(text: string) {
+          testWindow.__prdClipboardWrites.push(text);
+          return new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+        },
+      },
+    });
+  });
+
+const clipboardWrites = (page: Page) =>
+  page.evaluate(
+    () =>
+      (window as typeof window & { __prdClipboardWrites: string[] })
+        .__prdClipboardWrites,
+  );
 
 test('all three stable blank-template URLs return parseable files with canonical structure', async ({
   page,
@@ -290,4 +370,344 @@ test('a generation failure is explicit and leaves the current draft intact', asy
   const { download: retry } = await clickDownload(page, '#download-pdf');
   expect(retry.suggestedFilename()).toBe('keep-this-title.pdf');
   expect((await bytesFrom(retry)).subarray(0, 5)).toEqual(Buffer.from('%PDF-'));
+});
+
+test('both editor routes expose one Copy Markdown action and exactly three document downloads', async ({
+  page,
+}) => {
+  for (const path of ['/prd/', '/prd/create/']) {
+    await page.goto(path);
+    await expect(
+      page.getByRole('button', { name: 'Copy Markdown', exact: true }),
+      path,
+    ).toHaveCount(1);
+    await expect(page.locator('[data-export-format]'), path).toHaveCount(3);
+    await expect(
+      page.locator('.editor-download-actions .editor-button'),
+      path,
+    ).toHaveCount(4);
+  }
+});
+
+test('Copy Markdown by keyboard uses the live unsaved draft and matches the canonical serializer and Markdown download', async ({
+  browserName,
+  page,
+}) => {
+  test.skip(browserName !== 'chromium', 'Native clipboard reads are Chromium-only.');
+
+  await page.goto(CREATE_PATH);
+  const savedState = copyFixture('Native clipboard');
+  await fillDraft(page, savedState);
+  await page.locator('#save-draft').click();
+  const savedBeforeLastEdit = await storedDraft(page);
+
+  await page.clock.install();
+  await page.clock.pauseAt(new Date());
+  const lastSection = PRD_TEMPLATE_SECTIONS.at(-1)!;
+  const state: PrdEditorState = {
+    title: savedState.title,
+    values: {
+      ...savedState.values,
+      [lastSection.id]:
+        `${savedState.values[lastSection.id]}\nUNSAVED LAST-MOMENT EDIT`,
+    },
+  };
+  await page
+    .locator(`#section-input-${lastSection.id}`)
+    .fill(state.values[lastSection.id]);
+  expect(await storedDraft(page)).toBe(savedBeforeLastEdit);
+
+  const copy = page.getByRole('button', {
+    name: 'Copy Markdown',
+    exact: true,
+  });
+  await copy.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#download-status')).toHaveText(
+    'Copied Markdown to the clipboard.',
+  );
+  await expect(copy).toBeEnabled();
+  await expect(copy).not.toHaveAttribute('aria-busy');
+  await expect(copy).toHaveAccessibleName('Copy Markdown');
+  expect(await storedDraft(page)).toBe(savedBeforeLastEdit);
+
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  const expected = canonicalMarkdown(state);
+  const { download } = await clickDownload(page, '#download-md');
+  const downloaded = decodeMarkdown(await bytesFrom(download));
+  expect(normalizePlatformNewlines(copied)).toBe(
+    normalizePlatformNewlines(expected),
+  );
+  expect(normalizePlatformNewlines(downloaded)).toBe(
+    normalizePlatformNewlines(expected),
+  );
+  expect(normalizePlatformNewlines(copied)).toBe(
+    normalizePlatformNewlines(downloaded),
+  );
+  expect(
+    Array.from(expected.matchAll(/^# (.+)$/gm), (match) => match[1]),
+  ).toEqual([state.title]);
+  expect(
+    Array.from(expected.matchAll(/^## (.+)$/gm), (match) => match[1]),
+  ).toEqual(sectionTitles);
+});
+
+test('stubbed clipboard copy succeeds twice through the existing live region without changing its accessible name', async ({
+  page,
+}) => {
+  await installClipboardStub(page);
+  await page.goto(CREATE_PATH);
+  await page.evaluate(() => {
+    const testWindow = window as typeof window & {
+      __prdDownloadStatusMessages: string[];
+    };
+    testWindow.__prdDownloadStatusMessages = [];
+    const status = document.querySelector('#download-status')!;
+    new MutationObserver(() => {
+      testWindow.__prdDownloadStatusMessages.push(status.textContent ?? '');
+    }).observe(status, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
+  });
+  const liveRegions = page.locator(
+    '[role="status"][aria-live="polite"][aria-atomic="true"]',
+  );
+  await expect(liveRegions).toHaveCount(2);
+
+  const first = copyFixture('First copy');
+  const second = copyFixture('Second copy');
+  const copy = page.getByRole('button', {
+    name: 'Copy Markdown',
+    exact: true,
+  });
+  for (const state of [first, second]) {
+    await fillDraft(page, state);
+    await copy.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#download-status')).toHaveText(
+      'Copied Markdown to the clipboard.',
+    );
+    await expect(copy).toBeEnabled();
+    await expect(copy).not.toHaveAttribute('aria-busy');
+    await expect(copy).toHaveAccessibleName('Copy Markdown');
+  }
+
+  expect((await clipboardWrites(page)).map(normalizePlatformNewlines)).toEqual([
+    normalizePlatformNewlines(canonicalMarkdown(first)),
+    normalizePlatformNewlines(canonicalMarkdown(second)),
+  ]);
+  const statusMessages = await page.evaluate(
+    () =>
+      (window as typeof window & {
+        __prdDownloadStatusMessages: string[];
+      }).__prdDownloadStatusMessages,
+  );
+  expect(statusMessages.filter((message) => message === '')).toHaveLength(2);
+  expect(
+    statusMessages.filter(
+      (message) => message === 'Copied Markdown to the clipboard.',
+    ),
+  ).toHaveLength(2);
+});
+
+for (const failure of [
+  {
+    name: 'unavailable',
+    message:
+      'Clipboard access is unavailable. Use the Markdown (.md) download instead.',
+  },
+  {
+    name: 'rejected write',
+    message:
+      'Could not copy Markdown to the clipboard. Use the Markdown (.md) download instead.',
+  },
+] as const) {
+  test(`clipboard ${failure.name} preserves every field and the working Markdown download`, async ({
+    page,
+  }) => {
+    await page.addInitScript((name) => {
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: name === 'unavailable'
+          ? undefined
+          : {
+              writeText() {
+                return Promise.reject(
+                  new DOMException('Clipboard denied', 'NotAllowedError'),
+                );
+              },
+            },
+      });
+    }, failure.name);
+    await page.goto(CREATE_PATH);
+    const state = copyFixture(`Clipboard ${failure.name}`);
+    await fillDraft(page, state);
+    const fieldsBefore = await currentFields(page);
+    const completionBefore = await page
+      .locator('#completion-count')
+      .textContent();
+
+    const copy = page.getByRole('button', {
+      name: 'Copy Markdown',
+      exact: true,
+    });
+    await copy.click();
+    await expect(page.locator('#download-status')).toHaveText(failure.message);
+    await expect(copy).toBeEnabled();
+    await expect(copy).not.toHaveAttribute('aria-busy');
+    await expect(page.locator('#download-md')).toBeEnabled();
+    expect(await currentFields(page)).toEqual(fieldsBefore);
+    await expect(page.locator('#completion-count')).toHaveText(
+      completionBefore ?? '',
+    );
+
+    const { download } = await clickDownload(page, '#download-md');
+    expect(normalizePlatformNewlines(decodeMarkdown(await bytesFrom(download)))).toBe(
+      normalizePlatformNewlines(canonicalMarkdown(state)),
+    );
+    expect(await currentFields(page)).toEqual(fieldsBefore);
+  });
+}
+
+test('copy remains local and available when draft persistence is unavailable', async ({
+  page,
+}) => {
+  await installClipboardStub(page);
+  await page.addInitScript(() => {
+    const testWindow = window as typeof window & {
+      __prdStorageAccesses: number;
+    };
+    testWindow.__prdStorageAccesses = 0;
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      get() {
+        testWindow.__prdStorageAccesses += 1;
+        throw new DOMException('Storage disabled', 'SecurityError');
+      },
+    });
+  });
+  await page.goto(CREATE_PATH);
+  const state = copyFixture('No persistence');
+  await fillDraft(page, state);
+  await page.waitForTimeout(450);
+  const fieldsBefore = await currentFields(page);
+  const completionBefore = await page.locator('#completion-count').textContent();
+  const accessesBefore = await page.evaluate(
+    () =>
+      (window as typeof window & { __prdStorageAccesses: number })
+        .__prdStorageAccesses,
+  );
+
+  const copy = page.getByRole('button', {
+    name: 'Copy Markdown',
+    exact: true,
+  });
+  await expect(copy).toBeEnabled();
+  await copy.click();
+  await expect(page.locator('#download-status')).toHaveText(
+    'Copied Markdown to the clipboard.',
+  );
+  expect(await clipboardWrites(page)).toEqual([canonicalMarkdown(state)]);
+  expect(await currentFields(page)).toEqual(fieldsBefore);
+  await expect(page.locator('#completion-count')).toHaveText(
+    completionBefore ?? '',
+  );
+  expect(
+    await page.evaluate(
+      () =>
+        (window as typeof window & { __prdStorageAccesses: number })
+          .__prdStorageAccesses,
+    ),
+  ).toBe(accessesBefore);
+});
+
+test('copy uses this tab live values without changing saved bytes or resolving a stale-tab conflict', async ({
+  context,
+  page,
+}) => {
+  await installClipboardStub(context);
+  await page.goto(CREATE_PATH);
+  await page.evaluate(
+    (key) => localStorage.removeItem(key),
+    PRD_EDITOR_STORAGE_KEY,
+  );
+  await page.reload();
+
+  await fillDraft(page, copyFixture('Original saved copy'));
+  await page.locator('#save-draft').click();
+  const other = await context.newPage();
+  await other.goto('/prd/create/');
+  await fillDraft(other, copyFixture('Newer saved copy'));
+  await other.locator('#save-draft').click();
+  const savedBytes = await storedDraft(other);
+  await expect(page.locator('#draft-conflict')).toBeVisible();
+  await expect(page.locator('#save-status')).toHaveAttribute(
+    'data-state',
+    'conflict',
+  );
+
+  const localState = copyFixture('Unsaved stale tab');
+  await fillDraft(page, localState);
+  const fieldsBefore = await currentFields(page);
+  const completionBefore = await page.locator('#completion-count').textContent();
+  expect(await storedDraft(page)).toBe(savedBytes);
+
+  await page.getByRole('button', {
+    name: 'Copy Markdown',
+    exact: true,
+  }).click();
+  await expect(page.locator('#download-status')).toHaveText(
+    'Copied Markdown to the clipboard.',
+  );
+  expect(await clipboardWrites(page)).toEqual([canonicalMarkdown(localState)]);
+  expect(await currentFields(page)).toEqual(fieldsBefore);
+  await expect(page.locator('#completion-count')).toHaveText(
+    completionBefore ?? '',
+  );
+  expect(await storedDraft(page)).toBe(savedBytes);
+  await expect(page.locator('#draft-conflict')).toBeVisible();
+  await expect(page.locator('#save-status')).toHaveAttribute(
+    'data-state',
+    'conflict',
+  );
+  await other.close();
+});
+
+test('all current-draft actions remain at least 32px and overflow-free at supported widths', async ({
+  page,
+}) => {
+  for (const width of [320, 390, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(CREATE_PATH);
+    const actions = page.locator(
+      '.editor-download-actions .editor-button:visible',
+    );
+    await expect(actions).toHaveCount(4);
+    const boxes = await actions.evaluateAll((buttons) =>
+      buttons.map((button) => {
+        const box = button.getBoundingClientRect();
+        return {
+          name: button.textContent?.trim(),
+          height: box.height,
+          width: box.width,
+          left: box.left,
+          right: box.right,
+        };
+      }),
+    );
+    for (const box of boxes) {
+      expect(box.height, `${box.name} height at ${width}px`).toBeGreaterThanOrEqual(32);
+      expect(box.width, `${box.name} width at ${width}px`).toBeGreaterThanOrEqual(32);
+      expect(box.left, `${box.name} left edge at ${width}px`).toBeGreaterThanOrEqual(0);
+      expect(box.right, `${box.name} right edge at ${width}px`).toBeLessThanOrEqual(width);
+    }
+    expect(
+      await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      })),
+    ).toEqual({ scrollWidth: width, clientWidth: width });
+  }
 });

@@ -79,6 +79,9 @@ available. The editor checks for observed and sequential cross-tab changes,
 including before saving; localStorage is not an atomic compare-and-swap database,
 so this is not perfect locking for simultaneous edits.
 
+**Copy Markdown** copies the current editor fields directly for pasting elsewhere,
+including unsaved edits; the clipboard action remains local to the browser.
+
 Browser Print / Save as PDF on the editor prints the current title and all 12
 sections as wrapping, paginated text, including unsaved edits; canceling print
 preserves the draft, focus, and scroll position.
