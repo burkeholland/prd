@@ -19,6 +19,7 @@ type ClipboardMode = 'success' | 'hold' | 'reject' | 'absent';
 const installClipboard = (page: Page, mode: ClipboardMode = 'success') =>
   page.addInitScript((clipboardMode) => {
     const state = {
+      mode: clipboardMode,
       attempts: [] as string[],
       writes: [] as string[],
       release: undefined as (() => void) | undefined,
@@ -31,12 +32,12 @@ const installClipboard = (page: Page, mode: ClipboardMode = 'success') =>
         : {
             writeText(text: string) {
               state.attempts.push(text);
-              if (clipboardMode === 'reject') {
+              if (state.mode === 'reject') {
                 return Promise.reject(
                   new DOMException('Clipboard denied', 'NotAllowedError'),
                 );
               }
-              if (clipboardMode === 'hold') {
+              if (state.mode === 'hold') {
                 return new Promise<void>((resolve) => {
                   state.release = () => {
                     state.writes.push(text);
@@ -49,6 +50,14 @@ const installClipboard = (page: Page, mode: ClipboardMode = 'success') =>
             },
           },
     });
+  }, mode);
+
+const setClipboardMode = (page: Page, mode: Exclude<ClipboardMode, 'absent'>) =>
+  page.evaluate((nextMode) => {
+    const state = (window as typeof window & {
+      __sectionCopyClipboard: { mode: ClipboardMode };
+    }).__sectionCopyClipboard;
+    state.mode = nextMode;
   }, mode);
 
 const clipboardState = (page: Page) =>
@@ -95,6 +104,98 @@ const fillState = async (page: Page, state: PrdEditorState) => {
   for (const [index, section] of PRD_TEMPLATE_SECTIONS.entries()) {
     await sectionField(page, index).fill(state.values[section.id]);
   }
+};
+
+const observeCopyMessages = (page: Page) =>
+  page.evaluate(() => {
+    const status = document.querySelector('#section-copy-status');
+    const messages: string[] = [];
+    Object.assign(window, { __sectionCopyMessages: messages });
+    new MutationObserver(() => {
+      const message = status?.textContent ?? '';
+      if (message) messages.push(message);
+    }).observe(status!, { childList: true, characterData: true, subtree: true });
+  });
+
+const resetCopyMessages = (page: Page) =>
+  page.evaluate(() => {
+    (window as typeof window & { __sectionCopyMessages: string[] })
+      .__sectionCopyMessages.length = 0;
+  });
+
+const copyMessages = (page: Page) =>
+  page.evaluate(() =>
+    [...(window as typeof window & { __sectionCopyMessages: string[] })
+      .__sectionCopyMessages]
+  );
+
+const settleRestorationFrames = (page: Page) =>
+  page.evaluate(() => new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  }));
+
+const editorSnapshot = (page: Page) =>
+  page.evaluate((key) => ({
+    fields: Array.from(
+      document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+        '#prd-editor-form input, #prd-editor-form textarea',
+      ),
+      (input) => ({
+        id: input.id,
+        value: input.value,
+        selectionStart: input.selectionStart,
+        selectionEnd: input.selectionEnd,
+        selectionDirection: input.selectionDirection,
+        scrollTop: input.scrollTop,
+        scrollLeft: input.scrollLeft,
+      }),
+    ),
+    scroll: { x: window.scrollX, y: window.scrollY },
+    activeId: (document.activeElement as HTMLElement | null)?.id,
+    stored: localStorage.getItem(key),
+    conflict: {
+      hidden: (document.querySelector('#draft-conflict') as HTMLElement).hidden,
+      text: document.querySelector('#draft-conflict')?.textContent,
+      saveDisabled: document.querySelector('#save-draft')?.getAttribute('aria-disabled'),
+      startOverDisabled: document.querySelector('#start-over')?.getAttribute('aria-disabled'),
+    },
+    completion: document.querySelector('#completion-count')?.textContent,
+    outline: Array.from(
+      document.querySelectorAll<HTMLElement>('[data-outline-target]'),
+      (link) => ({
+        id: link.dataset.outlineTarget,
+        complete: link.hasAttribute('data-outline-complete'),
+        statusHidden: link.querySelector('[data-outline-status]')?.hasAttribute('hidden'),
+      }),
+    ),
+    url: location.href,
+    historyLength: history.length,
+    saveStatus: document.querySelector('#save-status')?.textContent,
+    downloadStatus: document.querySelector('#download-status')?.textContent,
+  }), PRD_EDITOR_STORAGE_KEY);
+
+const prepareRejectedPointerState = async (page: Page, index: number) => {
+  const action = sectionAction(page, index);
+  const field = sectionField(page, index);
+  await page.evaluate(() => {
+    document.documentElement.style.overflowX = 'auto';
+    const overflow = document.createElement('div');
+    overflow.style.cssText =
+      'position:absolute;left:0;top:0;width:calc(100vw + 200px);height:1px;pointer-events:none';
+    document.body.append(overflow);
+  });
+  await field.evaluate((input) => {
+    if (!(input instanceof HTMLTextAreaElement)) throw new Error('Missing textarea.');
+    input.wrap = 'off';
+    input.focus({ preventScroll: true });
+    input.setSelectionRange(31, 96, 'backward');
+    input.scrollTop = 180;
+    input.scrollLeft = 90;
+  });
+  await action.evaluate((button) => {
+    const top = button.getBoundingClientRect().top + window.scrollY;
+    window.scrollTo(75, Math.max(1, top - 40));
+  });
 };
 
 const copySection = async (
@@ -176,13 +277,9 @@ test('click, Enter, and Space each make one write and one section-specific annou
   await page.goto(ROUTES[0]);
   await page.evaluate(() => {
     const status = document.querySelector('#section-copy-status');
-    const messages: string[] = [];
-    Object.assign(window, { __sectionCopyMessages: messages });
-    new MutationObserver(() => {
-      const message = status?.textContent ?? '';
-      if (message) messages.push(message);
-    }).observe(status!, { childList: true, characterData: true, subtree: true });
+    if (!status) throw new Error('Missing section copy status.');
   });
+  await observeCopyMessages(page);
 
   const section = PRD_TEMPLATE_SECTIONS[2];
   const action = sectionAction(page, 2);
@@ -210,10 +307,9 @@ test('click, Enter, and Space each make one write and one section-specific annou
     expect(state.writes.at(-1)).toBe(
       serializePrdSectionMarkdown(section.id, value),
     );
-    expect(await page.evaluate(() =>
-      (window as typeof window & { __sectionCopyMessages: string[] })
-        .__sectionCopyMessages
-    )).toEqual([`Copied ${section.title} section as Markdown.`]);
+    expect(await copyMessages(page)).toEqual([
+      `Copied ${section.title} section as Markdown.`,
+    ]);
     await expect(action).toHaveAccessibleName(
       `Copy ${section.title} section as Markdown`,
     );
@@ -250,89 +346,154 @@ test('one pending section write blocks duplicate activations across all actions'
   await expect(page.locator('.editor-section-copy[aria-disabled]')).toHaveCount(0);
 });
 
-test('a rejected write changes only the dedicated copy status', async ({ page }) => {
+test('pointer rejection restores complete state, focuses the action, and permits an immediate retry on both routes', async ({
+  page,
+}) => {
+  await installClipboard(page, 'reject');
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+
+  const index = PRD_TEMPLATE_SECTIONS.length - 1;
+  const section = PRD_TEMPLATE_SECTIONS[index];
+  for (const route of ROUTES) {
+    await page.goto(route);
+    await observeCopyMessages(page);
+    const rejected = stateWith(`Rejected ${route}`);
+    const draft: PrdEditorState = {
+      ...rejected,
+      values: {
+        ...rejected.values,
+        [section.id]:
+          `${'Wide rejected field '.repeat(40)}\n${'Scrollable field line\n'.repeat(80)}${SENTINEL}`,
+      },
+    };
+    await fillState(page, draft);
+    await page.locator('#save-draft').click();
+
+    const external = stateWith(`External conflict ${route}`);
+    await page.evaluate(({ key, raw }) => {
+      localStorage.setItem(key, raw);
+      window.dispatchEvent(new StorageEvent('storage', {
+        key,
+        newValue: raw,
+        storageArea: localStorage,
+      }));
+    }, {
+      key: PRD_EDITOR_STORAGE_KEY,
+      raw: JSON.stringify(createPrdEditorDraftPayload(external)),
+    });
+    await expect(page.locator('#draft-conflict')).toBeVisible();
+
+    const field = sectionField(page, index);
+    const action = sectionAction(page, index);
+    await prepareRejectedPointerState(page, index);
+    const before = await editorSnapshot(page);
+    const fieldId = await field.getAttribute('id');
+    const selectedField = before.fields.find(({ id }) => id === fieldId);
+    expect(before.activeId).toBe(fieldId);
+    expect(selectedField?.selectionDirection).toBe('backward');
+    expect(selectedField?.selectionEnd).toBeGreaterThan(selectedField?.selectionStart ?? 0);
+    expect(selectedField?.scrollTop).toBeGreaterThan(0);
+    expect(selectedField?.scrollLeft).toBeGreaterThan(0);
+    expect(before.scroll.x).toBeGreaterThan(0);
+    expect(before.scroll.y).toBeGreaterThan(0);
+    await resetCopyMessages(page);
+
+    await action.click();
+    const failure =
+      `Could not copy ${section.title} section as Markdown. Your draft is unchanged.`;
+    await expect(page.locator('#section-copy-status')).toHaveText(failure);
+    await settleRestorationFrames(page);
+
+    expect(await editorSnapshot(page)).toEqual({
+      ...before,
+      activeId: `copy-section-${section.id}`,
+    });
+    expect(await clipboardState(page)).toEqual({
+      attempts: [serializePrdSectionMarkdown(section.id, draft.values[section.id])],
+      writes: [],
+    });
+    expect(await copyMessages(page)).toEqual([failure]);
+    await expect(action).toBeFocused();
+    await expect(action).not.toHaveAttribute('aria-busy');
+    await expect(page.locator('.editor-section-copy[aria-disabled]')).toHaveCount(0);
+
+    await field.evaluate((input) => {
+      if (!(input instanceof HTMLTextAreaElement)) throw new Error('Missing textarea.');
+      input.setSelectionRange(109, 147, 'forward');
+      input.scrollTop = 240;
+      input.scrollLeft = 130;
+    });
+    await action.evaluate((button) => {
+      const top = button.getBoundingClientRect().top + window.scrollY;
+      window.scrollTo(110, Math.max(1, top - 65));
+    });
+    const beforeRetry = await editorSnapshot(page);
+    expect(beforeRetry).not.toEqual(before);
+    expect(beforeRetry.activeId).toBe(`copy-section-${section.id}`);
+    await setClipboardMode(page, 'success');
+    await resetCopyMessages(page);
+
+    await page.keyboard.press('Enter');
+    const success = `Copied ${section.title} section as Markdown.`;
+    await expect(page.locator('#section-copy-status')).toHaveText(success);
+    await settleRestorationFrames(page);
+
+    expect(await editorSnapshot(page)).toEqual(beforeRetry);
+    expect(await clipboardState(page)).toEqual({
+      attempts: [
+        serializePrdSectionMarkdown(section.id, draft.values[section.id]),
+        serializePrdSectionMarkdown(section.id, draft.values[section.id]),
+      ],
+      writes: [serializePrdSectionMarkdown(section.id, draft.values[section.id])],
+    });
+    expect(await copyMessages(page)).toEqual([success]);
+    await expect(action).toBeFocused();
+  }
+  expect(errors).toEqual([]);
+});
+
+test('Enter and Space rejection each keep focus and announce one failed attempt', async ({
+  page,
+}) => {
   await installClipboard(page, 'reject');
   await page.goto(ROUTES[0]);
-  const rejected = stateWith('Rejected');
-  const draft: PrdEditorState = {
-    ...rejected,
-    values: {
-      ...rejected.values,
-      'validation-done': `${'Scrollable field line\n'.repeat(30)}${SENTINEL}`,
-    },
-  };
-  await fillState(page, draft);
-  await page.locator('#save-draft').click();
+  await observeCopyMessages(page);
+  const index = 2;
+  const section = PRD_TEMPLATE_SECTIONS[index];
+  const action = sectionAction(page, index);
 
-  const external = stateWith('External conflict');
-  await page.evaluate(({ key, raw }) => {
-    localStorage.setItem(key, raw);
-    window.dispatchEvent(new StorageEvent('storage', {
-      key,
-      newValue: raw,
-      storageArea: localStorage,
-    }));
-  }, {
-    key: PRD_EDITOR_STORAGE_KEY,
-    raw: JSON.stringify(createPrdEditorDraftPayload(external)),
-  });
-  await expect(page.locator('#draft-conflict')).toBeVisible();
+  for (const activation of ['Enter', 'Space'] as const) {
+    const value = `Rejected ${activation}`;
+    await sectionField(page, index).fill(value);
+    await action.focus();
+    await page.evaluate(() => {
+      const clipboard = (window as typeof window & {
+        __sectionCopyClipboard: { attempts: string[]; writes: string[] };
+      }).__sectionCopyClipboard;
+      clipboard.attempts.length = 0;
+      clipboard.writes.length = 0;
+    });
+    await resetCopyMessages(page);
 
-  const field = sectionField(page, 11);
-  const action = sectionAction(page, 11);
-  await action.scrollIntoViewIfNeeded();
-  await field.evaluate((input) => {
-    if (!(input instanceof HTMLTextAreaElement)) throw new Error('Missing textarea.');
-    input.setSelectionRange(17, 43);
-    input.scrollTop = 120;
-  });
-  await action.evaluate((button) => button.focus({ preventScroll: true }));
+    await page.keyboard.press(activation);
+    const failure =
+      `Could not copy ${section.title} section as Markdown. Your draft is unchanged.`;
+    await expect(page.locator('#section-copy-status')).toHaveText(failure);
+    await settleRestorationFrames(page);
 
-  const snapshot = () => page.evaluate((key) => ({
-    fields: Array.from(
-      document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
-        '#prd-editor-form input, #prd-editor-form textarea',
-      ),
-      (input) => ({
-        id: input.id,
-        value: input.value,
-        selectionStart: input.selectionStart,
-        selectionEnd: input.selectionEnd,
-        scrollTop: input.scrollTop,
-      }),
-    ),
-    scroll: { x: window.scrollX, y: window.scrollY },
-    activeId: (document.activeElement as HTMLElement | null)?.id,
-    stored: localStorage.getItem(key),
-    conflict: {
-      hidden: (document.querySelector('#draft-conflict') as HTMLElement).hidden,
-      saveDisabled: document.querySelector('#save-draft')?.getAttribute('aria-disabled'),
-      startOverDisabled: document.querySelector('#start-over')?.getAttribute('aria-disabled'),
-    },
-    completion: document.querySelector('#completion-count')?.textContent,
-    outline: Array.from(document.querySelectorAll<HTMLElement>('[data-outline-target]'),
-      (link) => ({
-        id: link.dataset.outlineTarget,
-        complete: link.hasAttribute('data-outline-complete'),
-      })),
-    url: location.href,
-    historyLength: history.length,
-    saveStatus: document.querySelector('#save-status')?.textContent,
-    downloadStatus: document.querySelector('#download-status')?.textContent,
-  }), PRD_EDITOR_STORAGE_KEY);
-  const before = await snapshot();
-
-  await action.click();
-  await expect(page.locator('#section-copy-status')).toHaveText(
-    `Could not copy ${PRD_TEMPLATE_SECTIONS[11].title} section as Markdown. Your draft is unchanged.`,
-  );
-
-  expect(await snapshot()).toEqual(before);
-  const clipboard = await clipboardState(page);
-  expect(clipboard.attempts).toEqual([
-    serializePrdSectionMarkdown(PRD_TEMPLATE_SECTIONS[11].id, draft.values['validation-done']),
-  ]);
-  expect(clipboard.writes).toEqual([]);
+    expect(await clipboardState(page)).toEqual({
+      attempts: [serializePrdSectionMarkdown(section.id, value)],
+      writes: [],
+    });
+    expect(await copyMessages(page)).toEqual([failure]);
+    await expect(action).toBeFocused();
+    await expect(action).not.toHaveAttribute('aria-busy');
+    await expect(page.locator('.editor-section-copy[aria-disabled]')).toHaveCount(0);
+  }
 });
 
 test('section copy is local and byte-neutral for every export and full Copy Markdown', async ({
