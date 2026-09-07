@@ -70,8 +70,10 @@ test('click, Enter, and Space print once without changing page state or making r
     await page.waitForLoadState('networkidle');
 
     const button = printButton(page);
+    const otherControl = page.locator('a.brand');
     await expect(button).toBeVisible();
     await page.evaluate(() => window.scrollTo(0, 50));
+    await otherControl.evaluate((control: HTMLElement) => control.focus({ preventScroll: true }));
     const before = await page.evaluate(() => {
       const testWindow = window as InstrumentedWindow;
       return {
@@ -84,6 +86,9 @@ test('click, Enter, and Space print once without changing page state or making r
       };
     });
     trackRequests = true;
+
+    await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+    await expect(otherControl, `${path} focus before any activation`).toBeFocused();
 
     const activation = ACTIVATIONS[index];
     if (activation === 'click') {
@@ -101,6 +106,19 @@ test('click, Enter, and Space print once without changing page state or making r
 
     await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
     await expect(button, `${path} focus after afterprint`).toBeFocused();
+
+    await otherControl.evaluate((control: HTMLElement) => control.focus({ preventScroll: true }));
+    await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+    await expect(otherControl, `${path} focus after unrelated afterprint`).toBeFocused();
+
+    await button.click();
+    expect(
+      await page.evaluate(() => (window as InstrumentedWindow).__printCalls),
+      `${path} second activation print calls`,
+    ).toBe(2);
+    await expect(button, `${path} focus after second activation`).toBeFocused();
+    await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+    await expect(button, `${path} focus after second afterprint`).toBeFocused();
 
     const after = await page.evaluate(() => {
       const testWindow = window as InstrumentedWindow;

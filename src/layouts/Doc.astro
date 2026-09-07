@@ -76,17 +76,15 @@ const hasToc = toc.length > 0;
     action.append(button);
     header.append(action);
 
-    let activated = false;
     const restoreFocus = () => {
-      if (activated && button.isConnected) button.focus({ preventScroll: true });
+      if (button.isConnected) button.focus({ preventScroll: true });
     };
 
     button.addEventListener('click', () => {
-      activated = true;
       restoreFocus();
+      window.addEventListener('afterprint', restoreFocus, { once: true });
       window.print();
       restoreFocus();
     });
-    window.addEventListener('afterprint', restoreFocus);
   }
 </script>
