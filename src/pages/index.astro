@@ -2,6 +2,7 @@
 import PrdEditor from '../components/PrdEditor.astro';
 import PrdPrint from '../components/PrdPrint.astro';
 import Base from '../layouts/Base.astro';
+import { withBase } from '../lib/base';
 import { SITE } from '../lib/site';
 
 const title = `Create a product requirements document · ${SITE.name}`;
@@ -10,4 +11,17 @@ const title = `Create a product requirements document · ${SITE.name}`;
 <Base title={title}>
   <PrdEditor />
   <PrdPrint />
+  <section class="portable-references" aria-labelledby="portable-references-heading">
+    <h2 id="portable-references-heading">Portable references</h2>
+    <div class="portable-references__row">
+      <p>Includes the Guide, handoff checklist, Walkthrough, Template guidance, and blank template.</p>
+      <a
+        class="portable-references__download"
+        href={withBase('/downloads/prd-reference-bundle.zip')}
+        download
+      >
+        Download reference bundle (.zip)
+      </a>
+    </div>
+  </section>
 </Base>
