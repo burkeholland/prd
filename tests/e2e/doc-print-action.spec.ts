@@ -48,8 +48,8 @@ test('every document route has one print action after its complete header', asyn
     await expect(button, `${path} print action`).toHaveCount(1);
     await expect(button, `${path} visible print action`).toBeVisible();
     await expect(button).toHaveAttribute('type', 'button');
-    await expect(page.locator('.doc__header > :last-child')).toHaveClass('doc__print-action');
-    await expect(page.locator('.doc__print-action > button')).toHaveCount(1);
+    await expect(page.locator('.doc__header > :last-child')).toHaveClass(/doc__page-actions/);
+    await expect(page.locator('.doc__page-actions > .doc__print-button')).toHaveCount(1);
   }
 });
 
@@ -144,7 +144,7 @@ test('the print action is hidden from print media on every document route', asyn
     const button = page.locator('button.doc__print-button');
     await expect(button, `${path} enhanced action`).toHaveCount(1);
     await expect(button, `${path} printed action`).toBeHidden();
-    await expect(page.locator('.doc__print-action:visible'), `${path} visible print controls`).toHaveCount(0);
+    await expect(page.locator('.doc__page-actions:visible'), `${path} visible print controls`).toHaveCount(0);
   }
 });
 

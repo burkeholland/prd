@@ -279,11 +279,16 @@ main:focus {
   font-size: 0.92rem;
 }
 
-.doc__print-action {
+.doc__page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
   justify-self: start;
 }
 
-.doc__print-button {
+.doc__page-action-button {
   min-width: 32px;
   min-height: 32px;
   padding: 0.35rem 0.75rem;
@@ -298,9 +303,26 @@ main:focus {
   cursor: pointer;
 }
 
-.doc__print-button:hover {
+.doc__page-action-button:hover {
   color: var(--text);
   border-color: var(--text-muted);
+}
+
+.doc__copy-button {
+  inline-size: 8.5rem;
+}
+
+.doc__page-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 .button {
