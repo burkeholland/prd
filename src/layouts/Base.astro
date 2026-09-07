@@ -3,11 +3,13 @@ import '../styles/global.css';
 import '../styles/print.css';
 import Nav from '../components/Nav.astro';
 import ThemeControl from '../components/ThemeControl.astro';
+import ReaderTextSizeControl from '../components/ReaderTextSizeControl.astro';
 import Footer from '../components/Footer.astro';
 import { SITE } from '../lib/site';
 import { withBase } from '../lib/base';
 import { canonicalUrl, OG_IMAGE, socialCard } from '../lib/seo';
 import { THEME_STORAGE_KEY } from '../lib/theme';
+import { READER_TEXT_SIZE_STORAGE_KEY } from '../lib/reader-text-size';
 
 interface Props {
   title: string;
@@ -39,6 +41,21 @@ const ogImage = new URL(withBase(card.file), Astro.site).href;
         }
       } catch {
         // System remains the truthful default when storage is unavailable.
+      }
+    </script>
+    <script
+      is:inline
+      define:vars={{ readerTextSizeStorageKey: READER_TEXT_SIZE_STORAGE_KEY }}
+    >
+      try {
+        const savedTextSize = window.localStorage.getItem(
+          readerTextSizeStorageKey,
+        );
+        if (savedTextSize === 'large') {
+          document.documentElement.dataset.textSize = savedTextSize;
+        }
+      } catch {
+        // Default remains the truthful value when storage is unavailable.
       }
     </script>
     <meta name="color-scheme" content="light dark" />
@@ -73,6 +90,7 @@ const ogImage = new URL(withBase(card.file), Astro.site).href;
         <a class="brand" href={withBase('/')}>{SITE.name}</a>
         <Nav current={Astro.url.pathname} />
         <ThemeControl />
+        <ReaderTextSizeControl />
       </div>
     </header>
     <main id="main" class="container" tabindex="-1">
