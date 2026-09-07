@@ -571,6 +571,11 @@ main:focus {
   color: var(--text-muted);
 }
 
+.source-card__case-study {
+  color: var(--text-muted);
+  font-size: 0.92rem;
+}
+
 .placeholder {
   padding: 2rem 1.5rem;
   border: 1px dashed var(--border);

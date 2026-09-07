@@ -53,7 +53,7 @@ const activeElement = (page: Page) =>
 // Linux WebKit → the button (`<button class="copy-prd">`, whose empty id the old `id === 'main'` check read as '').
 const FOCUS_AFTER_CLICK = ['button.copy-prd', 'main#main', 'body'];
 
-test('/sample/ adds Copy the PRD after Download .md and keeps all five links', async ({ page }) => {
+test('/sample/ adds Copy the PRD after Download .md and keeps all six links', async ({ page }) => {
   await page.goto(to('/sample/'));
 
   const button = copyButton(page);
@@ -68,10 +68,11 @@ test('/sample/ adds Copy the PRD after Download .md and keeps all five links', a
     RESET,
     'Word (.docx)',
     'PDF',
+    'Download case study (.zip)',
     'Revision history',
   ]);
   await expect(items.nth(2).locator('button.copy-prd')).toHaveCount(1);
-  await expect(page.locator('.source-card__links a')).toHaveCount(5);
+  await expect(page.locator('.source-card__links a')).toHaveCount(6);
 
   const status = statusRegion(page);
   await expect(status).toHaveCount(1);
@@ -171,13 +172,13 @@ test('the button does not widen /sample/ at 320px', async ({ page }) => {
   expect(scrollWidth).toBeLessThanOrEqual(320);
 });
 
-test('on a phone the six card controls are thumb-sized (>= 32 px tall) and the card is no taller for it', async ({ page }) => {
+test('on a phone the seven card controls are thumb-sized (>= 32 px tall) and the card is no taller for it', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(to('/sample/'));
   await expect(copyButton(page)).toHaveCount(1);
 
   const controls = page.locator('.source-card__links a, .source-card__links button.copy-prd');
-  await expect(controls).toHaveCount(6);
+  await expect(controls).toHaveCount(7);
   const rects = await controls.evaluateAll((nodes) =>
     nodes.map((node) => {
       const { width, height } = node.getBoundingClientRect();

@@ -3,6 +3,10 @@ import { getEntry } from 'astro:content';
 import Doc from '../layouts/Doc.astro';
 import { DOC_ROUTES, SITE } from '../lib/site';
 import { withBase } from '../lib/base';
+import {
+  EXAMPLE_CASE_STUDY_FILENAME,
+  EXAMPLE_CASE_STUDY_PATH,
+} from '../lib/example-case-study';
 // Written by scripts/fetch-gist.mjs next to the snapshot: html_url, revision, fetched_at, updated_at.
 import meta from '../../content/gist/meta.json';
 // Written by scripts/fetch-gist-history.mjs: one entry per gist revision, oldest → newest.
@@ -40,8 +44,10 @@ const revisionLabel = current ? `Gist revision ${current.n} of ${history.count}`
       <li><a href={withBase('/raw/build-the-urlist.md')} download="build-the-urlist.md">Download .md</a></li>
       <li><a href={withBase('/downloads/build-the-urlist.docx')} download="build-the-urlist.docx">Word (.docx)</a></li>
       <li><a href={withBase('/downloads/build-the-urlist.pdf')} download="build-the-urlist.pdf">PDF</a></li>
+      <li><a href={withBase(EXAMPLE_CASE_STUDY_PATH)} download={EXAMPLE_CASE_STUDY_FILENAME}>Download case study (.zip)</a></li>
       <li><a href={withBase('/history/')}>Revision history</a></li>
     </ul>
+    <p class="source-card__case-study">Includes the current PRD, Walkthrough, and revision index.</p>
     {
       (mirroredLabel || revision) && (
         <p class="source-card__meta">

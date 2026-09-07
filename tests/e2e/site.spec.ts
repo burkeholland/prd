@@ -371,7 +371,7 @@ test('the sample source card has the generic intro, actions, and gist metadata',
 
   const card = page.locator('.source-card');
   await expect(card.locator('h1')).toHaveText('Example PRD');
-  await expect(card.locator(':scope > p:not(.source-card__meta):not(.copy-prd-status)')).toHaveText([
+  await expect(card.locator(':scope > p:not(.source-card__meta):not(.source-card__case-study):not(.copy-prd-status)')).toHaveText([
     'A complete PRD for a link-sharing app, shown exactly as written. It includes mocks, stack choices, routes, data rules, exact interface copy, tests, and completion checks.',
     'The screenshots show the reference product described by the document.',
   ]);
@@ -384,8 +384,12 @@ test('the sample source card has the generic intro, actions, and gist metadata',
     'Download .md',
     'Word (.docx)',
     'PDF',
+    'Download case study (.zip)',
     'Revision history',
   ]);
+  await expect(card.locator('.source-card__case-study')).toHaveText(
+    'Includes the current PRD, Walkthrough, and revision index.',
+  );
   await expect(card.locator('a', { hasText: 'View original' })).toHaveAttribute('href', meta.html_url);
   await expect(card.locator('.source-card__links a', { hasText: 'Revision history' })).toHaveAttribute(
     'href',
