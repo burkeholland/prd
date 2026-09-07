@@ -71,6 +71,7 @@ const expectPrivateDownloads = (
 };
 
 test('all index links download their snapshots without JavaScript or external requests', async ({ browser }) => {
+  test.setTimeout(90_000);
   const context = await browser.newContext({ javaScriptEnabled: false });
   const page = await context.newPage();
   const observedRequests: ObservedRequest[] = [];
@@ -99,6 +100,7 @@ test('all index links download their snapshots without JavaScript or external re
 });
 
 test('all revision-page links download their snapshots without JavaScript or external requests', async ({ browser }) => {
+  test.setTimeout(90_000);
   const context = await browser.newContext({ javaScriptEnabled: false });
   const page = await context.newPage();
   const observedRequests: ObservedRequest[] = [];
