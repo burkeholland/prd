@@ -22,6 +22,7 @@ const FILE_ROUTES = [
   '/downloads/prd-template.docx',
   '/downloads/prd-template.pdf',
   '/downloads/prd-example-walkthrough.md',
+  '/downloads/prd-guide.md',
   '/downloads/build-the-urlist.docx',
   '/downloads/build-the-urlist.pdf',
   '/downloads/prd-handoff-checklist.md',
