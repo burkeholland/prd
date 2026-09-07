@@ -1,10 +1,17 @@
 ---
 import { getEntry } from 'astro:content';
+import guideSource from '../../content/guide.md?raw';
 import Doc from '../layouts/Doc.astro';
+import { withBase } from '../lib/base';
+import {
+  extractHandoffChecklistItems,
+  HANDOFF_CHECKLIST_DOWNLOAD_PATH,
+} from '../lib/handoff-checklist';
 import { DOC_ROUTES } from '../lib/site';
 
 const route = DOC_ROUTES['/guide'];
 const entry = await getEntry(route.collection, route.id);
+const checklistItems = extractHandoffChecklistItems(guideSource);
 ---
 
 <Doc
@@ -12,28 +19,65 @@ const entry = await getEntry(route.collection, route.id);
   title={route.label}
   description={entry?.data.description}
   entry={entry}
-/>
+>
+  <div
+    class="guide-checklist-action"
+    data-checklist-items={JSON.stringify(checklistItems)}
+  >
+    <a
+      class="guide-checklist-download"
+      href={withBase(HANDOFF_CHECKLIST_DOWNLOAD_PATH)}
+      download
+    >
+      Download checklist (.md)
+    </a>
+  </div>
+  <noscript>
+    <style is:inline>
+      .doc__body:has(> .guide-checklist-action) {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .doc__body > .guide-checklist-action {
+        order: 1;
+      }
+
+      .doc__body > #before-you-hand-it-off ~ :not(.guide-checklist-action) {
+        order: 2;
+      }
+    </style>
+  </noscript>
+</Doc>
 
 <script>
+  import { serializeHandoffChecklist } from '../lib/handoff-checklist';
+
   const RESET_LABEL = 'Copy handoff checklist';
   const RESET_DELAY = 2000;
+  const action = document.querySelector<HTMLElement>(
+    '.guide-checklist-action',
+  );
   const heading = document.querySelector<HTMLHeadingElement>(
     '.doc__body h2#before-you-hand-it-off',
   );
   const checklist = heading?.nextElementSibling;
 
-  if (
-    checklist instanceof HTMLUListElement &&
-    typeof navigator.clipboard?.writeText === 'function'
-  ) {
-    const items = Array.from(
+  if (action && checklist instanceof HTMLUListElement) {
+    checklist.before(action);
+    const renderedItems = Array.from(
       checklist.querySelectorAll<HTMLLIElement>(':scope > li.task-list-item'),
     );
+    const sourceItems: unknown = JSON.parse(
+      action.dataset.checklistItems ?? 'null',
+    );
 
-    if (items.length === 7) {
-      const action = document.createElement('div');
-      action.className = 'guide-checklist-action';
-
+    if (
+      Array.isArray(sourceItems) &&
+      sourceItems.every((item): item is string => typeof item === 'string') &&
+      renderedItems.length === sourceItems.length &&
+      typeof navigator.clipboard?.writeText === 'function'
+    ) {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'guide-checklist-copy';
@@ -45,8 +89,8 @@ const entry = await getEntry(route.collection, route.id);
       status.setAttribute('aria-live', 'polite');
       status.setAttribute('aria-atomic', 'true');
 
-      action.append(button, status);
-      checklist.before(action);
+      action.prepend(button);
+      action.append(status);
 
       let copying = false;
       let resetTimer: ReturnType<typeof setTimeout> | undefined;
@@ -72,8 +116,7 @@ const entry = await getEntry(route.collection, route.id);
         clearTimeout(resetTimer);
         status.textContent = '';
 
-        const markdown =
-          items.map((item) => `- [ ] ${item.innerText.trim()}`).join('\n') + '\n';
+        const markdown = serializeHandoffChecklist(sourceItems);
 
         try {
           await navigator.clipboard.writeText(markdown);
@@ -94,10 +137,20 @@ const entry = await getEntry(route.collection, route.id);
 
 <style is:global>
   .guide-checklist-action {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
     min-width: 0;
   }
 
-  .guide-checklist-copy {
+  .guide-checklist-copy,
+  .guide-checklist-download {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 1 auto;
     min-width: 32px;
     min-height: 32px;
     max-width: 100%;
@@ -111,11 +164,22 @@ const entry = await getEntry(route.collection, route.id);
     background: transparent;
     border: 1px solid var(--border);
     border-radius: var(--radius);
+  }
+
+  .guide-checklist-copy {
     cursor: pointer;
   }
 
+  .guide-checklist-download {
+    color: var(--text-muted);
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+  }
+
   .guide-checklist-copy:hover:not(:disabled),
-  .guide-checklist-copy:focus-visible {
+  .guide-checklist-copy:focus-visible,
+  .guide-checklist-download:hover,
+  .guide-checklist-download:focus-visible {
     color: var(--text);
     border-color: var(--text-muted);
   }
