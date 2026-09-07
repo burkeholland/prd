@@ -117,6 +117,31 @@ test('the table of contents still points at the same ids the permalinks use', as
   }
 });
 
+for (const width of [320, 390, 1280]) {
+  test(`heading permalinks remain 32px targets without overflow at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+
+    for (const path of DOC_PAGES) {
+      await page.goto(to(path));
+      const links = await page.locator(LINKS).evaluateAll((nodes) =>
+        nodes.map((node) => {
+          const { width: linkWidth, height } = node.getBoundingClientRect();
+          return { name: node.textContent?.trim() ?? '', width: linkWidth, height };
+        }),
+      );
+
+      for (const link of links) {
+        expect(link.width, `${path} "${link.name}" width`).toBeGreaterThanOrEqual(32);
+        expect(link.height, `${path} "${link.name}" height`).toBeGreaterThanOrEqual(32);
+      }
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth),
+        `${path} document width`,
+      ).toBeLessThanOrEqual(width);
+    }
+  });
+}
+
 test('in print the heading links show no # and look like plain heading text', async ({ page }) => {
   await page.emulateMedia({ media: 'print' });
   await page.goto(to('/sample/'));

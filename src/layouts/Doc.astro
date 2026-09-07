@@ -64,6 +64,8 @@ const hasToc = toc.length > 0;
 
 <script>
   const header = document.querySelector<HTMLElement>('article.doc > header.doc__header');
+  const body = document.querySelector<HTMLElement>('article.doc > .doc__body');
+  const article = body?.closest<HTMLElement>('article.doc');
   const canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
   const clipboard = navigator.clipboard;
   const canCopy = canonical && typeof clipboard?.writeText === 'function';
@@ -138,5 +140,81 @@ const hasToc = toc.length > 0;
     }
 
     header.append(action);
+  }
+
+  if (article && body && canCopy) {
+    const headings = Array.from(
+      body.querySelectorAll<HTMLHeadingElement>('h2[id], h3[id]'),
+    ).flatMap((heading) => {
+      const style = getComputedStyle(heading);
+      if (
+        heading.id.trim() === '' ||
+        heading.closest('[hidden], [aria-hidden="true"]') ||
+        style.display === 'none' ||
+        style.visibility === 'hidden'
+      ) {
+        return [];
+      }
+
+      return [{
+        heading,
+        offset:
+          Number.parseFloat(style.marginBlockStart) +
+          Number.parseFloat(style.paddingBlockStart),
+      }];
+    });
+
+    if (headings.length > 0) {
+      const RESET_LABEL = 'Copy section link';
+      const RESET_DELAY = 1500;
+      const status = document.createElement('span');
+      status.className = 'doc__section-status';
+      status.setAttribute('role', 'status');
+      status.setAttribute('aria-live', 'polite');
+      status.setAttribute('aria-atomic', 'true');
+      article.append(status);
+
+      for (const { heading, offset } of headings) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'doc__section-link-button';
+        button.textContent = RESET_LABEL;
+        button.setAttribute('aria-label', RESET_LABEL);
+        button.setAttribute('aria-describedby', heading.id);
+        button.setAttribute('aria-busy', 'false');
+        // The preceding float keeps the heading itself untouched; carry its block-start spacing
+        // onto the action so the two controls share a line in every document's heading layout.
+        button.style.marginBlockStart = `${offset}px`;
+        heading.before(button);
+
+        let resetTimer: ReturnType<typeof setTimeout> | undefined;
+        button.addEventListener('click', async () => {
+          if (button.getAttribute('aria-busy') === 'true') return;
+
+          clearTimeout(resetTimer);
+          button.setAttribute('aria-busy', 'true');
+          button.textContent = 'Copying link';
+          delete button.dataset.state;
+          status.textContent = '';
+
+          try {
+            await clipboard.writeText(`${canonical.href}#${encodeURIComponent(heading.id)}`);
+            button.textContent = 'Link copied';
+            button.dataset.state = 'copied';
+            status.textContent = 'Section link copied.';
+          } catch {
+            button.textContent = 'Copy failed';
+            button.dataset.state = 'failed';
+            status.textContent = 'Section link could not be copied.';
+          } finally {
+            button.setAttribute('aria-busy', 'false');
+            resetTimer = setTimeout(() => {
+              button.textContent = RESET_LABEL;
+              delete button.dataset.state;
+            }, RESET_DELAY);
+          }
+        });
+      }
+    }
   }
 </script>
