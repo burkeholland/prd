@@ -71,6 +71,8 @@ import is saved in the current browser; if browser storage is unavailable, the
 imported draft remains editable and the status tells you to download a backup
 before leaving.
 
+Use **Continue draft** beside the progress count to jump to the first blank section.
+
 If another tab changes or removes the saved draft, saving and Start over pause
 without changing this tab's text. Download a draft backup to preserve this copy,
 then choose **Load saved draft** or confirm **Keep this draft** to replace the

@@ -1,7 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 import {
+  createBlankPrdEditorState,
+  createPrdEditorDraftPayload,
   PRD_EDITOR_STORAGE_KEY,
   PRD_EDITOR_PAYLOAD_VERSION,
+  type PrdEditorState,
 } from '../../src/lib/prd-editor-state';
 import { PRD_TEMPLATE_SECTIONS } from '../../src/lib/prd-template';
 
@@ -10,11 +13,62 @@ const CREATE_PATH = '/prd/';
 const sectionField = (page: Page, index: number) =>
   page.locator('textarea').nth(index);
 
+const storedDraft = (page: Page) =>
+  page.evaluate((key) => localStorage.getItem(key), PRD_EDITOR_STORAGE_KEY);
+
+type MutablePrdValues = {
+  -readonly [Id in keyof PrdEditorState['values']]: string;
+};
+
+const partialDraft = (): PrdEditorState => {
+  const blank = createBlankPrdEditorState();
+  const values: MutablePrdValues = { ...blank.values };
+  for (const index of [0, 1, 3, 11]) {
+    const section = PRD_TEMPLATE_SECTIONS[index];
+    values[section.id] = `Completed ${section.title}`;
+  }
+  return { title: blank.title, values };
+};
+
 test.beforeEach(async ({ page }) => {
   await page.goto(CREATE_PATH);
   await page.evaluate((key) => localStorage.removeItem(key), PRD_EDITOR_STORAGE_KEY);
   await page.reload();
 });
+
+for (const path of ['/prd/', '/prd/create/']) {
+  test(`${path} restores a partial draft and Continue draft navigates without changing history or saved bytes`, async ({
+    page,
+  }) => {
+    const raw = JSON.stringify(createPrdEditorDraftPayload(partialDraft()));
+    await page.goto(path);
+    await page.evaluate(
+      ({ key, raw }) => localStorage.setItem(key, raw),
+      { key: PRD_EDITOR_STORAGE_KEY, raw },
+    );
+    await page.reload();
+
+    const action = page.getByRole('button', { name: 'Continue draft', exact: true });
+    await expect(action).toHaveCount(1);
+    await expect(action).toBeVisible();
+    await expect(page.locator('#completion-count')).toHaveText('4 of 12 sections completed');
+    const historyLength = await page.evaluate(() => history.length);
+
+    await action.focus();
+    await page.keyboard.press('Enter');
+
+    const destination = sectionField(page, 2);
+    await expect(destination).toBeFocused();
+    await expect(page).toHaveURL(new RegExp(`${path.replaceAll('/', '\\/')}#section-${PRD_TEMPLATE_SECTIONS[2].id}$`));
+    await expect.poll(() => page.locator(`#section-${PRD_TEMPLATE_SECTIONS[2].id}`)
+      .evaluate((section) => section.getBoundingClientRect().top)).toBeGreaterThanOrEqual(-1);
+    expect(await page.locator(`#section-${PRD_TEMPLATE_SECTIONS[2].id}`)
+      .evaluate((section) => section.getBoundingClientRect().top)).toBeLessThanOrEqual(1);
+    expect(await page.evaluate(() => history.length)).toBe(historyLength);
+    expect(await storedDraft(page)).toBe(raw);
+    await expect(page.locator('#completion-count')).toHaveText('4 of 12 sections completed');
+  });
+}
 
 test('renders one editor with the canonical heading, 12 optional section fields, one copy action, six downloads, and status regions', async ({
   page,
@@ -64,6 +118,7 @@ test('renders one editor with the canonical heading, 12 optional section fields,
   await expect(page.locator('.editor-downloads h3')).toHaveText('Or start with a blank file');
   await expect(page.getByRole('button', { name: 'Download draft backup' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Import draft backup' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Continue draft', exact: true })).toBeVisible();
   await expect(page.locator('.hero, .cards, a.card')).toHaveCount(0);
 
   const liveRegions = page.locator('[aria-live="polite"]');
@@ -83,6 +138,7 @@ test('automatically saves and restores the title and all 12 section values after
   await expect(page.locator('#completion-count')).toHaveText(
     '12 of 12 sections completed',
   );
+  await expect(page.getByRole('button', { name: 'Continue draft', exact: true })).toBeHidden();
   await expect(page.locator('#save-status')).toContainText(
     'Draft saved automatically in this browser at',
   );
@@ -120,6 +176,7 @@ test('Save draft immediately writes a complete versioned payload and visible tim
     PRD_TEMPLATE_SECTIONS.map((section) => section.id),
   );
   expect(payload.state.values['summary-outcome']).toBe('A deliberate outcome.');
+  await expect(page.getByRole('button', { name: 'Continue draft', exact: true })).toBeVisible();
 });
 
 for (const scenario of [
@@ -214,6 +271,112 @@ test('Start over requires confirmation; cancel preserves content and confirm cle
   await expect(page.locator('#save-status')).toHaveText(
     'Local draft removed. All fields are clear.',
   );
+  await expect(page.getByRole('button', { name: 'Continue draft', exact: true })).toBeVisible();
+});
+
+test('Continue draft follows current non-contiguous values and its visibility never steals focus', async ({
+  page,
+}) => {
+  const raw = JSON.stringify(createPrdEditorDraftPayload(partialDraft()));
+  await page.evaluate(
+    ({ key, raw }) => localStorage.setItem(key, raw),
+    { key: PRD_EDITOR_STORAGE_KEY, raw },
+  );
+  await page.reload();
+  const action = page.getByRole('button', { name: 'Continue draft', exact: true });
+
+  await page.locator('.site-nav a').last().focus();
+  await page.keyboard.press('Tab');
+  await expect(action).toBeFocused();
+  await sectionField(page, 2).fill('Section 3 is now complete.');
+  await sectionField(page, 4).fill(' \t ');
+  await action.focus();
+  await page.keyboard.press('Enter');
+  await expect(sectionField(page, 4)).toBeFocused();
+  await expect(page).toHaveURL(new RegExp(`#section-${PRD_TEMPLATE_SECTIONS[4].id}$`));
+
+  for (const [index, section] of PRD_TEMPLATE_SECTIONS.entries()) {
+    await sectionField(page, index).fill(`Completed ${section.title}`);
+  }
+  await expect(page.locator('#completion-count')).toHaveText('12 of 12 sections completed');
+  await expect(action).toBeHidden();
+
+  await page.locator('.site-nav a').last().focus();
+  await page.keyboard.press('Tab');
+  await expect(page.locator('#document-title')).toBeFocused();
+
+  const currentFocus = sectionField(page, 7);
+  await currentFocus.focus();
+  await sectionField(page, 6).evaluate((input) => {
+    if (!(input instanceof HTMLTextAreaElement)) throw new Error('Expected a section textarea.');
+    input.value = '';
+    input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }));
+  });
+  await expect(currentFocus).toBeFocused();
+  await expect(action).toBeVisible();
+  await expect(page.locator('#completion-count')).toHaveText('11 of 12 sections completed');
+
+  await action.focus();
+  await page.keyboard.press('Enter');
+  await expect(sectionField(page, 6)).toBeFocused();
+  await expect(page).toHaveURL(new RegExp(`#section-${PRD_TEMPLATE_SECTIONS[6].id}$`));
+});
+
+test('Continue draft uses newly imported partial values', async ({ page }) => {
+  const state = partialDraft();
+  await page.locator('#backup-file').setInputFiles({
+    name: 'partial.prd.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(createPrdEditorDraftPayload(state))),
+  });
+  await expect(page.locator('#save-status')).toContainText('Draft backup imported and saved');
+  await expect(page.locator('#completion-count')).toHaveText('4 of 12 sections completed');
+
+  const action = page.getByRole('button', { name: 'Continue draft', exact: true });
+  await action.focus();
+  await page.keyboard.press('Enter');
+  await expect(sectionField(page, 2)).toBeFocused();
+});
+
+test('Continue draft remains navigation-only when localStorage is inaccessible', async ({
+  page,
+  context,
+}) => {
+  const raw = JSON.stringify(createPrdEditorDraftPayload(partialDraft()));
+  const storagePage = await context.newPage();
+  await storagePage.goto('/prd/create/');
+  await storagePage.evaluate(
+    ({ key, raw }) => localStorage.setItem(key, raw),
+    { key: PRD_EDITOR_STORAGE_KEY, raw },
+  );
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      get() {
+        throw new DOMException('Disabled', 'SecurityError');
+      },
+    });
+  });
+  await page.reload();
+  await expect(page.locator('[data-prd-editor]')).toBeVisible();
+
+  const before = {
+    fields: await page.locator('#prd-editor-form input, #prd-editor-form textarea')
+      .evaluateAll((nodes) => nodes.map((node) => (node as HTMLInputElement).value)),
+    completion: await page.locator('#completion-count').textContent(),
+    status: await page.locator('#save-status').textContent(),
+  };
+  const action = page.getByRole('button', { name: 'Continue draft', exact: true });
+  await action.focus();
+  await page.keyboard.press('Enter');
+
+  await expect(sectionField(page, 0)).toBeFocused();
+  expect(await page.locator('#prd-editor-form input, #prd-editor-form textarea')
+    .evaluateAll((nodes) => nodes.map((node) => (node as HTMLInputElement).value))).toEqual(before.fields);
+  await expect(page.locator('#completion-count')).toHaveText(before.completion ?? '');
+  await expect(page.locator('#save-status')).toHaveText(before.status ?? '');
+  expect(await storedDraft(storagePage)).toBe(raw);
+  await storagePage.close();
 });
 
 test('keyboard flow reaches every field and action, and outline links focus their section fields', async ({
@@ -300,24 +463,45 @@ test('keyboard flow reaches every field and action, and outline links focus thei
   }
 });
 
-test('at 320px the page does not overflow and every outline link and button is at least 32px high', async ({
+test('at target widths Continue draft is at least 32px square, unobstructed, and causes no overflow', async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 320, height: 780 });
-  await page.reload();
+  for (const width of [320, 390, 1280]) {
+    await page.setViewportSize({ width, height: 780 });
+    await page.reload();
 
-  const dimensions = await page.evaluate(() => ({
-    scrollWidth: document.documentElement.scrollWidth,
-    viewport: window.innerWidth,
-  }));
-  expect(dimensions).toEqual({ scrollWidth: 320, viewport: 320 });
+    const layout = await page.locator('#continue-draft').evaluate((button) => {
+      const action = button.getBoundingClientRect();
+      const text = ['#completion-count', '#save-status', '.editor-privacy'].map((selector) =>
+        document.querySelector(selector)!.getBoundingClientRect()
+      );
+      const overlaps = (first: DOMRect, second: DOMRect) =>
+        first.left < second.right && second.left < first.right &&
+        first.top < second.bottom && second.top < first.bottom;
+      return {
+        width: action.width,
+        height: action.height,
+        left: action.left,
+        right: action.right,
+        obscuresText: text.some((rect) => overlaps(action, rect)),
+        scrollWidth: document.documentElement.scrollWidth,
+        viewport: window.innerWidth,
+      };
+    });
+    expect(layout.width).toBeGreaterThanOrEqual(32);
+    expect(layout.height).toBeGreaterThanOrEqual(32);
+    expect(layout.left).toBeGreaterThanOrEqual(0);
+    expect(layout.right).toBeLessThanOrEqual(width);
+    expect(layout.obscuresText).toBe(false);
+    expect(layout.scrollWidth).toBe(layout.viewport);
 
-  const targets = page.locator('.editor-outline a:visible, .editor-button:visible');
-  await expect(targets).toHaveCount(20);
-  const heights = await targets.evaluateAll((nodes) =>
-    nodes.map((node) => node.getBoundingClientRect().height),
-  );
-  for (const height of heights) expect(height).toBeGreaterThanOrEqual(32);
+    const targets = page.locator('.editor-outline a:visible, .editor-button:visible');
+    await expect(targets).toHaveCount(21);
+    const heights = await targets.evaluateAll((nodes) =>
+      nodes.map((node) => node.getBoundingClientRect().height),
+    );
+    for (const height of heights) expect(height).toBeGreaterThanOrEqual(32);
+  }
 });
 
 test('the workbench keeps the editor primary on desktop and remains linear and unobstructed on phones', async ({

@@ -36,7 +36,12 @@ const blankDownloads = [
 
 <div class="editor-page" data-prd-editor hidden>
   <section class="editor-status" aria-label="Draft status">
-    <p><output id="completion-count">0 of 12 sections completed</output></p>
+    <div class="editor-progress">
+      <p><output id="completion-count">0 of 12 sections completed</output></p>
+      <button id="continue-draft" class="editor-button editor-continue" type="button" hidden>
+        Continue draft
+      </button>
+    </div>
     <p id="save-status" role="status" aria-live="polite" aria-atomic="true">
       Checking this browser for a saved draft.
     </p>
@@ -237,6 +242,7 @@ const blankDownloads = [
   const form = document.querySelector('#prd-editor-form');
   const titleInput = document.querySelector('#document-title');
   const completion = document.querySelector('#completion-count');
+  const continueButton = document.querySelector('#continue-draft');
   const status = document.querySelector('#save-status');
   const saveButton = document.querySelector('#save-draft');
   const startOverButton = document.querySelector('#start-over');
@@ -257,6 +263,7 @@ const blankDownloads = [
     !(form instanceof HTMLFormElement) ||
     !(titleInput instanceof HTMLInputElement) ||
     !(completion instanceof HTMLOutputElement) ||
+    !(continueButton instanceof HTMLButtonElement) ||
     !(status instanceof HTMLParagraphElement) ||
     !(saveButton instanceof HTMLButtonElement) ||
     !(startOverButton instanceof HTMLButtonElement) ||
@@ -342,6 +349,7 @@ const blankDownloads = [
     ).length;
     const message = `${completed} of ${PRD_TEMPLATE.sections.length} sections completed`;
     if (completion.textContent !== message) completion.textContent = message;
+    continueButton.hidden = completed === PRD_TEMPLATE.sections.length;
   };
 
   let storage: PrdEditorStorage | undefined;
@@ -841,16 +849,28 @@ const blankDownloads = [
     titleInput.focus();
   });
 
+  const navigateToSection = (id: string) => {
+    const section = PRD_TEMPLATE.sections.find((candidate) => candidate.id === id);
+    const input = section ? sectionInputs.get(section.id) : undefined;
+    const container = section ? document.getElementById(`section-${section.id}`) : null;
+    if (!section || !input || !container) return false;
+    history.replaceState(null, '', `#section-${section.id}`);
+    input.focus({ preventScroll: true });
+    container.scrollIntoView({ behavior: 'instant', block: 'start' });
+    return true;
+  };
+
+  continueButton.addEventListener('click', () => {
+    const firstIncomplete = PRD_TEMPLATE.sections.find((section) =>
+      sectionInputs.get(section.id)?.value.trim().length === 0
+    );
+    if (firstIncomplete) navigateToSection(firstIncomplete.id);
+  });
+
   for (const link of document.querySelectorAll<HTMLAnchorElement>('[data-outline-target]')) {
     link.addEventListener('click', (event) => {
       const id = link.dataset.outlineTarget;
-      const section = PRD_TEMPLATE.sections.find((candidate) => candidate.id === id);
-      const input = section ? sectionInputs.get(section.id) : undefined;
-      if (!section || !input) return;
-      event.preventDefault();
-      history.replaceState(null, '', link.hash);
-      input.focus({ preventScroll: true });
-      document.getElementById(`section-${section.id}`)?.scrollIntoView({ block: 'start' });
+      if (id && navigateToSection(id)) event.preventDefault();
     });
   }
 
@@ -871,7 +891,8 @@ const blankDownloads = [
   }
 
   .editor-page[hidden],
-  .editor-conflict[hidden] {
+  .editor-conflict[hidden],
+  .editor-continue[hidden] {
     display: none;
   }
 
@@ -927,8 +948,23 @@ const blankDownloads = [
     min-width: 0;
   }
 
+  .editor-progress {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.75rem;
+    align-items: center;
+    min-width: 0;
+  }
+
   #completion-count {
     font-weight: 650;
+  }
+
+  .editor-continue {
+    flex: 0 0 auto;
+    min-width: 2rem;
+    padding: 0.35rem 0.6rem;
+    font-size: 0.9rem;
   }
 
   #save-status {
@@ -1065,7 +1101,6 @@ const blankDownloads = [
     min-width: 0;
     padding-top: 1.5rem;
     border-top: 1px solid var(--border);
-    scroll-margin-top: 1rem;
   }
 
   .editor-section h2 {
